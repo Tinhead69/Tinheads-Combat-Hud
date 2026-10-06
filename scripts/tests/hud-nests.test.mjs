@@ -90,6 +90,47 @@ assert(menu[1].kind === "weapon-use-ability", "second is use ability");
 const modes = getWeaponAbilityOptions(wave);
 assert(modes.length === 2, "two cube modes");
 
+const hazirawn = enrichWeaponOption({
+  id: "hazirawn",
+  name: "Hazirawn",
+  img: "",
+  item: {
+    id: "hazirawn",
+    name: "Hazirawn",
+    type: "weapon",
+    img: "",
+    isOwner: true,
+    system: {
+      description: { value: "<p><strong>Increased Potency.</strong> Bonus while attuned.</p><p><strong>Wounding.</strong> Target cannot regain hit points.</p>" },
+      activities: [
+        { id: "atk", name: "Attack", type: "attack", activation: { type: "action" } },
+        { id: "potency", name: "Increased Potency", type: "utility", activation: { type: "none" } },
+        {
+          id: "detect",
+          name: "Detect Magic",
+          type: "utility",
+          activation: { type: "none" },
+          flags: { "midi-qol": { automationOnly: false, onUseMacroName: "ItemMacro" } }
+        },
+        {
+          id: "wound",
+          name: "Wounding",
+          type: "damage",
+          activation: { type: "special" },
+          flags: { "midi-qol": { automationOnly: true } }
+        }
+      ]
+    }
+  },
+  activity: null
+});
+assert(hazirawn.hasSpecial === true, "Hazirawn midi activity opens Use Ability");
+const hazModes = getWeaponAbilityOptions(hazirawn).map(mode => mode.name);
+assert(hazModes.includes("Detect Magic"), "midi-qol activity is an action");
+assert(!hazModes.includes("Increased Potency"), "passive rider is not an action");
+assert(!hazModes.includes("Wounding"), "automation-only midi rider is not a button");
+assert(!hazModes.includes("Attack"), "attack stays off the ability list");
+
 // --- End Turn ---
 game.combat = null;
 assert(getEndTurnState().enabled === false, "no combat disables end turn");

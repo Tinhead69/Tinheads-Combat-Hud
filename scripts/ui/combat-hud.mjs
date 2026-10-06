@@ -52,24 +52,72 @@ function nextClipId(prefix = "tch-clip") {
 }
 
 /**
- * Split a wedge name onto two lines so it stays inside a wider slice.
+ * Name on its own lines, use-count underneath, sized to the wedge chord
+ * so neighboring labels no longer run into each other.
  * @param {string} caption
+ * @param {number} startDeg
+ * @param {number} endDeg
+ * @param {number} innerR
+ * @param {number} outerR
+ * @returns {{ lines: string[], uses: string, fontSize: number }}
+ */
+function wedgeCaptionLayout(caption, startDeg, endDeg, innerR, outerR) {
+  const raw = String(caption ?? "").trim();
+  const splitAt = raw.lastIndexOf(" · ");
+  const name = splitAt > 0 ? raw.slice(0, splitAt).trim() : raw;
+  const uses = splitAt > 0 ? raw.slice(splitAt + 3).trim() : "";
+
+  const sweep = endDeg < startDeg ? endDeg + 360 - startDeg : endDeg - startDeg;
+  const midR = (Number(innerR) + Number(outerR)) / 2;
+  const chord = 2 * midR * Math.sin((Math.min(Math.abs(sweep), 180) * Math.PI) / 360);
+  const usable = Math.max(40, chord * 0.78);
+  const fontSize = usable < 78 ? 11 : 12;
+  const maxChars = Math.max(7, Math.floor(usable / (fontSize * 0.56)));
+
+  return {
+    lines: wrapWedgeName(name, maxChars),
+    uses,
+    fontSize
+  };
+}
+
+/**
+ * @param {string} name
+ * @param {number} maxChars
  * @returns {string[]}
  */
-function captionLines(caption) {
-  const text = String(caption ?? "").trim();
-  if (!text) return [];
-  const limit = 14;
-  if (text.length <= limit) return [text];
-  const mid = text.lastIndexOf(" ", limit);
-  if (mid >= 4) {
-    const rest = text.slice(mid + 1);
-    return [
-      text.slice(0, mid),
-      rest.length > limit ? `${rest.slice(0, limit - 1)}…` : rest
-    ];
+function wrapWedgeName(name, maxChars) {
+  const words = String(name ?? "").split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const lines = [];
+  let current = "";
+  let index = 0;
+  while (index < words.length && lines.length < 2) {
+    const word = words[index];
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxChars) {
+      current = next;
+      index += 1;
+      continue;
+    }
+    if (current) {
+      lines.push(current);
+      current = "";
+      continue;
+    }
+    lines.push(word.length > maxChars ? `${word.slice(0, Math.max(1, maxChars - 1))}…` : word);
+    index += 1;
+    current = "";
   }
-  return [`${text.slice(0, limit - 1)}…`];
+  if (current && lines.length < 2) lines.push(current);
+  if (index < words.length && lines.length) {
+    const last = lines[lines.length - 1];
+    lines[lines.length - 1] = last.endsWith("…") ? last : `${last.replace(/\s+\S*$/, "")}…`.replace(/^…$/, "…");
+    if (!lines[lines.length - 1] || lines[lines.length - 1] === "…") {
+      lines[lines.length - 1] = `${last.slice(0, Math.max(1, maxChars - 1))}…`;
+    }
+  }
+  return lines;
 }
 
 /**
@@ -1251,22 +1299,31 @@ export class CombatHud {
     }
 
     if (cfg.caption) {
-      const lines = captionLines(cfg.caption);
-      const lineH = 15;
-      const origin = anchor.y + (cfg.label ? 8 : 0);
-      const startY = origin - ((lines.length - 1) * lineH) / 2;
+      const layout = wedgeCaptionLayout(cfg.caption, cfg.start, cfg.end, cfg.inner, cfg.outer);
+      const lineH = layout.fontSize + 2;
+      const rowCount = layout.lines.length + (layout.uses ? 1 : 0);
+      const startY = anchor.y - ((rowCount - 1) * lineH) / 2;
       const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
       const asLabel = !cfg.label;
       cap.classList.add(asLabel ? "tch-segment__label" : "tch-segment__caption");
       cap.setAttribute("x", String(anchor.x));
       cap.setAttribute("y", String(startY));
-      lines.forEach((line, index) => {
+      cap.style.fontSize = `${layout.fontSize}px`;
+      layout.lines.forEach((line, index) => {
         const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
         tspan.setAttribute("x", String(anchor.x));
         tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
         tspan.textContent = line;
         cap.appendChild(tspan);
       });
+      if (layout.uses) {
+        const uses = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        uses.classList.add("tch-segment__uses");
+        uses.setAttribute("x", String(anchor.x));
+        uses.setAttribute("dy", String(lineH));
+        uses.textContent = layout.uses;
+        cap.appendChild(uses);
+      }
       g.appendChild(cap);
     }
 

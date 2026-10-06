@@ -55,36 +55,34 @@ export function getClassFeatureOptions(actor, activation = "action") {
     feats.push(item);
   }
 
-  const parent = feats.find(isChannelDivinityParent) ?? null;
+  const shells = feats.filter(isChannelDivinityParent);
+  const parent = pickChannelParent(shells);
   const childItems = feats.filter(item =>
     isChannelDivinityOption(item, parent) && featureMatchesActivation(item, activation)
   );
-  const childIds = new Set(childItems.map(item => item.id));
+  const hiddenIds = new Set([
+    ...shells.map(item => item.id),
+    ...childItems.map(item => item.id)
+  ]);
 
   const options = [];
-  let parentLeaf = null;
 
   for (const item of feats) {
-    if (childIds.has(item.id)) continue;
+    if (hiddenIds.has(item.id)) continue;
 
     const { matching, legacyMatch } = activationMatch(item, activation);
     if (!matching.length && !legacyMatch) continue;
 
     if (!matching.length && legacyMatch) {
-      const isParent = parent && item.id === parent.id;
-      const hasNest = isParent && childItems.length > 0;
-      const available = canAttemptUse(null, item);
-      const leaf = makeLeaf({
+      options.push(makeLeaf({
         item,
         activity: null,
-        hasNest,
+        hasNest: false,
         nestActivities: [],
-        childItems: isParent ? childItems : [],
-        available,
+        childItems: [],
+        available: canAttemptUse(null, item),
         activation
-      });
-      options.push(leaf);
-      if (isParent) parentLeaf = leaf;
+      }));
       continue;
     }
 
@@ -92,48 +90,21 @@ export function getClassFeatureOptions(actor, activation = "action") {
     const usable = matching.filter(a => !isAttackActivity(a) || matching.length === 1);
     if (!usable.length) continue;
 
-    const isParent = parent && item.id === parent.id;
-    const modes = isParent ? channelModeActivities(usable, childItems.length > 0) : usable;
-    const hasNest = isParent
-      ? (childItems.length > 0 || modes.length > 1)
-      : modes.length > 1;
-    const primary = modes[0] ?? usable[0];
-    const available = canAttemptUse(hasNest ? null : primary, item);
-    const leaf = makeLeaf({
+    const hasNest = usable.length > 1;
+    const primary = usable[0];
+    options.push(makeLeaf({
       item,
       activity: hasNest ? null : primary,
       hasNest,
-      nestActivities: hasNest ? modes : usable,
-      childItems: isParent ? childItems : [],
-      available,
+      nestActivities: usable,
+      childItems: [],
+      available: canAttemptUse(hasNest ? null : primary, item),
       activation
-    });
-    options.push(leaf);
-    if (isParent) parentLeaf = leaf;
+    }));
   }
 
-  // Uses-only Channel Divinity shell: still the one button when options exist.
-  if (parent && childItems.length && !parentLeaf) {
-    options.push(makeLeaf({
-      item: parent,
-      activity: null,
-      hasNest: true,
-      nestActivities: [],
-      childItems,
-      available: canAttemptUse(null, parent),
-      activation
-    }));
-  } else if (!parent && childItems.length) {
-    options.push(makeLeaf({
-      item: syntheticChannelParent(childItems),
-      activity: null,
-      hasNest: true,
-      nestActivities: [],
-      childItems,
-      available: canAttemptUse(null, childItems[0]),
-      activation
-    }));
-  }
+  const channelLeaf = buildChannelLeaf(shells, parent, childItems, activation);
+  if (channelLeaf) options.push(channelLeaf);
 
   return options.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -155,11 +126,11 @@ export function getFeatureModeOptions(featureOption) {
       kind: "feature-mode",
       name: activity.name || featureOption.name,
       img: preferDocumentImg(activity.img || featureOption.item?.img, featureOption.img),
-      item: featureOption.item,
+      item: activity?.item ?? activity?.parent ?? featureOption.item,
       activity,
       available: available.ok,
       reason: available.reason,
-      requiresTarget: optionRequiresTarget(activity, featureOption.item),
+      requiresTarget: optionRequiresTarget(activity, activity?.item ?? featureOption.item),
       parentFeatureId: featureOption.id,
       usesLabel: formatUses(featureOption.item, activity),
       tooltip: {
@@ -195,8 +166,8 @@ export function getFeatureModeOptions(featureOption) {
   return [...fromActivities, ...fromItems];
 }
 
-function makeLeaf({ item, activity, hasNest, nestActivities, childItems = [], available, activation }) {
-  const usesLabel = formatUses(item, activity ?? nestActivities[0]);
+function makeLeaf({ item, activity, hasNest, nestActivities, childItems = [], available, activation, usesLabel = null }) {
+  const poolLabel = usesLabel ?? formatUses(item, activity ?? nestActivities[0]);
   return {
     id: `feature:${activation}:${item.id}`,
     kind: "feature",
@@ -211,7 +182,7 @@ function makeLeaf({ item, activity, hasNest, nestActivities, childItems = [], av
     available: available.ok,
     reason: available.reason,
     requiresTarget: optionRequiresTarget(activity, item),
-    usesLabel,
+    usesLabel: poolLabel,
     tooltip: {
       title: item.name,
       description: [
@@ -268,6 +239,72 @@ function isRestOnlyItem(item) {
 }
 
 /**
+ * One Channel Divinity button. Every same-named shell and "Channel Divinity: …" option
+ * hangs off it, so the Action ring never shows two Channel Divinity wedges.
+ * @param {Item[]} shells
+ * @param {Item|null} parent
+ * @param {Item[]} childItems
+ * @param {"action"|"bonus"|"reaction"} activation
+ */
+function buildChannelLeaf(shells, parent, childItems, activation) {
+  if (!parent && !childItems.length) return null;
+
+  const activities = [];
+  for (const shell of shells) {
+    for (const activity of usableActivities(shell, activation)) {
+      if (activity && !activity.item && !activity.parent) activity.item = shell;
+      activities.push(activity);
+    }
+  }
+
+  const modes = channelModeActivities(activities, childItems.length > 0);
+  const hasNest = childItems.length > 0 || modes.length > 1;
+  const host = parent ?? syntheticChannelParent(childItems);
+  const primary = modes[0] ?? null;
+  const poolMatches = parent ? featureMatchesActivation(parent, activation) : false;
+  const anyModes = modes.length > 0 || childItems.length > 0;
+  if (!anyModes && !poolMatches && !shells.some(shell => featureMatchesActivation(shell, activation))) {
+    return null;
+  }
+
+  return makeLeaf({
+    item: host,
+    activity: hasNest ? null : primary,
+    hasNest,
+    nestActivities: hasNest ? modes : (primary ? [primary] : []),
+    childItems,
+    available: canAttemptUse(hasNest ? null : primary, primary?.item ?? host),
+    activation,
+    usesLabel: formatUses(host, null)
+  });
+}
+
+function usableActivities(item, activation) {
+  const { matching } = activationMatch(item, activation);
+  return matching.filter(activity => !isAttackActivity(activity) || matching.length === 1);
+}
+
+/**
+ * Prefer the shell that actually holds the uses pool (the "2/2" button).
+ * @param {Item[]} shells
+ * @returns {Item|null}
+ */
+function pickChannelParent(shells) {
+  if (!shells.length) return null;
+  return [...shells].sort((a, b) => channelPoolScore(b) - channelPoolScore(a))[0];
+}
+
+function channelPoolScore(item) {
+  const uses = item?.system?.uses;
+  if (!uses) return 0;
+  const max = Number(uses.max);
+  if (Number.isFinite(max) && max > 0) return 100 + max;
+  if (typeof uses.max === "string" && uses.max.trim()) return 50;
+  if (uses.spent != null || uses.value != null) return 10;
+  return 0;
+}
+
+/**
  * The Channel Divinity uses pool, not an individual option.
  * @param {Item} item
  */
@@ -302,9 +339,17 @@ function isChannelDivinityOption(item, parent) {
  * @param {boolean} hasChildren
  */
 function channelModeActivities(usable, hasChildren) {
-  if (!hasChildren) return usable;
   const specific = usable.filter(activity => normalize(activity?.name) !== "channel divinity");
-  return specific;
+  const source = (hasChildren || specific.length) ? specific : usable;
+  const seen = new Set();
+  const unique = [];
+  for (const activity of source) {
+    const key = normalize(activity?.name) || String(activity?.id ?? activity?._id ?? unique.length);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(activity);
+  }
+  return unique;
 }
 
 function syntheticChannelParent(children) {

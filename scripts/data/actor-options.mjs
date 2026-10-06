@@ -64,12 +64,20 @@ export function getAttackHandle(item) {
 export function getActivities(item) {
   const collection = item?.system?.activities;
   if (!collection) return [];
-  if (typeof collection === "object" && typeof collection[Symbol.iterator] === "function") {
-    return Array.from(collection);
-  }
-  if (typeof collection.values === "function") return Array.from(collection.values());
-  if (typeof collection === "object") return Object.values(collection);
-  return [];
+
+  let entries = [];
+  if (Array.isArray(collection?.contents)) entries = collection.contents;
+  else if (typeof collection.values === "function") entries = Array.from(collection.values());
+  else if (typeof collection[Symbol.iterator] === "function") entries = Array.from(collection);
+  else if (typeof collection === "object") entries = Object.values(collection);
+
+  return entries.map(entry => {
+    // Map / Collection iterators sometimes yield [id, activity].
+    if (Array.isArray(entry) && entry.length === 2 && entry[1] && typeof entry[1] === "object") {
+      return entry[1];
+    }
+    return entry;
+  }).filter(activity => activity && typeof activity === "object");
 }
 
 /**

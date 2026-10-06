@@ -1,6 +1,7 @@
 /**
  * Classify weapon activities into Attack vs special abilities (e.g. Cube of Force modes).
- * Reads dnd5e item activities — no Wave-specific hardcoding.
+ * Passive riders stay off the ring. A Midi-QOL activity is a usable action even when
+ * its activation looks passive. automationOnly activities stay hidden (triggered riders).
  */
 
 import {
@@ -24,6 +25,53 @@ export function isAttackActivity(activity) {
 }
 
 /**
+ * Midi-QOL activity config. Present on activities that Midi will run.
+ * @param {object} activity
+ * @returns {object|null}
+ */
+function midiActivityFlags(activity) {
+  const flags = activity?.flags?.["midi-qol"]
+    ?? activity?.system?.midiProperties
+    ?? activity?.midiProperties
+    ?? null;
+  if (!flags || typeof flags !== "object") return null;
+  return flags;
+}
+
+/**
+ * A Midi-QOL activity the player can fire. automationOnly is an internal trigger, not a button.
+ * @param {object} activity
+ * @returns {boolean}
+ */
+export function isMidiQolAction(activity) {
+  const flags = midiActivityFlags(activity);
+  if (!flags) return false;
+  if (flags.automationOnly === true) return false;
+  return true;
+}
+
+/**
+ * Description riders and unactivated utilities. Midi-QOL activities are never passive.
+ * @param {object} activity
+ * @returns {boolean}
+ */
+export function isPassiveActivity(activity) {
+  if (!activity || isAttackActivity(activity)) return false;
+  if (isMidiQolAction(activity)) return false;
+
+  const activation = String(
+    activity.activation?.type ?? activity.system?.activation?.type ?? ""
+  ).toLowerCase().trim();
+  if (["action", "bonus", "reaction", "special", "legendary", "lair", "mythic"].includes(activation)) {
+    return false;
+  }
+
+  const type = String(activity.type ?? "").toLowerCase();
+  if (["cast", "save", "damage", "heal", "summon", "enchant"].includes(type)) return false;
+  return true;
+}
+
+/**
  * @param {Item} item
  * @returns {{
  *   attacks: object[],
@@ -39,7 +87,8 @@ export function getWeaponActivityGroups(item) {
 
   for (const activity of activities) {
     if (isAttackActivity(activity)) attacks.push(activity);
-    else specials.push(activity);
+    else if (midiActivityFlags(activity)?.automationOnly === true) continue;
+    else if (!isPassiveActivity(activity)) specials.push(activity);
   }
 
   return {
