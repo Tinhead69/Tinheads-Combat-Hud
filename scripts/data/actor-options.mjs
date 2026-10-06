@@ -27,47 +27,20 @@ export function actorFromToken(tokenLike) {
 export { canOpenHud, canUseActor, canResolveLocally } from "./permissions.mjs";
 
 /**
- * Resolve a favorite id (relative UUID / activity path) against an actor.
- * @param {Actor} actor
- * @param {string} favoriteId
- * @returns {Document|object|null}
- */
-function resolveFavoriteRef(actor, favoriteId) {
-  if (!favoriteId) return null;
-  try {
-    if (typeof fromUuidSync === "function") {
-      const resolved = fromUuidSync(favoriteId, { relative: actor });
-      if (resolved) return resolved;
-    }
-  } catch (_) {
-    /* fall through */
-  }
-
-  // Relative item id forms: ".Item.<id>" / "Item.<id>" / ".<id>"
-  const itemMatch = favoriteId.match(/(?:^|\.)Item\.([A-Za-z0-9]+)$/);
-  if (itemMatch) return actor.items.get(itemMatch[1]) ?? null;
-
-  const bare = favoriteId.startsWith(".") ? favoriteId.slice(1) : favoriteId;
-  if (actor.items?.get(bare)) return actor.items.get(bare);
-
-  // Activity favorites: "...Item.<id>.Activity.<activityId>"
-  const activityMatch = favoriteId.match(/Item\.([A-Za-z0-9]+)\.Activity\.([A-Za-z0-9]+)/);
-  if (activityMatch) {
-    const item = actor.items.get(activityMatch[1]);
-    const activity = item?.system?.activities?.get?.(activityMatch[2])
-      ?? item?.system?.activities?.[activityMatch[2]];
-    if (activity) return activity;
-  }
-
-  return null;
-}
-
-/**
  * @param {Item} item
  * @returns {boolean}
  */
 export function isWeaponItem(item) {
   return item?.type === "weapon";
+}
+
+/**
+ * dnd5e inventory equipped flag (`item.system.equipped`).
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isEquippedItem(item) {
+  return item?.system?.equipped === true;
 }
 
 /**
@@ -113,41 +86,25 @@ export function getActivationType(activity, item) {
 }
 
 /**
- * Favorited weapons for the Action ring.
+ * Equipped weapons for the Action ring.
+ * Uses the dnd5e equipped checkbox, not character-sheet favorites.
  * @param {Actor} actor
  * @returns {Array<{ id: string, name: string, img: string, item: Item, activity: object|null, available: boolean, reason?: string }>}
  */
-export function getFavoritedWeapons(actor) {
-  const favorites = foundry.utils.duplicate(actor.system?.favorites ?? []);
-  favorites.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+export function getEquippedWeapons(actor) {
+  const items = [];
+  for (const item of actor?.items ?? []) items.push(item);
+  items.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
   const weapons = [];
   const seen = new Set();
 
-  for (const fav of favorites) {
-    if (fav.type && !["item", "activity"].includes(fav.type)) continue;
-    const ref = resolveFavoriteRef(actor, fav.id);
-    if (!ref) continue;
-
-    let item = null;
-    let activity = null;
-
-    // Activity favorites expose `.item`; item favorites are Item documents.
-    if (ref.item && !isWeaponItem(ref) && (ref.type || ref.activation || ref.use)) {
-      activity = ref;
-      item = ref.item;
-    } else if (isWeaponItem(ref)) {
-      item = ref;
-    } else if (ref.item && isWeaponItem(ref.item)) {
-      activity = ref;
-      item = ref.item;
-    }
-
-    if (!item || !isWeaponItem(item)) continue;
+  for (const item of items) {
+    if (!isWeaponItem(item) || !isEquippedItem(item)) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
 
-    const handle = activity ? { item, activity } : getAttackHandle(item);
+    const handle = getAttackHandle(item);
     const available = canAttemptUse(handle.activity, handle.item);
     weapons.push({
       id: `weapon:${item.id}`,

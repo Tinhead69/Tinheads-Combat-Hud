@@ -49,4 +49,14 @@ function assert(cond, msg) {
   assert(Math.abs(((segs[0].start + segs[4].end) / 2) - mid) < 2, "action nest fans over Action wedge");
 }
 
+{
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(12, action.start, action.end);
+  const span = segs[11].end - segs[0].start;
+  const sweep = segs[0].end - segs[0].start;
+  assert(span > 240, "crowded action nest spreads into readable wedges");
+  assert(sweep > 18, "each crowded wedge stays wide enough to read");
+  assert(span < 360, "crowded nest still leaves a gap");
+}
+
 console.log(`\n${passed} assertions passed`);

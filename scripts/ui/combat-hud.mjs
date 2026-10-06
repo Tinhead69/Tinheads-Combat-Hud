@@ -6,7 +6,7 @@ import {
   actorFromToken,
   canUseActor,
   getActivationOptions,
-  getFavoritedWeapons,
+  getEquippedWeapons,
   getSpellLevels,
   t
 } from "../data/actor-options.mjs";
@@ -52,11 +52,32 @@ function nextClipId(prefix = "tch-clip") {
 }
 
 /**
+ * Split a wedge name onto two lines so it stays inside a wider slice.
+ * @param {string} caption
+ * @returns {string[]}
+ */
+function captionLines(caption) {
+  const text = String(caption ?? "").trim();
+  if (!text) return [];
+  const limit = 14;
+  if (text.length <= limit) return [text];
+  const mid = text.lastIndexOf(" ", limit);
+  if (mid >= 4) {
+    const rest = text.slice(mid + 1);
+    return [
+      text.slice(0, mid),
+      rest.length > limit ? `${rest.slice(0, limit - 1)}…` : rest
+    ];
+  }
+  return [`${text.slice(0, limit - 1)}…`];
+}
+
+/**
  * Compact SVG viewBox + ring radii (px).
  * Main Action/BA/R is intentionally smaller so nested partial arcs stay on-screen.
  * Keep preview/radial-preview.html RINGS in sync with these values.
  */
-export const SIZE = 640;
+export const SIZE = 920;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
 
@@ -69,17 +90,17 @@ const CY = SIZE / 2;
  *  flatInner: number, flatOuter: number
  * }>} */
 export const RINGS = Object.freeze({
-  hub: 34,
-  mainInner: 42,
-  mainOuter: 108,
-  actionInner: 116,
-  actionOuter: 178,
-  nest1Inner: 186,
-  nest1Outer: 238,
-  nest2Inner: 246,
-  nest2Outer: 292,
-  flatInner: 116,
-  flatOuter: 178
+  hub: 40,
+  mainInner: 50,
+  mainOuter: 132,
+  actionInner: 144,
+  actionOuter: 272,
+  nest1Inner: 284,
+  nest1Outer: 384,
+  nest2Inner: 396,
+  nest2Outer: 448,
+  flatInner: 144,
+  flatOuter: 272
 });
 
 /** @type {CombatHud|null} */
@@ -104,7 +125,7 @@ export class CombatHud {
       section: null,       // action | checks | bonus | reaction
       castSpell: false,
       useItem: false,
-      weaponNestId: null,  // favorited weapon id with Attack / Use Ability nest
+      weaponNestId: null,  // equipped weapon id with Attack / Use Ability nest
       useAbility: false,   // weapon ability modes nest open
       featureNestId: null, // multi-mode class feature (Channel Divinity, …)
       abilityId: null,     // checks nest: str|dex|…
@@ -559,7 +580,7 @@ export class CombatHud {
   }
 
   _drawActionRing() {
-    const weapons = getFavoritedWeapons(this.actor);
+    const weapons = getEquippedWeapons(this.actor);
     const entries = buildActionRingEntries(this.actor, weapons);
     const actionMain = mainSectionById("action");
     const segs = arcSegmentsForParent(
@@ -576,7 +597,7 @@ export class CombatHud {
 
     const group = this._ringGroup("action");
     if (!weapons.length) {
-      this._emptyLabel(group, t("Empty.NoFavorites"), (RINGS.actionInner + RINGS.actionOuter) / 2 - 10);
+      this._emptyLabel(group, t("Empty.NoEquippedWeapons"), (RINGS.actionInner + RINGS.actionOuter) / 2 - 10);
     }
 
     entries.forEach((entry, i) => {
@@ -731,7 +752,7 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, { maxSpanDeg: 150 });
+    const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, { maxSpanDeg: 240 });
     abilities.forEach((opt, i) => {
       const seg = segs[i];
       const g = this._leafSegment({
@@ -792,7 +813,7 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(modes.length, parent.start, parent.end, { maxSpanDeg: 170 });
+    const segs = arcSegmentsForParent(modes.length, parent.start, parent.end, { maxSpanDeg: 260 });
     modes.forEach((opt, i) => {
       const seg = segs[i];
       const caption = opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name;
@@ -835,7 +856,7 @@ export class CombatHud {
       abilities.length,
       main.start,
       main.end,
-      { maxSpanDeg: 200 }
+      { maxSpanDeg: 280 }
     );
 
     if (this._layout) {
@@ -935,7 +956,7 @@ export class CombatHud {
       items.length,
       parent.start,
       parent.end,
-      { maxSpanDeg: 170 }
+      { maxSpanDeg: 280 }
     );
     items.forEach((opt, i) => {
       const seg = segs[i];
@@ -1002,7 +1023,7 @@ export class CombatHud {
       levels.length,
       parent.start,
       parent.end,
-      { maxSpanDeg: 170 }
+      { maxSpanDeg: 280 }
     );
     if (this._layout) {
       this._layout.levelSegs = segs;
@@ -1064,7 +1085,7 @@ export class CombatHud {
       spells.length,
       parent.start,
       parent.end,
-      { maxSpanDeg: 160 }
+      { maxSpanDeg: 280 }
     );
     spells.forEach((spell, i) => {
       const seg = segs[i];
@@ -1121,7 +1142,7 @@ export class CombatHud {
       entries.length,
       main.start,
       main.end,
-      { maxSpanDeg: 160 }
+      { maxSpanDeg: 280 }
     );
     this._layout = {
       ...(this._layout || {}),
@@ -1230,13 +1251,22 @@ export class CombatHud {
     }
 
     if (cfg.caption) {
+      const lines = captionLines(cfg.caption);
+      const lineH = 15;
+      const origin = anchor.y + (cfg.label ? 8 : 0);
+      const startY = origin - ((lines.length - 1) * lineH) / 2;
       const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
       const asLabel = !cfg.label;
       cap.classList.add(asLabel ? "tch-segment__label" : "tch-segment__caption");
       cap.setAttribute("x", String(anchor.x));
-      cap.setAttribute("y", String(anchor.y + (cfg.label ? 8 : 0)));
-      const short = cfg.caption.length > 14 ? `${cfg.caption.slice(0, 12)}…` : cfg.caption;
-      cap.textContent = short;
+      cap.setAttribute("y", String(startY));
+      lines.forEach((line, index) => {
+        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        tspan.setAttribute("x", String(anchor.x));
+        tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
+        tspan.textContent = line;
+        cap.appendChild(tspan);
+      });
       g.appendChild(cap);
     }
 

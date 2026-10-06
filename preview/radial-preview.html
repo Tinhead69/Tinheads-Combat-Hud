@@ -115,19 +115,19 @@
     }
 
     // Keep in sync with scripts/ui/combat-hud.mjs SIZE / RINGS
-    const SIZE = 640;
+    const SIZE = 920;
     const CX = SIZE / 2;
     const CY = SIZE / 2;
     const RINGS = {
-      hub: 34,
-      mainInner: 42,
-      mainOuter: 108,
-      actionInner: 116,
-      actionOuter: 178,
-      nest1Inner: 186,
-      nest1Outer: 238,
-      nest2Inner: 246,
-      nest2Outer: 292
+      hub: 40,
+      mainInner: 50,
+      mainOuter: 132,
+      actionInner: 144,
+      actionOuter: 272,
+      nest1Inner: 284,
+      nest1Outer: 384,
+      nest2Inner: 396,
+      nest2Outer: 448
     };
 
     function icon(bg, glyph, fg = "#f4f7fb") {
@@ -384,6 +384,22 @@
       }
     }
 
+    function captionLines(caption) {
+      const text = String(caption ?? "").trim();
+      if (!text) return [];
+      const limit = 14;
+      if (text.length <= limit) return [text];
+      const mid = text.lastIndexOf(" ", limit);
+      if (mid >= 4) {
+        const rest = text.slice(mid + 1);
+        return [
+          text.slice(0, mid),
+          rest.length > limit ? `${rest.slice(0, limit - 1)}…` : rest
+        ];
+      }
+      return [`${text.slice(0, limit - 1)}…`];
+    }
+
     function leaf(cfg) {
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.classList.add("tch-segment");
@@ -425,10 +441,20 @@
       }
       if (cfg.caption) {
         const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        cap.classList.add("tch-segment__caption");
+        cap.classList.add(cfg.label ? "tch-segment__caption" : "tch-segment__label");
+        const lines = captionLines(cfg.caption);
+        const lineH = 15;
+        const origin = a.y + (cfg.label ? 10 : 0);
+        const startY = origin - ((lines.length - 1) * lineH) / 2;
         cap.setAttribute("x", a.x);
-        cap.setAttribute("y", a.y + 10);
-        cap.textContent = cfg.caption.length > 12 ? cfg.caption.slice(0, 10) + "…" : cfg.caption;
+        cap.setAttribute("y", startY);
+        lines.forEach((line, index) => {
+          const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+          tspan.setAttribute("x", a.x);
+          tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
+          tspan.textContent = line;
+          cap.appendChild(tspan);
+        });
         g.appendChild(cap);
       }
       return g;
@@ -515,7 +541,7 @@
       const weapon = MOCK.weapons.find(w => w.name === state.weaponNest);
       const abilities = weapon?.abilities ?? [];
       const parent = actionLayout.weaponMenuSegs[1] || parentSeg(state.weaponNest);
-      const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, { maxSpanDeg: 150 });
+      const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, { maxSpanDeg: 240 });
       abilities.forEach((opt, i) => {
         const seg = segs[i];
         const g = leaf({
@@ -531,7 +557,7 @@
 
     function drawInventory() {
       const parent = parentSeg("useItem");
-      const segs = arcSegmentsForParent(MOCK.inventory.length, parent.start, parent.end, { maxSpanDeg: 170 });
+      const segs = arcSegmentsForParent(MOCK.inventory.length, parent.start, parent.end, { maxSpanDeg: 280 });
       MOCK.inventory.forEach((item, i) => {
         const seg = segs[i];
         const g = leaf({
@@ -547,7 +573,7 @@
 
     function drawLevels() {
       const parent = parentSeg("cast");
-      const segs = arcSegmentsForParent(MOCK.levels.length, parent.start, parent.end, { maxSpanDeg: 170 });
+      const segs = arcSegmentsForParent(MOCK.levels.length, parent.start, parent.end, { maxSpanDeg: 280 });
       actionLayout.levelSegs = segs;
       actionLayout.levelInfos = MOCK.levels;
       MOCK.levels.forEach((lvl, i) => {
@@ -573,7 +599,7 @@
       let parent = parentSeg("cast");
       const li = actionLayout.levelInfos.findIndex(l => l.level === level);
       if (li >= 0) parent = actionLayout.levelSegs[li];
-      const segs = arcSegmentsForParent(spells.length, parent.start, parent.end, { maxSpanDeg: 160 });
+      const segs = arcSegmentsForParent(spells.length, parent.start, parent.end, { maxSpanDeg: 280 });
       spells.forEach((spell, i) => {
         const seg = segs[i];
         const g = leaf({
@@ -591,7 +617,7 @@
 
     function drawFlat(options) {
       const main = mainSectionById(state.section === "reaction" ? "reaction" : "bonus");
-      const segs = arcSegmentsForParent(options.length, main.start, main.end, { maxSpanDeg: 160 });
+      const segs = arcSegmentsForParent(options.length, main.start, main.end, { maxSpanDeg: 280 });
       options.forEach((opt, i) => {
         const seg = segs[i];
         const g = leaf({
@@ -618,7 +644,7 @@
 
     function drawAbilities() {
       const main = mainSectionById("checks");
-      const segs = arcSegmentsForParent(MOCK_ABILITIES.length, main.start, main.end, { maxSpanDeg: 200 });
+      const segs = arcSegmentsForParent(MOCK_ABILITIES.length, main.start, main.end, { maxSpanDeg: 280 });
       abilityLayout = { segs, entries: MOCK_ABILITIES };
       MOCK_ABILITIES.forEach((abl, i) => {
         const seg = segs[i];

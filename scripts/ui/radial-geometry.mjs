@@ -9,13 +9,13 @@
 /** Defaults for nested / leaf arcs (Action options, spells, Use Item, BA/R). */
 export const ARC_DEFAULTS = Object.freeze({
   /** Cap total arc span so a large list stays readable and leaves a gap. */
-  maxSpanDeg: 200,
+  maxSpanDeg: 300,
   /** Preferred wedge width when there is room. */
-  idealSegmentDeg: 34,
-  /** Floor so tiny counts stay clickable. */
-  minSegmentDeg: 20,
+  idealSegmentDeg: 42,
+  /** Floor so a crowded ring still has a readable slice. */
+  minSegmentDeg: 26,
   /** Gap between neighboring segments. */
-  gapDeg: 2.5
+  gapDeg: 3
 });
 
 /**
@@ -144,12 +144,12 @@ export function arcSegments(count, opts = {}) {
 export function arcSegmentsForParent(count, parentStart, parentEnd, opts = {}) {
   const mid = normalizeMid(parentStart, parentEnd);
   const parentSpan = parentSweep(parentStart, parentEnd);
-  // Allow child arc to be a bit wider than the parent for readability, but keep a gap.
-  const maxSpanDeg = Math.min(
-    opts.maxSpanDeg ?? ARC_DEFAULTS.maxSpanDeg,
-    Math.max(parentSpan + 40, 90),
-    ARC_DEFAULTS.maxSpanDeg
-  );
+  const minSegmentDeg = opts.minSegmentDeg ?? ARC_DEFAULTS.minSegmentDeg;
+  const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
+  const ceiling = Math.min(opts.maxSpanDeg ?? ARC_DEFAULTS.maxSpanDeg, ARC_DEFAULTS.maxSpanDeg);
+  // A 90° parent cannot hold a long option list. Grow until each wedge is readable.
+  const readable = count * minSegmentDeg + gapDeg * Math.max(count - 1, 0);
+  const maxSpanDeg = Math.min(ceiling, Math.max(parentSpan + 40, 110, Math.min(readable, ceiling)));
   return arcSegments(count, { ...opts, midAngle: mid, maxSpanDeg });
 }
 

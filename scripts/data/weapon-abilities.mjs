@@ -51,8 +51,8 @@ export function getWeaponActivityGroups(item) {
 }
 
 /**
- * Enrich a favorited-weapon option with special-ability metadata.
- * @param {object} weaponOption from getFavoritedWeapons
+ * Enrich an equipped-weapon option with special-ability metadata.
+ * @param {object} weaponOption from getEquippedWeapons
  */
 export function enrichWeaponOption(weaponOption) {
   const item = weaponOption.item;

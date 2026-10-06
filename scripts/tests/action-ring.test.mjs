@@ -14,6 +14,7 @@ globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 const { buildActionRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions } =
   await import("../data/basic-actions.mjs");
 const { getUsableInventoryItems } = await import("../data/use-items.mjs");
+const { getEquippedWeapons } = await import("../data/actor-options.mjs");
 
 let passed = 0;
 function assert(cond, msg) {
@@ -91,5 +92,19 @@ assert(inv.some(i => i.name === "Potion of Healing"), "includes potion");
 assert(inv.every(i => i.name !== "Longsword"), "excludes weapons");
 assert(inv.every(i => i.name !== "Fire Bolt"), "excludes spells");
 assert(inv.find(i => i.name === "Empty Flask")?.available === false, "qty 0 unavailable");
+
+const equippedActor = {
+  items: [
+    { id: "w1", type: "weapon", name: "Longsword", sort: 2, img: "", system: { equipped: true, activation: { type: "action" } } },
+    { id: "w2", type: "weapon", name: "Dagger", sort: 1, img: "", system: { equipped: false, activation: { type: "action" } } },
+    { id: "w3", type: "weapon", name: "Shortbow", sort: 3, img: "", system: { equipped: true, activation: { type: "action" } } },
+    { id: "a1", type: "equipment", name: "Shield", sort: 0, img: "", system: { equipped: true } }
+  ],
+  system: { favorites: [{ id: ".Item.w2", type: "item", sort: 0 }] }
+};
+const equipped = getEquippedWeapons(equippedActor);
+assert(equipped.map(w => w.name).join(",") === "Longsword,Shortbow", "equipped weapons only, in sheet order");
+assert(equipped.every(w => w.name !== "Dagger"), "unequipped favorite stays off the ring");
+assert(equipped.every(w => w.name !== "Shield"), "equipped non-weapons stay off the ring");
 
 console.log(`\n${passed} assertions passed`);

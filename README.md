@@ -8,7 +8,7 @@ Nested radial combat HUD for **Foundry VTT v13** + **dnd5e 3.0.0+**. Right-click
 - Token HUD button (Foundry’s right-click token surface) labeled **Combat Hud**
 - Actor directory + combatant context-menu entries
 - Compact viewport-centered main radial: **Action | Checks | Bonus Action | Reaction**
-- Hover **Action** → favorited weapons + Dash/Disengage/Dodge/Ready + class features (e.g. Lay on Hands / Channel Divinity) + **Use Item** + **Cast Spell**
+- Hover **Action** → equipped weapons + Dash/Disengage/Dodge/Ready + class features (e.g. Lay on Hands / Channel Divinity) + **Use Item** + **Cast Spell**
 - Special weapons → **Attack** / **Use Ability** → ability modes; plain weapons stay direct attack leaves
 - Hover **Checks** → STR…CHA → **Check** | **Save** via dnd5e `rollAbilityCheck` / `rollSavingThrow`
 - Hover **Cast Spell** → **available** spell levels only → spells (`item.img` + tooltips)
@@ -85,7 +85,7 @@ ln -s /absolute/path/to/this/repo "${FOUNDRY_DATA}/Data/modules/tinheads-combat-
 
 ### Favorites
 
-Weapons on the Action ring come from the character sheet **Favorites** (`actor.system.favorites`), filtered to **weapons only**. Favorite a weapon on the dnd5e sheet first.
+Weapons on the Action ring are the actor's **equipped** weapons (`item.system.equipped`). Equip a weapon on the dnd5e inventory tab; unequipped weapons stay off the ring.
 
 ### Macro / API (debug)
 
@@ -118,7 +118,7 @@ styles/combat-hud.css
 scripts/
   module.js                 # entry
   hooks/token-entry.mjs     # Token HUD + context menus
-  data/actor-options.mjs    # favorites, spells, BA/R helpers
+  data/actor-options.mjs    # equipped weapons, spells, BA/R helpers
   data/resolve.mjs          # use() / targeting feedback
   ui/combat-hud.mjs         # radial HUD controller
   ui/radial-geometry.mjs    # wedge path math

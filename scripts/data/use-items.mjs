@@ -95,7 +95,7 @@ function itemIsActionUsable(item) {
  */
 function pickUseActivity(item, activities) {
   if (!activities.length) return null;
-  // Prefer utility / heal / enchant over attack (weapons are on favorites)
+  // Prefer utility / heal / enchant over attack (weapons are the equipped wedges)
   return activities.find(a => a.type === "utility")
     ?? activities.find(a => a.type === "heal")
     ?? activities.find(a => a.type === "consume")

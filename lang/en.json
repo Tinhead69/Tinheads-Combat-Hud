@@ -70,7 +70,7 @@
       "EmDash": "—"
     },
     "Empty": {
-      "NoFavorites": "No favorited weapons",
+      "NoEquippedWeapons": "No equipped weapons",
       "NoSpellsAtLevel": "No spells at this level",
       "NoSpellLevels": "No castable spells",
       "NoBonusActions": "No bonus actions",

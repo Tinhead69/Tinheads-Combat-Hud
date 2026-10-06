@@ -211,7 +211,7 @@ function safeLocalize(key, fallback) {
 /**
  * Ordered Action sub-radial leaves: weapons → basics → Use Item → Cast Spell.
  * @param {Actor} actor
- * @param {Array<object>} weapons from getFavoritedWeapons
+ * @param {Array<object>} weapons from getEquippedWeapons
  * @returns {Array<object>}
  */
 export function buildActionRingEntries(actor, weapons) {
