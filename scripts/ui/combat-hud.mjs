@@ -1301,9 +1301,11 @@ export class CombatHud {
   }
 
   async _onLeafClick(option) {
-    const result = await resolveHudOption(option, { actor: this.actor });
-    if (result.closed) this.close();
-    else this._draw();
+    // activity.use() / item.use() open configure dialogs and do not resolve
+    // until those dialogs close. Drop the radial first so the popups are visible.
+    const actor = this.actor;
+    this.close();
+    await resolveHudOption(option, { actor });
   }
 
   showTooltip(data, _segment, event) {
