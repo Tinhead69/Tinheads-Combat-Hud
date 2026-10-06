@@ -40,15 +40,16 @@
   ],
   "authors": [
     {
-      "name": "Tinhead"
+      "name": "Tinhead",
+      "url": "https://github.com/Tinhead69"
     }
   ],
-  "url": "",
-  "manifest": "",
-  "download": "",
+  "url": "https://github.com/Tinhead69/Tinheads-Combat-Hud",
+  "manifest": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Combat-Hud/main/module.json",
+  "download": "https://github.com/Tinhead69/Tinheads-Combat-Hud/archive/refs/heads/main.zip",
   "license": "MIT",
-  "readme": "README.md",
-  "bugs": "",
+  "readme": "https://github.com/Tinhead69/Tinheads-Combat-Hud/blob/main/README.md",
+  "bugs": "https://github.com/Tinhead69/Tinheads-Combat-Hud/issues",
   "flags": {
     "hotReload": {
       "extensions": ["css", "html", "hbs", "json"],
