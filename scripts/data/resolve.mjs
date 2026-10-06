@@ -166,11 +166,26 @@ function hasActiveTargets() {
 }
 
 /**
- * Prefer activity.use(); fall back to item.use(); then basic-action chat.
+ * Weapon attacks post the item chat card only.
+ * activity.use({ configure: true }) also opens the Attack Roll dialog.
+ * @param {object} option
+ * @returns {boolean}
+ */
+function isWeaponAttackOption(option) {
+  return option?.kind === "weapon" || option?.kind === "weapon-attack";
+}
+
+/**
+ * Prefer activity.use(); weapon attacks post a chat card instead of the roll dialog.
+ * Fall back to item.use(); then basic-action chat.
  * @param {object} option
  */
 async function useOption(option) {
   const { activity, item } = option;
+
+  if (isWeaponAttackOption(option) && item && typeof item.displayCard === "function") {
+    return item.displayCard();
+  }
 
   if (activity && typeof activity.use === "function") {
     return activity.use(

@@ -1,6 +1,6 @@
 /**
- * Usable inventory items for the Action → Use Item nest.
- * Prefer consumables / tools / equipment (and similar) with an Action-like use.
+ * Usable inventory for the Action → Use Item nest.
+ * Consumables only (potions, scrolls, and similar).
  */
 
 import {
@@ -13,14 +13,8 @@ import {
   t
 } from "./actor-options.mjs";
 
-/** Item types that belong under Use Item (not weapons/spells/class features). */
-const USE_ITEM_TYPES = new Set([
-  "consumable",
-  "tool",
-  "equipment",
-  "loot",
-  "container"
-]);
+/** Item types that belong under Use Item. */
+const USE_ITEM_TYPES = new Set(["consumable"]);
 
 /**
  * @param {Actor} actor
@@ -79,14 +73,8 @@ function itemIsActionUsable(item) {
   const type = item.system?.activation?.type ?? "";
   if (type === "action" || type === "special") return true;
 
-  // Consumables are typically usable even when activation is blank
-  if (item.type === "consumable") return true;
-
-  // Tools / equipment with limited uses
-  const uses = item.system?.uses;
-  if (uses && (uses.max || uses.value != null)) return true;
-
-  return typeof item.use === "function" && !!item.system?.activities;
+  // Potions and other consumables are usable even when activation is blank.
+  return item.type === "consumable";
 }
 
 /**

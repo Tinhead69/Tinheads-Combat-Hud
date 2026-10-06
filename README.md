@@ -12,7 +12,7 @@ Nested radial combat HUD for **Foundry VTT v13** + **dnd5e 3.0.0+**. Right-click
 - Special weapons → **Attack** / **Use Ability** → ability modes; plain weapons stay direct attack leaves
 - Hover **Checks** → STR…CHA → **Check** | **Save** via dnd5e `rollAbilityCheck` / `rollSavingThrow`
 - Hover **Cast Spell** → **available** spell levels only → spells (`item.img` + tooltips)
-- Hover **Use Item** → Action-usable inventory leaves → click `use()` → close HUD
+- Hover **Use Item** → consumables only → click `use()` → close HUD
 - Center hub = **End Turn** (`Combat#nextTurn` when GM or current combatant owner); **Esc** / backdrop dismiss
 - **Draggable** HUD (grab ring + hub drag-threshold); position clamped so open nests stay on-screen
 - Nested rings are **partial arcs** (not full 360°)

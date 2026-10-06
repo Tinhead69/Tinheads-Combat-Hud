@@ -48,7 +48,15 @@ const actor = {
     item({ name: "Dodge", type: "feat", identifier: "dodge" }),
     item({ name: "Potion of Healing", type: "consumable", quantity: 2 }),
     item({ name: "Empty Flask", type: "consumable", quantity: 0 }),
+    item({ name: "Thieves' Tools", type: "tool" }),
     item({ name: "Longsword", type: "weapon" }),
+    item({ name: "Chain Mail", type: "equipment", system: { type: { value: "heavy" }, armor: { value: 16 } } }),
+    item({
+      name: "Armor of Gleaming",
+      type: "equipment",
+      activities: [{ id: "gleam", name: "Gleam", type: "utility", activation: { type: "action" } }],
+      system: { type: { value: "medium" } }
+    }),
     item({ name: "Fire Bolt", type: "spell", system: { level: 0, preparation: { mode: "always", prepared: true } } }),
     item({
       name: "Cunning Action",
@@ -90,6 +98,9 @@ assert(kinds.indexOf("useItem") < kinds.indexOf("cast"), "Use Item before Cast S
 const inv = getUsableInventoryItems(actor);
 assert(inv.some(i => i.name === "Potion of Healing"), "includes potion");
 assert(inv.every(i => i.name !== "Longsword"), "excludes weapons");
+assert(inv.every(i => i.name !== "Chain Mail"), "armour stays out of Use Item");
+assert(inv.every(i => i.name !== "Armor of Gleaming"), "magical armour stays out of Use Item");
+assert(inv.every(i => i.name !== "Thieves' Tools"), "tools stay out of Use Item");
 assert(inv.every(i => i.name !== "Fire Bolt"), "excludes spells");
 assert(inv.find(i => i.name === "Empty Flask")?.available === false, "qty 0 unavailable");
 

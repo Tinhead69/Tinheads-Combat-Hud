@@ -190,9 +190,62 @@ assert(!features.some(f => f.name === "Dodge"), "Dodge stays on basics only");
 const loh = features.find(f => f.name === "Lay on Hands");
 assert(loh.hasNest === false, "Lay on Hands is a leaf");
 assert(formatUses(loh.item, loh.activity) === "25/25", "uses pool shown");
+
+const layOnHands = {
+  name: "Lay on Hands Pool",
+  actor: { getRollData: () => ({ classes: { paladin: { levels: 6 } } }) },
+  system: { uses: { spent: 10, max: "@classes.paladin.levels * 5" } }
+};
+const layActivity = {
+  uses: { spent: 0, max: "", value: 0 },
+  consumption: { targets: [{ type: "itemUses", value: "1" }] }
+};
+assert(formatUses(layOnHands, layActivity) === "20/30", "lay on hands shows remaining pool, not the activity's 0");
 const cd = features.find(f => f.name === "Channel Divinity");
 assert(cd.hasNest === true, "Channel Divinity nests modes");
 assert(getFeatureModeOptions(cd).length === 2, "two divinity modes");
+
+const splitPaladin = {
+  ...paladin,
+  items: [
+    ...paladin.items,
+    {
+      id: "abjure",
+      name: "Channel Divinity: Abjure Enemies",
+      type: "feat",
+      img: "icons/abjure.webp",
+      isOwner: true,
+      system: {
+        activation: { type: "action" },
+        activities: [
+          { id: "abj", name: "Abjure Enemies", type: "save", activation: { type: "action" } }
+        ]
+      }
+    },
+    {
+      id: "weapon",
+      name: "Channel Divinity: Sacred Weapon",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        type: { value: "class", subtype: "channelDivinity" },
+        activities: [
+          { id: "sw", name: "Sacred Weapon", type: "utility", activation: { type: "action" } }
+        ]
+      }
+    }
+  ]
+};
+const splitFeatures = getActionFeatureOptions(splitPaladin);
+assert(splitFeatures.filter(f => /channel divinity/i.test(f.name)).length === 1, "one Channel Divinity button");
+const splitCd = splitFeatures.find(f => f.name === "Channel Divinity");
+assert(splitCd.hasNest === true, "split Channel Divinity opens a nest");
+const splitModes = getFeatureModeOptions(splitCd).map(mode => mode.name);
+assert(splitModes.includes("Turn Undead"), "parent modes stay in the nest");
+assert(splitModes.includes("Abjure Enemies"), "named option is nested");
+assert(splitModes.includes("Sacred Weapon"), "subtype option is nested");
+assert(!splitFeatures.some(f => f.name.includes("Abjure")), "option is not its own wedge");
 
 const ring = buildActionRingEntries(paladin, []);
 assert(ring.some(e => e.kind === "feature"), "features in Action ring entries");

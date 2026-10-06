@@ -17,7 +17,7 @@
       "BonusHint": "Bonus Action options from your sheet.",
       "ReactionHint": "Reaction options from your sheet.",
       "CastSpellHint": "Choose a spell level, then a spell to cast.",
-      "UseItemHint": "Potions, tools, and other usable inventory."
+      "UseItemHint": "Potions, scrolls, and other consumables."
     },
     "BasicActions": {
       "Dash": "Dash",
