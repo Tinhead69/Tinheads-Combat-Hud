@@ -82,6 +82,9 @@
     },
     "Notify": {
       "SelectTarget": "Select a target first.",
+      "ChooseTarget": "Select a target for {name}.",
+      "ChooseTargetHint": "Click a token. Press Esc to cancel.",
+      "TargetCancelled": "Target selection cancelled.",
       "Unavailable": "That option is unavailable.",
       "UnavailableReason": "{reason}",
       "NoActor": "No usable actor for this token.",

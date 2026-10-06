@@ -42,8 +42,11 @@ export async function resolveHudOption(option, ctx = {}) {
     : (option.requiresTarget ?? optionRequiresTarget(option.activity, option.item));
 
   if (requiresTarget && !hasActiveTargets()) {
-    ui.notifications.warn(t("Notify.SelectTarget"));
-    return { closed: true, ok: false };
+    const token = await requestTargetSelection(option.name || t("Notify.SelectTarget"));
+    if (!token) {
+      ui.notifications.warn(t("Notify.TargetCancelled"));
+      return { closed: true, ok: false };
+    }
   }
 
   const local = shouldResolveLocally(actor) || canResolveLocally(actor);
@@ -166,8 +169,79 @@ function hasActiveTargets() {
 }
 
 /**
- * Weapon attacks post the item chat card only.
- * activity.use({ configure: true }) also opens the Attack Roll dialog.
+ * Ask the player to click a token, then target it.
+ * @param {string} name
+ * @returns {Promise<Token|null>}
+ */
+function requestTargetSelection(name) {
+  const label = t("Notify.ChooseTarget", { name });
+  const hint = t("Notify.ChooseTargetHint");
+  ui.notifications?.info?.(label);
+
+  const stage = globalThis.canvas?.stage;
+  const placeables = globalThis.canvas?.tokens?.placeables;
+  if (!stage || !placeables) return Promise.resolve(null);
+
+  const banner = document.createElement("div");
+  banner.className = "tch-target-prompt";
+  banner.textContent = `${label} ${hint}`;
+  document.body.appendChild(banner);
+  document.body.classList.add("tch-targeting");
+
+  return new Promise(resolve => {
+    let settled = false;
+
+    const finish = (token) => {
+      if (settled) return;
+      settled = true;
+      banner.remove();
+      document.body.classList.remove("tch-targeting");
+      window.removeEventListener("keydown", onKey, true);
+      stage.off("pointerdown", onPointer);
+      Hooks.off("targetToken", onTarget);
+      resolve(token ?? null);
+    };
+
+    const onKey = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      finish(null);
+    };
+
+    const onTarget = (user, token, targeted) => {
+      if (!targeted || user?.id !== game.user?.id || !token) return;
+      finish(token);
+    };
+
+    const onPointer = (event) => {
+      const layer = globalThis.canvas.tokens;
+      const point = event.getLocalPosition?.(layer) ?? event.data?.getLocalPosition?.(layer);
+      if (!point) return;
+      const tokens = [...placeables].reverse();
+      const hit = tokens.find(token => {
+        if (!token?.visible || token.document?.hidden) return false;
+        const bounds = token.bounds;
+        return bounds?.contains?.(point.x, point.y);
+      });
+      if (!hit) return;
+      event.stopPropagation?.();
+      try {
+        hit.setTarget(true, { releaseOthers: true, groupSelection: false });
+      } catch (_) {
+        /* targetToken hook may already have fired */
+      }
+      finish(hit);
+    };
+
+    window.addEventListener("keydown", onKey, true);
+    Hooks.on("targetToken", onTarget);
+    stage.on("pointerdown", onPointer);
+  });
+}
+
+/**
+ * A weapon wedge or the Attack leaf under a special weapon.
  * @param {object} option
  * @returns {boolean}
  */
@@ -176,15 +250,92 @@ function isWeaponAttackOption(option) {
 }
 
 /**
- * Prefer activity.use(); weapon attacks post a chat card instead of the roll dialog.
+ * Live attack activity. The option may hold a stale copy without use()/rollAttack().
+ * @param {object} option
+ * @returns {object|null}
+ */
+function weaponAttackActivity(option) {
+  const item = option?.item;
+  const stored = option?.activity;
+  const storedId = stored?.id ?? stored?._id ?? null;
+  const collection = item?.system?.activities;
+  const live = storedId && collection?.get?.(storedId);
+  if (live && (live.type === "attack" || typeof live.rollAttack === "function")) return live;
+
+  let entries = [];
+  if (collection?.contents && Array.isArray(collection.contents)) entries = collection.contents;
+  else if (typeof collection?.values === "function") entries = Array.from(collection.values());
+  else if (collection && typeof collection[Symbol.iterator] === "function") entries = Array.from(collection);
+
+  const found = entries.find(activity =>
+    activity?.type === "attack" || typeof activity?.rollAttack === "function"
+  );
+  if (found) return found;
+  if (stored && typeof stored.use === "function") return stored;
+  return null;
+}
+
+/**
+ * First equipped ammunition choice for a ranged attack, when the weapon lists any.
+ * @param {Item|null} item
+ * @returns {string|null}
+ */
+function defaultAmmunitionId(item) {
+  const options = item?.system?.ammunitionOptions;
+  if (!Array.isArray(options)) return null;
+  const choice = options.find(entry => entry?.value);
+  return choice?.value ?? null;
+}
+
+function midiQolActive() {
+  return !!game.modules?.get?.("midi-qol")?.active;
+}
+
+/**
+ * Post the activity card (Attack / Damage buttons) and roll against the current target.
+ * displayCard() only posts the item description, so the attack controls never appear.
+ * The usage dialog stays closed. Midi-QOL applies its own attack workflow from activity.use().
+ * @param {object} option
+ */
+async function useWeaponAttack(option) {
+  const item = option.item ?? null;
+  const activity = weaponAttackActivity(option);
+
+  if (activity && typeof activity.use === "function") {
+    const usage = await activity.use({}, { configure: false }, { create: true });
+    if (usage && hasActiveTargets() && !midiQolActive() && typeof activity.rollAttack === "function") {
+      const ammunition = defaultAmmunitionId(item);
+      const config = ammunition ? { ammunition } : {};
+      await activity.rollAttack(config, { configure: false }, { create: true });
+    }
+    return usage;
+  }
+
+  if (item && typeof item.use === "function") {
+    return item.use({}, { configure: false }, { create: true });
+  }
+
+  if (item && typeof item.rollAttack === "function") {
+    return item.rollAttack({ configure: false });
+  }
+
+  if (item && typeof item.displayCard === "function") {
+    return item.displayCard();
+  }
+
+  throw new Error("No usable activity or item.use() on option");
+}
+
+/**
+ * Prefer activity.use(); weapon attacks post an activity card and roll.
  * Fall back to item.use(); then basic-action chat.
  * @param {object} option
  */
 async function useOption(option) {
   const { activity, item } = option;
 
-  if (isWeaponAttackOption(option) && item && typeof item.displayCard === "function") {
-    return item.displayCard();
+  if (isWeaponAttackOption(option)) {
+    return useWeaponAttack(option);
   }
 
   if (activity && typeof activity.use === "function") {
