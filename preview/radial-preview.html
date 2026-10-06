@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tinhead's Combat Hud — Radial Preview</title>
+  <link rel="stylesheet" href="../styles/combat-hud.css" />
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(70, 90, 70, 0.35), transparent 45%),
+        radial-gradient(ellipse at 70% 80%, rgba(40, 55, 80, 0.4), transparent 50%),
+        linear-gradient(160deg, #1a2220 0%, #0e1218 45%, #1c1814 100%);
+      color: #e8eef5;
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+    }
+    .preview-banner {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 10001;
+      max-width: 320px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.45);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+    .preview-banner h1 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .preview-banner p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+      opacity: 0.9;
+    }
+    .scene-grid {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 64px 64px;
+      pointer-events: none;
+    }
+    .token-mock {
+      position: fixed;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 3px solid rgba(220, 200, 120, 0.85);
+      background:
+        radial-gradient(circle at 35% 30%, #6a7a68, #2a332c 70%);
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    .token-mock.a { left: 22%; top: 38%; }
+    .token-mock.b { left: 58%; top: 48%; }
+    .token-mock.c { left: 40%; top: 62%; }
+  </style>
+</head>
+<body>
+  <div class="scene-grid"></div>
+  <div class="token-mock a"></div>
+  <div class="token-mock b"></div>
+  <div class="token-mock c"></div>
+  <div class="preview-banner">
+    <h1>Tinhead's Combat Hud</h1>
+    <p>Static preview (no Foundry). Compact 4-wedge radial — partial arcs, artwork-first. In Foundry: draggable + viewport clamp; socketlib proxy for OBSERVER. Try <code>?shot=checks</code> or <code>?shot=weapon</code>.</p>
+  </div>
+
+  <script type="module">
+    import {
+      arcSegmentsForParent,
+      mainSectionAngles,
+      mainSectionById,
+      sectionAnchor,
+      sectionWedgePath,
+      wedgeAnchor
+    } from "../scripts/ui/radial-geometry.mjs";
+    import { appendHubArt, appendWedgeArt } from "../scripts/ui/wedge-art.mjs";
+    import { previewWedge } from "../scripts/data/module-icons.mjs";
+
+    const CHROME = {
+      dash: previewWedge("dash"),
+      disengage: previewWedge("disengage"),
+      dodge: previewWedge("dodge"),
+      ready: previewWedge("ready"),
+      castSpell: previewWedge("cast-spell"),
+      useItem: previewWedge("use-item"),
+      checks: previewWedge("checks"),
+      check: previewWedge("check"),
+      save: previewWedge("save"),
+      endTurn: previewWedge("end-turn"),
+      action: previewWedge("action"),
+      bonus: previewWedge("bonus"),
+      reaction: previewWedge("reaction"),
+      attack: previewWedge("attack"),
+      useAbility: previewWedge("use-ability"),
+      spell0: previewWedge("spell-cantrip"),
+      abilities: {
+        str: previewWedge("str"), dex: previewWedge("dex"), con: previewWedge("constitution"),
+        int: previewWedge("int"), wis: previewWedge("wis"), cha: previewWedge("cha")
+      }
+    };
+
+    let clipSeq = 0;
+    function nextClipId(prefix = "prev-clip") {
+      clipSeq += 1;
+      return `${prefix}-${clipSeq}`;
+    }
+
+    // Keep in sync with scripts/ui/combat-hud.mjs SIZE / RINGS
+    const SIZE = 640;
+    const CX = SIZE / 2;
+    const CY = SIZE / 2;
+    const RINGS = {
+      hub: 34,
+      mainInner: 42,
+      mainOuter: 108,
+      actionInner: 116,
+      actionOuter: 178,
+      nest1Inner: 186,
+      nest1Outer: 238,
+      nest2Inner: 246,
+      nest2Outer: 292
+    };
+
+    function icon(bg, glyph, fg = "#f4f7fb") {
+      return "data:image/svg+xml," + encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+          <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="${bg}"/>
+            <stop offset="100%" stop-color="#12161c"/>
+          </linearGradient></defs>
+          <rect width="64" height="64" rx="10" fill="url(#g)"/>
+          <text x="32" y="40" text-anchor="middle" fill="${fg}" font-size="22" font-family="Georgia, serif">${glyph}</text>
+        </svg>`
+      );
+    }
+
+    const FALLBACK = previewWedge("fallback");
+
+    const MOCK = {
+      weapons: [
+        { name: "Longsword", img: icon("#5a4630", "S"), hasSpecial: false },
+        { name: "Wave", img: icon("#1e4a6a", "W", "#d7efff"), hasSpecial: true, abilities: [
+          { name: "Cube — Wall", img: icon("#2e5a7a", "1") },
+          { name: "Cube — Cage", img: icon("#2e5a7a", "2") },
+          { name: "Cube — Keep Out", img: icon("#2e5a7a", "3") }
+        ] },
+        { name: "Dagger", img: icon("#4a5564", "D"), hasSpecial: false }
+      ],
+      levels: [
+        {
+          level: 0, label: "Cantrip",
+          spells: [
+            { name: "Fire Bolt", img: icon("#7a2e1e", "F", "#ffd7c8"), tooltip: { title: "Fire Bolt", description: "Hurl a mote of fire.", targets: "1 creature", range: "120 ft", duration: "Instant", damage: "1d10 fire" } },
+            { name: "Ray of Frost", img: icon("#1e4a6a", "R", "#d7efff"), tooltip: { title: "Ray of Frost", description: "A frigid beam of blue-white light.", targets: "1 creature", range: "60 ft", duration: "Instant", damage: "1d8 cold" } }
+          ]
+        },
+        {
+          level: 1, label: "1st",
+          spells: [
+            { name: "Magic Missile", img: icon("#2e3f7a", "M", "#e0e7ff"), tooltip: { title: "Magic Missile", description: "Three darts of magical force.", targets: "up to 3 creatures", range: "120 ft", duration: "Instant", damage: "1d4+1 force" } },
+            { name: "Shield", img: icon("#2f5a4a", "Sh", "#d8fff0"), tooltip: { title: "Shield", description: "An invisible barrier of magical force.", targets: "Self", range: "Self", duration: "1 round", damage: null } }
+          ]
+        },
+        {
+          level: 2, label: "2nd",
+          spells: [
+            { name: "Misty Step", img: icon("#3a5a6a", "MS"), tooltip: { title: "Misty Step", description: "Briefly surrounded by silvery mist, you teleport.", targets: "Self", range: "Self", duration: "Instant", damage: null } }
+          ]
+        }
+      ],
+      bonus: [
+        { name: "Second Wind", img: icon("#6a5a20", "2") },
+        { name: "Misty Step", img: icon("#3a5a6a", "MS") }
+      ],
+      reaction: [
+        { name: "Shield", img: icon("#2f5a4a", "Sh", "#d8fff0") },
+        { name: "Opportunity Attack", img: icon("#5a3030", "OA") }
+      ],
+      basics: [
+        { name: "Dash", img: CHROME.dash },
+        { name: "Disengage", img: CHROME.disengage },
+        { name: "Dodge", img: CHROME.dodge },
+        { name: "Ready", img: CHROME.ready }
+      ],
+      inventory: [
+        { name: "Potion of Healing", img: icon("#5a2030", "P", "#ffd0d8") },
+        { name: "Alchemist's Fire", img: icon("#6a3a10", "AF", "#ffe0c0") },
+        { name: "Thieves' Tools", img: icon("#3a3a40", "TT") }
+      ]
+    };
+
+    const params = new URLSearchParams(location.search);
+    const shot = params.get("shot") || "action";
+    const state = {
+      section: shot === "bonus" ? "bonus"
+        : shot === "reaction" ? "reaction"
+        : shot === "checks" || shot === "check-roll" ? "checks"
+        : shot === "main" ? null
+        : "action",
+      castSpell: shot === "action" || shot === "tooltip",
+      useItem: shot === "items",
+      weaponNest: shot === "weapon" ? "Wave" : null,
+      useAbility: shot === "weapon",
+      abilityId: shot === "checks" || shot === "check-roll" ? "str" : null,
+      spellLevel: shot === "action" || shot === "tooltip" ? 0 : null,
+      endTurnEnabled: shot !== "main"
+    };
+    let root, svg, tooltipEl, collapseTimer;
+
+    function mount() {
+      root = document.createElement("div");
+      root.className = "tch-root";
+      const backdrop = document.createElement("div");
+      backdrop.className = "tch-backdrop";
+      backdrop.addEventListener("pointerdown", () => {
+        state.section = null;
+        state.castSpell = false;
+        state.useItem = false;
+        state.spellLevel = null;
+        draw();
+      });
+      root.appendChild(backdrop);
+
+      const stage = document.createElement("div");
+      stage.className = "tch-stage";
+      root.appendChild(stage);
+
+      svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add("tch-radial");
+      svg.setAttribute("width", String(SIZE));
+      svg.setAttribute("height", String(SIZE));
+      svg.setAttribute("viewBox", `0 0 ${SIZE} ${SIZE}`);
+      stage.appendChild(svg);
+
+      tooltipEl = document.createElement("div");
+      tooltipEl.className = "tch-tooltip";
+      tooltipEl.hidden = true;
+      root.appendChild(tooltipEl);
+
+      document.body.appendChild(root);
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          state.section = null;
+          state.castSpell = false;
+          state.useItem = false;
+          state.weaponNest = null;
+          state.useAbility = false;
+          state.spellLevel = null;
+          hideTooltip();
+          draw();
+        }
+      });
+      draw();
+      if (shot === "tooltip") {
+        const tip = MOCK.levels[0].spells[0].tooltip;
+        showTooltip(tip, null);
+      }
+    }
+
+    function clearNests() {
+      state.castSpell = false;
+      state.useItem = false;
+      state.weaponNest = null;
+      state.useAbility = false;
+      state.abilityId = null;
+      state.spellLevel = null;
+    }
+
+    function draw() {
+      svg.replaceChildren();
+      clipSeq = 0;
+      drawMain();
+      drawHub();
+      if (state.section === "action") {
+        drawAction();
+        if (state.weaponNest) {
+          drawWeaponMenu();
+          if (state.useAbility) drawWeaponAbilities();
+        }
+        if (state.useItem) drawInventory();
+        if (state.castSpell) {
+          drawLevels();
+          if (state.spellLevel != null) drawSpells(state.spellLevel);
+        }
+      } else if (state.section === "checks") {
+        drawAbilities();
+        if (state.abilityId) drawAbilityRolls();
+      } else if (state.section === "bonus") drawFlat(MOCK.bonus);
+      else if (state.section === "reaction") drawFlat(MOCK.reaction);
+    }
+
+    function drawHub() {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.classList.add("tch-hub", "tch-hub--has-art");
+      if (!state.endTurnEnabled) g.classList.add("tch-hub--disabled");
+      g.addEventListener("pointerdown", () => {
+        // Preview: End Turn does not advance combat; Esc/backdrop still dismiss
+        showTooltip({
+          title: "End Turn",
+          description: state.endTurnEnabled
+            ? "Would call combat.nextTurn() in Foundry."
+            : "Disabled without an active owned turn."
+        }, null);
+      });
+      appendHubArt(g, {
+        cx: CX, cy: CY, r: RINGS.hub,
+        img: CHROME.endTurn,
+        clipId: nextClipId("prev-hub")
+      });
+      const disk = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      disk.classList.add("tch-hub__disk");
+      disk.setAttribute("cx", CX); disk.setAttribute("cy", CY); disk.setAttribute("r", RINGS.hub);
+      g.appendChild(disk);
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.classList.add("tch-hub__label");
+      label.setAttribute("x", CX); label.setAttribute("y", CY + 2);
+      label.textContent = "End Turn";
+      g.appendChild(label);
+      const sub = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      sub.classList.add("tch-hub__sub");
+      sub.setAttribute("x", CX); sub.setAttribute("y", CY + 14);
+      sub.textContent = state.endTurnEnabled ? "next" : "—";
+      g.appendChild(sub);
+      svg.appendChild(g);
+    }
+
+    function drawMain() {
+      const labels = {
+        action: { name: "Action", img: CHROME.action },
+        checks: { name: "Checks", img: CHROME.checks },
+        bonus: { name: "Bonus Action", img: CHROME.bonus },
+        reaction: { name: "Reaction", img: CHROME.reaction }
+      };
+      for (const ang of mainSectionAngles()) {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.classList.add(
+          "tch-segment", "tch-segment--main", "tch-segment--has-art",
+          `tch-economy--${ang.id}`
+        );
+        if (state.section === ang.id) g.classList.add("tch-segment--active");
+        g.dataset.economy = ang.id;
+        const d = sectionWedgePath(CX, CY, RINGS.mainInner, RINGS.mainOuter, ang.start, ang.end);
+        const meta = labels[ang.id];
+        appendWedgeArt(g, {
+          d, img: meta.img,
+          inner: RINGS.mainInner, outer: RINGS.mainOuter,
+          start: ang.start, end: ang.end,
+          cx: CX, cy: CY,
+          clipId: nextClipId(`prev-main-${ang.id}`)
+        });
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.classList.add("tch-segment__fill");
+        path.setAttribute("d", d);
+        g.appendChild(path);
+        const a = sectionAnchor(CX, CY, (RINGS.mainInner + RINGS.mainOuter) / 2, ang.start, ang.end);
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.classList.add("tch-segment__label");
+        text.setAttribute("x", a.x); text.setAttribute("y", a.y);
+        text.textContent = meta.name;
+        g.appendChild(text);
+        g.addEventListener("pointerenter", () => {
+          clearCollapse();
+          state.section = ang.id;
+          if (ang.id !== "action") {
+            state.castSpell = false;
+            state.useItem = false;
+            state.weaponNest = null;
+            state.useAbility = false;
+            state.spellLevel = null;
+          }
+          if (ang.id !== "checks") state.abilityId = null;
+          draw();
+        });
+        svg.appendChild(g);
+      }
+    }
+
+    function leaf(cfg) {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.classList.add("tch-segment");
+      if (cfg.active) g.classList.add("tch-segment--active");
+      const eco = cfg.economy || state.section;
+      if (eco) {
+        g.classList.add(`tch-economy--${eco}`);
+        g.dataset.economy = eco;
+      }
+      const d = sectionWedgePath(CX, CY, cfg.inner, cfg.outer, cfg.start, cfg.end);
+      const a = sectionAnchor(CX, CY, (cfg.inner + cfg.outer) / 2, cfg.start, cfg.end);
+      if (cfg.img) {
+        g.classList.add("tch-segment--has-art");
+        const art = appendWedgeArt(g, {
+          d, img: cfg.img,
+          inner: cfg.inner, outer: cfg.outer,
+          start: cfg.start, end: cfg.end,
+          cx: CX, cy: CY,
+          clipId: nextClipId("prev-leaf")
+        });
+        if (art) {
+          art.addEventListener("error", () => {
+            art.setAttribute("href", FALLBACK);
+            art.setAttributeNS("http://www.w3.org/1999/xlink", "href", FALLBACK);
+          });
+        }
+      }
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.classList.add("tch-segment__fill");
+      path.setAttribute("d", d);
+      g.appendChild(path);
+      if (cfg.label) {
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.classList.add("tch-segment__label");
+        text.setAttribute("x", a.x);
+        text.setAttribute("y", a.y);
+        text.textContent = cfg.label;
+        g.appendChild(text);
+      }
+      if (cfg.caption) {
+        const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        cap.classList.add("tch-segment__caption");
+        cap.setAttribute("x", a.x);
+        cap.setAttribute("y", a.y + 10);
+        cap.textContent = cfg.caption.length > 12 ? cfg.caption.slice(0, 10) + "…" : cfg.caption;
+        g.appendChild(cap);
+      }
+      return g;
+    }
+
+    let actionLayout = { segs: [], entries: [], levelSegs: [], levelInfos: [], weaponMenuSegs: [] };
+
+    function drawAction() {
+      const entries = [
+        ...MOCK.weapons.map(w => ({ kind: "weapon", ...w })),
+        ...MOCK.basics.map(b => ({ kind: "basic", ...b })),
+        { kind: "useItem", name: "Use Item", img: CHROME.useItem },
+        { kind: "cast", name: "Cast Spell", img: CHROME.castSpell }
+      ];
+      const actionMain = mainSectionById("action");
+      const segs = arcSegmentsForParent(entries.length, actionMain.start, actionMain.end);
+      actionLayout = { segs, entries, levelSegs: [], levelInfos: [], weaponMenuSegs: [] };
+
+      entries.forEach((entry, i) => {
+        const seg = segs[i];
+        const isNest = entry.kind === "cast" || entry.kind === "useItem";
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.actionInner, outer: RINGS.actionOuter,
+          label: isNest ? entry.name : "",
+          caption: !isNest ? entry.name : "",
+          img: entry.img,
+          active: (entry.kind === "cast" && state.castSpell)
+            || (entry.kind === "useItem" && state.useItem)
+            || (entry.kind === "weapon" && entry.name === state.weaponNest)
+        });
+        g.addEventListener("pointerenter", () => {
+          clearCollapse();
+          if (entry.kind === "cast") {
+            clearNests(); state.castSpell = true; draw();
+          } else if (entry.kind === "useItem") {
+            clearNests(); state.useItem = true; draw();
+          } else if (entry.kind === "weapon" && entry.hasSpecial) {
+            clearNests(); state.weaponNest = entry.name; state.useAbility = false; draw();
+          } else {
+            clearNests();
+            showTooltip({ title: entry.name }, null);
+            draw();
+          }
+        });
+        svg.appendChild(g);
+      });
+    }
+
+    function parentSeg(kindOrName) {
+      const idx = actionLayout.entries.findIndex(e => e.kind === kindOrName || e.name === kindOrName);
+      if (idx >= 0) return actionLayout.segs[idx];
+      const a = mainSectionById("action");
+      return { start: a.start, end: a.end };
+    }
+
+    function drawWeaponMenu() {
+      const parent = parentSeg(state.weaponNest);
+      const menu = [
+        { kind: "attack", name: "Attack", img: CHROME.attack },
+        { kind: "use-ability", name: "Use Ability", img: CHROME.useAbility }
+      ];
+      const segs = arcSegmentsForParent(menu.length, parent.start, parent.end, { maxSpanDeg: 120 });
+      actionLayout.weaponMenuSegs = segs;
+      menu.forEach((opt, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          label: opt.name,
+          img: opt.img,
+          active: opt.kind === "use-ability" && state.useAbility
+        });
+        g.addEventListener("pointerenter", () => {
+          clearCollapse();
+          if (opt.kind === "use-ability") { state.useAbility = true; draw(); }
+          else if (state.useAbility) { state.useAbility = false; draw(); }
+        });
+        svg.appendChild(g);
+      });
+    }
+
+    function drawWeaponAbilities() {
+      const weapon = MOCK.weapons.find(w => w.name === state.weaponNest);
+      const abilities = weapon?.abilities ?? [];
+      const parent = actionLayout.weaponMenuSegs[1] || parentSeg(state.weaponNest);
+      const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, { maxSpanDeg: 150 });
+      abilities.forEach((opt, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest2Inner, outer: RINGS.nest2Outer,
+          caption: opt.name,
+          img: opt.img
+        });
+        g.addEventListener("pointerenter", () => showTooltip({ title: opt.name }, null));
+        svg.appendChild(g);
+      });
+    }
+
+    function drawInventory() {
+      const parent = parentSeg("useItem");
+      const segs = arcSegmentsForParent(MOCK.inventory.length, parent.start, parent.end, { maxSpanDeg: 170 });
+      MOCK.inventory.forEach((item, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          caption: item.name,
+          img: item.img
+        });
+        g.addEventListener("pointerenter", () => showTooltip({ title: item.name }, null));
+        svg.appendChild(g);
+      });
+    }
+
+    function drawLevels() {
+      const parent = parentSeg("cast");
+      const segs = arcSegmentsForParent(MOCK.levels.length, parent.start, parent.end, { maxSpanDeg: 170 });
+      actionLayout.levelSegs = segs;
+      actionLayout.levelInfos = MOCK.levels;
+      MOCK.levels.forEach((lvl, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          label: lvl.label,
+          img: lvl.level === 0 ? CHROME.spell0 : previewWedge(`spell-${lvl.level}`),
+          active: state.spellLevel === lvl.level
+        });
+        g.addEventListener("pointerenter", () => {
+          clearCollapse();
+          state.spellLevel = lvl.level;
+          draw();
+        });
+        svg.appendChild(g);
+      });
+    }
+
+    function drawSpells(level) {
+      const spells = MOCK.levels.find(l => l.level === level)?.spells ?? [];
+      let parent = parentSeg("cast");
+      const li = actionLayout.levelInfos.findIndex(l => l.level === level);
+      if (li >= 0) parent = actionLayout.levelSegs[li];
+      const segs = arcSegmentsForParent(spells.length, parent.start, parent.end, { maxSpanDeg: 160 });
+      spells.forEach((spell, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest2Inner, outer: RINGS.nest2Outer,
+          caption: spell.name,
+          img: spell.img
+        });
+        g.addEventListener("pointerenter", (ev) => showTooltip(spell.tooltip, ev));
+        g.addEventListener("pointermove", (ev) => positionTooltip(ev));
+        g.addEventListener("pointerleave", hideTooltip);
+        svg.appendChild(g);
+      });
+    }
+
+    function drawFlat(options) {
+      const main = mainSectionById(state.section === "reaction" ? "reaction" : "bonus");
+      const segs = arcSegmentsForParent(options.length, main.start, main.end, { maxSpanDeg: 160 });
+      options.forEach((opt, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.actionInner, outer: RINGS.actionOuter,
+          caption: opt.name,
+          img: opt.img
+        });
+        g.addEventListener("pointerenter", () => showTooltip({ title: opt.name }, null));
+        g.addEventListener("pointerleave", hideTooltip);
+        svg.appendChild(g);
+      });
+    }
+
+    const MOCK_ABILITIES = [
+      { id: "str", name: "Strength", mod: 3 },
+      { id: "dex", name: "Dexterity", mod: 2 },
+      { id: "con", name: "Constitution", mod: 1 },
+      { id: "int", name: "Intelligence", mod: 0 },
+      { id: "wis", name: "Wisdom", mod: 2 },
+      { id: "cha", name: "Charisma", mod: -1 }
+    ];
+    let abilityLayout = { segs: [], entries: [] };
+
+    function drawAbilities() {
+      const main = mainSectionById("checks");
+      const segs = arcSegmentsForParent(MOCK_ABILITIES.length, main.start, main.end, { maxSpanDeg: 200 });
+      abilityLayout = { segs, entries: MOCK_ABILITIES };
+      MOCK_ABILITIES.forEach((abl, i) => {
+        const seg = segs[i];
+        const mod = abl.mod >= 0 ? `+${abl.mod}` : String(abl.mod);
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.actionInner, outer: RINGS.actionOuter,
+          caption: `${abl.name} ${mod}`,
+          img: CHROME.abilities[abl.id] || CHROME.checks,
+          active: state.abilityId === abl.id
+        });
+        g.addEventListener("pointerenter", () => {
+          clearCollapse();
+          state.abilityId = abl.id;
+          draw();
+        });
+        svg.appendChild(g);
+      });
+    }
+
+    function drawAbilityRolls() {
+      const abl = MOCK_ABILITIES.find(a => a.id === state.abilityId) || MOCK_ABILITIES[0];
+      let parent = mainSectionById("checks");
+      const idx = abilityLayout.entries.findIndex(a => a.id === abl.id);
+      if (idx >= 0) parent = abilityLayout.segs[idx];
+      const rolls = [
+        { name: "Check", tip: `${abl.name} ability check` },
+        { name: "Save", tip: `${abl.name} saving throw` }
+      ];
+      const segs = arcSegmentsForParent(rolls.length, parent.start, parent.end, { maxSpanDeg: 120 });
+      rolls.forEach((opt, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          label: opt.name,
+          img: opt.name === "Save" ? CHROME.save : CHROME.check
+        });
+        g.addEventListener("pointerenter", () => showTooltip({ title: opt.tip }, null));
+        svg.appendChild(g);
+      });
+    }
+
+    function showTooltip(data, event) {
+      const rows = [];
+      if (data.description) rows.push(`<p class="tch-tooltip__desc">${data.description}</p>`);
+      for (const [k, v] of [["Targets", data.targets], ["Range", data.range], ["Duration", data.duration], ["Damage", data.damage]]) {
+        if (v == null || v === "") continue;
+        rows.push(`<div class="tch-tooltip__row"><span class="tch-tooltip__key">${k}</span><span class="tch-tooltip__value">${v}</span></div>`);
+      }
+      tooltipEl.innerHTML = `<p class="tch-tooltip__title">${data.title || ""}</p>${rows.join("")}`;
+      tooltipEl.hidden = false;
+      if (event) positionTooltip(event);
+      else {
+        tooltipEl.style.left = "50%";
+        tooltipEl.style.top = "10%";
+        tooltipEl.style.transform = "translateX(-50%)";
+      }
+    }
+
+    function positionTooltip(event) {
+      tooltipEl.style.transform = "none";
+      tooltipEl.style.left = `${Math.min(window.innerWidth - 300, event.clientX + 16)}px`;
+      tooltipEl.style.top = `${Math.min(window.innerHeight - 40, event.clientY + 16)}px`;
+    }
+
+    function hideTooltip() {
+      tooltipEl.hidden = true;
+      tooltipEl.innerHTML = "";
+    }
+
+    function clearCollapse() {
+      if (collapseTimer) clearTimeout(collapseTimer);
+      collapseTimer = null;
+    }
+
+    mount();
+  </script>
+</body>
+</html>

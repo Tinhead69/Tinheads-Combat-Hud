@@ -1,0 +1,572 @@
+/* Tinhead's Combat Hud — viewport-centered radial overlay
+ *
+ * Economy palette (semi-transparent so the canvas stays readable):
+ *   Action   — warm copper / amber
+ *   Bonus    — viridian / teal
+ *   Reaction — cool steel blue (alert)
+ *   Checks   — neutral slate (info)
+ */
+
+.tch-root {
+  /* Base neutrals (fallback / hub) */
+  --tch-fill: rgba(18, 22, 28, 0.55);
+  --tch-fill-hover: rgba(32, 40, 52, 0.72);
+  --tch-fill-main: rgba(14, 18, 24, 0.62);
+  --tch-stroke: rgba(235, 238, 242, 0.85);
+  --tch-stroke-soft: rgba(235, 238, 242, 0.4);
+  --tch-label: rgba(248, 250, 252, 0.96);
+  --tch-muted: rgba(220, 228, 238, 0.88);
+  --tch-accent: rgba(200, 214, 230, 0.9);
+  --tch-unavailable: rgba(70, 76, 84, 0.5);
+
+  /* Action — warm accent (base; --has-art lowers effective tint via fill-opacity) */
+  --tch-action: rgba(168, 92, 40, 0.58);
+  --tch-action-hot: rgba(196, 112, 48, 0.74);
+  --tch-action-nest: rgba(152, 84, 36, 0.52);
+  --tch-action-nest-hot: rgba(188, 108, 46, 0.7);
+  --tch-action-stroke: rgba(255, 198, 140, 0.55);
+
+  /* Bonus Action — distinct secondary */
+  --tch-bonus: rgba(36, 118, 108, 0.58);
+  --tch-bonus-hot: rgba(48, 148, 134, 0.74);
+  --tch-bonus-nest: rgba(32, 108, 100, 0.52);
+  --tch-bonus-nest-hot: rgba(44, 140, 128, 0.7);
+  --tch-bonus-stroke: rgba(140, 230, 210, 0.5);
+
+  /* Reaction — cool / alert */
+  --tch-reaction: rgba(56, 96, 158, 0.58);
+  --tch-reaction-hot: rgba(72, 118, 188, 0.74);
+  --tch-reaction-nest: rgba(48, 88, 148, 0.52);
+  --tch-reaction-nest-hot: rgba(68, 112, 180, 0.7);
+  --tch-reaction-stroke: rgba(160, 198, 255, 0.55);
+
+  /* Checks — neutral / info */
+  --tch-checks: rgba(86, 104, 124, 0.58);
+  --tch-checks-hot: rgba(108, 128, 152, 0.74);
+  --tch-checks-nest: rgba(78, 96, 116, 0.52);
+  --tch-checks-nest-hot: rgba(102, 122, 146, 0.7);
+  --tch-checks-stroke: rgba(190, 210, 230, 0.5);
+
+  /* Has-art fill alphas (~0.42–0.55 so clipped images show through) */
+  --tch-action-art: rgba(168, 92, 40, 0.48);
+  --tch-action-art-hot: rgba(196, 112, 48, 0.55);
+  --tch-action-nest-art: rgba(152, 84, 36, 0.42);
+  --tch-action-nest-art-hot: rgba(188, 108, 46, 0.52);
+  --tch-bonus-art: rgba(36, 118, 108, 0.48);
+  --tch-bonus-art-hot: rgba(48, 148, 134, 0.55);
+  --tch-bonus-nest-art: rgba(32, 108, 100, 0.42);
+  --tch-bonus-nest-art-hot: rgba(44, 140, 128, 0.52);
+  --tch-reaction-art: rgba(56, 96, 158, 0.48);
+  --tch-reaction-art-hot: rgba(72, 118, 188, 0.55);
+  --tch-reaction-nest-art: rgba(48, 88, 148, 0.42);
+  --tch-reaction-nest-art-hot: rgba(68, 112, 180, 0.52);
+  --tch-checks-art: rgba(86, 104, 124, 0.48);
+  --tch-checks-art-hot: rgba(108, 128, 152, 0.55);
+  --tch-checks-nest-art: rgba(78, 96, 116, 0.42);
+  --tch-checks-nest-art-hot: rgba(102, 122, 146, 0.52);
+
+  --tch-z: 10000;
+  position: fixed;
+  inset: 0;
+  z-index: var(--tch-z);
+  pointer-events: none;
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+}
+
+.tch-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.14);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.tch-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.tch-root--dragging,
+.tch-root--dragging .tch-backdrop {
+  cursor: grabbing;
+}
+
+.tch-root--dragging .tch-backdrop {
+  pointer-events: none;
+}
+
+.tch-grab {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.tch-grab__ring {
+  fill: rgba(235, 238, 242, 0.08);
+  stroke: rgba(235, 238, 242, 0.28);
+  stroke-width: 1;
+  transition: fill 120ms ease;
+}
+
+.tch-grab:hover .tch-grab__ring {
+  fill: rgba(235, 238, 242, 0.16);
+}
+
+.tch-radial {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.35));
+}
+
+.tch-segment {
+  pointer-events: auto;
+  cursor: pointer;
+  transition: fill 120ms ease, opacity 120ms ease;
+}
+
+.tch-segment__fill {
+  fill: var(--tch-fill);
+  stroke: var(--tch-stroke-soft);
+  stroke-width: 1.5;
+  transition: fill 120ms ease, stroke 120ms ease;
+}
+
+.tch-segment--main .tch-segment__fill {
+  fill: var(--tch-fill-main);
+  stroke: var(--tch-stroke);
+  stroke-width: 2;
+}
+
+.tch-segment:hover .tch-segment__fill,
+.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-fill-hover);
+  stroke: var(--tch-stroke);
+}
+
+/* ——— Economy color coding (main wedges) ——— */
+
+.tch-segment--main.tch-economy--action .tch-segment__fill {
+  fill: var(--tch-action);
+  stroke: var(--tch-action-stroke);
+}
+
+.tch-segment--main.tch-economy--action:hover .tch-segment__fill,
+.tch-segment--main.tch-economy--action.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-action-hot);
+  stroke: rgba(255, 210, 160, 0.75);
+}
+
+.tch-segment--main.tch-economy--bonus .tch-segment__fill {
+  fill: var(--tch-bonus);
+  stroke: var(--tch-bonus-stroke);
+}
+
+.tch-segment--main.tch-economy--bonus:hover .tch-segment__fill,
+.tch-segment--main.tch-economy--bonus.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-bonus-hot);
+  stroke: rgba(160, 240, 220, 0.7);
+}
+
+.tch-segment--main.tch-economy--reaction .tch-segment__fill {
+  fill: var(--tch-reaction);
+  stroke: var(--tch-reaction-stroke);
+}
+
+.tch-segment--main.tch-economy--reaction:hover .tch-segment__fill,
+.tch-segment--main.tch-economy--reaction.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-reaction-hot);
+  stroke: rgba(180, 210, 255, 0.75);
+}
+
+.tch-segment--main.tch-economy--checks .tch-segment__fill {
+  fill: var(--tch-checks);
+  stroke: var(--tch-checks-stroke);
+}
+
+.tch-segment--main.tch-economy--checks:hover .tch-segment__fill,
+.tch-segment--main.tch-economy--checks.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-checks-hot);
+  stroke: rgba(210, 226, 242, 0.7);
+}
+
+/* Nested arcs inherit / tint from parent economy (ring) or self */
+
+.tch-economy--action .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-action-nest);
+  stroke: var(--tch-action-stroke);
+}
+
+.tch-economy--action .tch-segment:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--action .tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-action-nest-hot);
+  stroke: rgba(255, 210, 160, 0.7);
+}
+
+.tch-economy--bonus .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-bonus-nest);
+  stroke: var(--tch-bonus-stroke);
+}
+
+.tch-economy--bonus .tch-segment:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--bonus .tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-bonus-nest-hot);
+  stroke: rgba(160, 240, 220, 0.65);
+}
+
+.tch-economy--reaction .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-reaction-nest);
+  stroke: var(--tch-reaction-stroke);
+}
+
+.tch-economy--reaction .tch-segment:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--reaction .tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-reaction-nest-hot);
+  stroke: rgba(180, 210, 255, 0.7);
+}
+
+.tch-economy--checks .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-checks-nest);
+  stroke: var(--tch-checks-stroke);
+}
+
+.tch-economy--checks .tch-segment:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--checks .tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-checks-nest-hot);
+  stroke: rgba(210, 226, 242, 0.65);
+}
+
+.tch-segment--unavailable {
+  cursor: not-allowed;
+}
+
+.tch-segment--unavailable .tch-segment__fill {
+  fill: var(--tch-unavailable) !important;
+  stroke: rgba(160, 160, 160, 0.35) !important;
+}
+
+/* Clipped image fills — art under translucent economy tint (colors stay) */
+.tch-segment__art-wrap,
+.tch-hub__art-wrap {
+  pointer-events: none;
+}
+
+.tch-segment__art {
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.tch-segment--unavailable .tch-segment__art {
+  opacity: 0.32;
+  filter: grayscale(0.55);
+}
+
+.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: rgba(18, 22, 28, 0.45);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--action .tch-segment__fill {
+  fill: var(--tch-action-art);
+  stroke: var(--tch-action-stroke);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--action:hover .tch-segment__fill,
+.tch-segment--has-art.tch-segment--main.tch-economy--action.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-action-art-hot);
+  stroke: rgba(255, 210, 160, 0.75);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--bonus .tch-segment__fill {
+  fill: var(--tch-bonus-art);
+  stroke: var(--tch-bonus-stroke);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--bonus:hover .tch-segment__fill,
+.tch-segment--has-art.tch-segment--main.tch-economy--bonus.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-bonus-art-hot);
+  stroke: rgba(160, 240, 220, 0.7);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--reaction .tch-segment__fill {
+  fill: var(--tch-reaction-art);
+  stroke: var(--tch-reaction-stroke);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--reaction:hover .tch-segment__fill,
+.tch-segment--has-art.tch-segment--main.tch-economy--reaction.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-reaction-art-hot);
+  stroke: rgba(180, 210, 255, 0.75);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--checks .tch-segment__fill {
+  fill: var(--tch-checks-art);
+  stroke: var(--tch-checks-stroke);
+}
+
+.tch-segment--has-art.tch-segment--main.tch-economy--checks:hover .tch-segment__fill,
+.tch-segment--has-art.tch-segment--main.tch-economy--checks.tch-segment--active .tch-segment__fill {
+  fill: var(--tch-checks-art-hot);
+  stroke: rgba(210, 226, 242, 0.7);
+}
+
+.tch-economy--action .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-action-nest-art);
+  stroke: var(--tch-action-stroke);
+}
+
+.tch-economy--action .tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--action .tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-action-nest-art-hot);
+  stroke: rgba(255, 210, 160, 0.7);
+}
+
+.tch-economy--bonus .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-bonus-nest-art);
+  stroke: var(--tch-bonus-stroke);
+}
+
+.tch-economy--bonus .tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--bonus .tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-bonus-nest-art-hot);
+  stroke: rgba(160, 240, 220, 0.65);
+}
+
+.tch-economy--reaction .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-reaction-nest-art);
+  stroke: var(--tch-reaction-stroke);
+}
+
+.tch-economy--reaction .tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--reaction .tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-reaction-nest-art-hot);
+  stroke: rgba(180, 210, 255, 0.7);
+}
+
+.tch-economy--checks .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-checks-nest-art);
+  stroke: var(--tch-checks-stroke);
+}
+
+.tch-economy--checks .tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-economy--checks .tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-checks-nest-art-hot);
+  stroke: rgba(210, 226, 242, 0.65);
+}
+
+.tch-segment__label {
+  fill: var(--tch-label);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.62);
+  stroke-width: 2.5px;
+}
+
+.tch-segment__caption {
+  fill: var(--tch-muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: hanging;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2px;
+}
+
+.tch-segment__icon {
+  pointer-events: none;
+  opacity: 0.96;
+}
+
+.tch-hub {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.tch-hub__art {
+  pointer-events: none;
+  opacity: 0.88;
+}
+
+.tch-hub--has-art .tch-hub__disk {
+  fill: rgba(12, 14, 18, 0.48);
+}
+
+.tch-hub--has-art:hover .tch-hub__disk {
+  fill: rgba(28, 34, 44, 0.58);
+}
+
+.tch-hub--disabled .tch-hub__art {
+  opacity: 0.28;
+  filter: grayscale(0.55);
+}
+
+.tch-hub__disk {
+  fill: rgba(12, 14, 18, 0.62);
+  stroke: var(--tch-stroke);
+  stroke-width: 2;
+  transition: fill 120ms ease;
+}
+
+.tch-hub:hover .tch-hub__disk {
+  fill: rgba(28, 34, 44, 0.82);
+}
+
+.tch-hub--disabled {
+  cursor: not-allowed;
+}
+
+.tch-hub--disabled .tch-hub__disk {
+  fill: rgba(10, 12, 16, 0.35);
+  stroke: rgba(235, 238, 242, 0.35);
+}
+
+.tch-hub--disabled:hover .tch-hub__disk {
+  fill: rgba(10, 12, 16, 0.4);
+}
+
+.tch-hub__icon {
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.tch-hub__label {
+  fill: var(--tch-label);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2px;
+}
+
+.tch-hub__sub {
+  fill: var(--tch-muted);
+  font-size: 8px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.tch-hub--disabled .tch-hub__label,
+.tch-hub--disabled .tch-hub__sub {
+  fill: rgba(160, 168, 178, 0.55);
+}
+
+.tch-ring-empty {
+  pointer-events: none;
+  fill: var(--tch-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.tch-tooltip {
+  position: fixed;
+  z-index: calc(var(--tch-z) + 1);
+  min-width: 180px;
+  max-width: 280px;
+  padding: 10px 12px;
+  border: 1px solid rgba(230, 235, 245, 0.35);
+  border-radius: 6px;
+  background: rgba(14, 16, 20, 0.92);
+  color: #f3f5f7;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.tch-tooltip__title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tch-tooltip__row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 6px;
+  margin: 3px 0;
+}
+
+.tch-tooltip__key {
+  color: rgba(190, 200, 214, 0.9);
+  font-weight: 600;
+}
+
+.tch-tooltip__value {
+  color: #f3f5f7;
+  word-break: break-word;
+}
+
+.tch-tooltip__desc {
+  margin: 0 0 8px;
+  color: rgba(220, 226, 234, 0.92);
+  max-height: 4.5em;
+  overflow: hidden;
+}
+
+.tch-token-hud-btn {
+  color: #dfe7f2;
+}
+
+.tch-token-hud-btn.active {
+  color: #fff;
+}
+
+/* Nested ring reveal */
+.tch-ring {
+  opacity: 0;
+  transform-origin: center;
+  transform: scale(0.92);
+  transition: opacity 140ms ease, transform 160ms ease;
+  pointer-events: none;
+}
+
+.tch-ring--visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}

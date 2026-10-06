@@ -1,0 +1,111 @@
+{
+  "TINHEADS_COMBAT_HUD": {
+    "Title": "Tinhead's Combat Hud",
+    "TokenHUD": {
+      "Open": "Combat Hud",
+      "Hint": "Open Tinhead's Combat Hud for this token"
+    },
+    "Sections": {
+      "Action": "Action",
+      "Checks": "Checks",
+      "BonusAction": "Bonus Action",
+      "Reaction": "Reaction",
+      "CastSpell": "Cast Spell",
+      "UseItem": "Use Item",
+      "ActionHint": "Attacks, movement actions, items, and spells.",
+      "ChecksHint": "Ability checks and saving throws.",
+      "BonusHint": "Bonus Action options from your sheet.",
+      "ReactionHint": "Reaction options from your sheet.",
+      "CastSpellHint": "Choose a spell level, then a spell to cast.",
+      "UseItemHint": "Potions, tools, and other usable inventory."
+    },
+    "BasicActions": {
+      "Dash": "Dash",
+      "Disengage": "Disengage",
+      "Dodge": "Dodge",
+      "Ready": "Ready",
+      "Hint": "Core combat action — announces in chat if no matching sheet item.",
+      "FromSheet": "Uses the matching item or activity from the character sheet."
+    },
+    "Features": {
+      "ClassFeatureHint": "Class feature from your character sheet.",
+      "UsesRemaining": "Uses remaining: {uses}",
+      "OpenModesHint": "Hover for options (e.g. Channel Divinity modes)."
+    },
+    "Checks": {
+      "Check": "Check",
+      "Save": "Save",
+      "AbilityHint": "Roll using the dnd5e ability helpers.",
+      "Mod": "Check mod {mod}",
+      "SaveMod": "Save mod {mod}"
+    },
+    "WeaponNest": {
+      "Attack": "Attack",
+      "UseAbility": "Use Ability",
+      "AbilityFallback": "Ability",
+      "AbilityHint": "Uses this activity from the weapon on your character sheet.",
+      "AttackHint": "Make a weapon attack with this item.",
+      "UseAbilityHint": "Special weapon modes and properties (e.g. Cube of Force)."
+    },
+    "SpellLevels": {
+      "0": "Cantrip",
+      "1": "1st",
+      "2": "2nd",
+      "3": "3rd",
+      "4": "4th",
+      "5": "5th",
+      "6": "6th",
+      "7": "7th",
+      "8": "8th",
+      "9": "9th",
+      "PickHint": "Spells available at {label}."
+    },
+    "Tooltip": {
+      "Description": "Description",
+      "Targets": "Targets",
+      "Range": "Range",
+      "Duration": "Duration",
+      "Damage": "Damage",
+      "NoDescription": "No description.",
+      "EmDash": "—"
+    },
+    "Empty": {
+      "NoFavorites": "No favorited weapons",
+      "NoSpellsAtLevel": "No spells at this level",
+      "NoSpellLevels": "No castable spells",
+      "NoBonusActions": "No bonus actions",
+      "NoReactions": "No reactions",
+      "NoUsableItems": "No usable items",
+      "NoItemUses": "None left.",
+      "NoWeaponAbilities": "No special abilities",
+      "NoFeatureModes": "No feature options"
+    },
+    "Notify": {
+      "SelectTarget": "Select a target first.",
+      "Unavailable": "That option is unavailable.",
+      "UnavailableReason": "{reason}",
+      "NoActor": "No usable actor for this token.",
+      "ResolveFailed": "Could not resolve that action."
+    },
+    "EndTurn": {
+      "Label": "End Turn",
+      "Sub": "next",
+      "Hint": "Advance the combat tracker to the next combatant.",
+      "NoCombat": "No active combat.",
+      "NoCombatant": "No current combatant.",
+      "NotYourTurn": "Not your turn to end.",
+      "Unavailable": "Cannot end turn right now."
+    },
+    "Drag": {
+      "Handle": "Move Hud",
+      "Hint": "Drag this ring to reposition the combat hud.",
+      "HubHint": "Drag to move; click to end turn."
+    },
+    "Proxy": {
+      "SocketlibMissing": "Enable the socketlib module for proxy resolve (absent-player control). Owners and GMs can still resolve locally.",
+      "Unauthorized": "You are not allowed to proxy that action.",
+      "RequestFailed": "Proxy request failed — is a GM connected?"
+    },
+    "DismissHint": "Esc or click outside to close"
+  }
+}
