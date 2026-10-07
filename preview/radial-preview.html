@@ -84,6 +84,7 @@
       wedgeAnchor
     } from "../scripts/ui/radial-geometry.mjs";
     import { appendHubArt, appendWedgeArt } from "../scripts/ui/wedge-art.mjs";
+    import { applyIconPalette } from "../scripts/ui/icon-color.mjs";
     import { wedgeCaptionLines } from "../scripts/ui/wedge-text.mjs";
     import { previewWedge } from "../scripts/data/module-icons.mjs";
 
@@ -118,28 +119,41 @@
       return `${prefix}-${clipSeq}`;
     }
 
-    // Keep in sync with scripts/ui/combat-hud.mjs SIZE / RINGS
+    // Keep in sync with scripts/ui/combat-hud.mjs SIZE / RINGS.
+    // Every wedge is 62px thick, with a 6px gap between rings.
     const SIZE = 760;
     const CX = SIZE / 2;
     const CY = SIZE / 2;
+    const WEDGE_DEPTH = 62;
+    const RING_GAP = 6;
+    const mainInner = 42;
+    const mainOuter = mainInner + WEDGE_DEPTH;
+    const actionInner = mainOuter + RING_GAP;
+    const actionOuter = actionInner + WEDGE_DEPTH;
+    const nest1Inner = actionOuter + RING_GAP;
+    const nest1Outer = nest1Inner + WEDGE_DEPTH;
+    const nest2Inner = nest1Outer + RING_GAP;
+    const nest2Outer = nest2Inner + WEDGE_DEPTH;
+    const nest3Inner = nest2Outer + RING_GAP;
+    const nest3Outer = nest3Inner + WEDGE_DEPTH;
     const RINGS = {
       hub: 34,
-      mainInner: 42,
-      mainOuter: 108,
-      actionInner: 116,
-      actionOuter: 178,
-      nest1Inner: 186,
-      nest1Outer: 238,
-      nest2Inner: 246,
-      nest2Outer: 292,
-      nest3Inner: 300,
-      nest3Outer: 352,
-      flatInner: 116,
-      flatOuter: 236,
-      flatNestInner: 244,
-      flatNestOuter: 308,
-      flatSpellInner: 316,
-      flatSpellOuter: 372
+      mainInner,
+      mainOuter,
+      actionInner,
+      actionOuter,
+      nest1Inner,
+      nest1Outer,
+      nest2Inner,
+      nest2Outer,
+      nest3Inner,
+      nest3Outer,
+      flatInner: actionInner,
+      flatOuter: actionOuter,
+      flatNestInner: nest1Inner,
+      flatNestOuter: nest1Outer,
+      flatSpellInner: nest2Inner,
+      flatSpellOuter: nest2Outer
     };
 
     function icon(bg, glyph, fg = "#f4f7fb") {
@@ -377,8 +391,15 @@
         text.setAttribute("x", a.x); text.setAttribute("y", a.y);
         text.textContent = meta.name;
         g.appendChild(text);
-        g.addEventListener("pointerenter", () => {
+        g.addEventListener("pointerenter", (ev) => {
           clearCollapse();
+          if (state.section === ang.id) {
+            if (ang.id === "checks" && pointerRadius(ev) < RINGS.actionInner && state.abilityId) {
+              state.abilityId = null;
+              draw();
+            }
+            return;
+          }
           state.section = ang.id;
           state.featureNestId = null;
           if (ang.id !== "action") {
@@ -392,7 +413,7 @@
             state.useAbility = false;
             state.spellLevel = null;
           }
-          if (ang.id !== "checks") state.abilityId = null;
+          state.abilityId = null;
           if (ang.id !== "reaction") state.opportunityOpen = false;
           draw();
         });
@@ -408,6 +429,8 @@
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.classList.add("tch-segment");
       if (cfg.active) g.classList.add("tch-segment--active");
+      if (cfg.itemArt) g.classList.add("tch-segment--item-art");
+      if (cfg.itemArt && cfg.img) applyIconPalette(g, cfg.img);
       const eco = cfg.economy || state.section;
       if (eco) {
         g.classList.add(`tch-economy--${eco}`);
@@ -536,6 +559,7 @@
           inner, outer,
           caption: entry.name,
           img: entry.img,
+          itemArt: entry.kind === "weapon" || entry.kind === "weapon-attack" || entry.kind === "weapon-ability",
           active: (entry.kind === "cast" && state.castSpell) || (entry.id && entry.id === state.weaponNest)
         });
         g.addEventListener("pointerenter", (ev) => {
@@ -672,7 +696,8 @@
           start: seg.start, end: seg.end,
           inner, outer,
           caption: item.name,
-          img: item.img
+          img: item.img,
+          itemArt: true
         });
         g.addEventListener("pointerenter", (ev) => showTooltip(item.tooltip || { title: item.name }, ev));
         g.addEventListener("pointermove", (ev) => positionTooltip(ev));
@@ -730,7 +755,8 @@
           start: seg.start, end: seg.end,
           inner, outer,
           caption: spell.name,
-          img: spell.img
+          img: spell.img,
+          itemArt: true
         });
         g.addEventListener("pointerenter", (ev) => showTooltip(spell.tooltip || { title: spell.name }, ev));
         g.addEventListener("pointermove", (ev) => positionTooltip(ev));
@@ -833,8 +859,10 @@
           img: abl.img || CHROME.checks,
           active: state.abilityId === abl.abilityId
         });
-        g.addEventListener("pointerenter", () => {
+        g.addEventListener("pointerenter", (ev) => {
+          if (pointerRadius(ev) < RINGS.actionInner) return;
           clearCollapse();
+          if (state.abilityId === abl.abilityId) return;
           state.abilityId = abl.abilityId;
           draw();
         });
@@ -889,6 +917,17 @@
     function hideTooltip() {
       tooltipEl.hidden = true;
       tooltipEl.innerHTML = "";
+    }
+
+    function pointerRadius(ev) {
+      if (!svg || ev?.clientX == null) return Infinity;
+      const pt = svg.createSVGPoint();
+      pt.x = ev.clientX;
+      pt.y = ev.clientY;
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return Infinity;
+      const p = pt.matrixTransform(ctm.inverse());
+      return Math.hypot(p.x - CX, p.y - CY);
     }
 
     function clearCollapse() {
