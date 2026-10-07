@@ -27,6 +27,15 @@ const {
 } = await import("../data/actor-options.mjs");
 
 function spell(partial) {
+  const mode = partial.mode ?? "spell";
+  const numeric = partial.prepared;
+  let method = mode;
+  let prepared = 1;
+  if (mode === "always" || mode === "prepared") method = "spell";
+  if (mode === "always" || numeric === 2) prepared = 2;
+  else if (numeric === false || numeric === 0) prepared = 0;
+  else if (typeof numeric === "number") prepared = numeric;
+  else if (mode === "atwill" || mode === "innate" || mode === "ritual") prepared = 2;
   return {
     id: partial.id || partial.name,
     type: "spell",
@@ -35,10 +44,8 @@ function spell(partial) {
     isOwner: true,
     system: {
       level: partial.level,
-      preparation: {
-        mode: partial.mode ?? "prepared",
-        prepared: partial.prepared ?? true
-      },
+      method,
+      prepared,
       description: { value: "" },
       ...(partial.system || {})
     },

@@ -1,6 +1,6 @@
 /**
  * Turn the trimmed Cornholio fixture into the item shape the HUD data
- * functions already read (system.activities, preparation, equipped).
+ * functions already read (system.activities, method, prepared, equipped).
  */
 
 /**
@@ -24,15 +24,14 @@ export function hydrateActor(raw) {
 }
 
 /**
- * dnd5e 5.x stores preparation as mode + boolean.
- * This export stored a number: 0 unprepared, 1 prepared, 2 always.
+ * dnd5e 5.1 stores method plus a number: 0 unprepared, 1 prepared, 2 always.
  * @param {number|boolean|null|undefined} prepared
+ * @returns {{ method: string, prepared: number }}
  */
-function spellPreparation(prepared) {
-  if (prepared === false || prepared === 0) return { mode: "prepared", prepared: false };
-  if (prepared === 2) return { mode: "always", prepared: true };
-  if (prepared === true || prepared === 1) return { mode: "prepared", prepared: true };
-  return { mode: "prepared", prepared: true };
+function spellCastingFields(prepared) {
+  if (prepared === false || prepared === 0) return { method: "spell", prepared: 0 };
+  if (prepared === 2) return { method: "spell", prepared: 2 };
+  return { method: "spell", prepared: 1 };
 }
 
 /**
@@ -71,7 +70,7 @@ function hydrateItem(raw, index, actor) {
       quantity: raw.quantity ?? 1,
       activation: { type: raw.activation || firstType },
       activities,
-      preparation: raw.type === "spell" ? spellPreparation(raw.prepared) : undefined,
+      ...(raw.type === "spell" ? spellCastingFields(raw.prepared) : {}),
       uses: raw.uses
         ? { max: raw.uses.max, spent: raw.uses.spent ?? 0 }
         : {},

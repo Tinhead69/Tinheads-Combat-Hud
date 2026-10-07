@@ -412,6 +412,54 @@ function slotSentence(key, data, fallback) {
 }
 
 /**
+ * dnd5e 5.1 stores casting on `system.method` and preparation on `system.prepared`
+ * (0 unprepared, 1 prepared, 2 always). Reading `system.preparation` logs a deprecation warning.
+ * Plain objects that still carry the old shape are accepted without touching a live getter
+ * when the new fields are already present.
+ * @param {Item} item
+ * @returns {{ method: string, prepared: number }}
+ */
+function spellCastingState(item) {
+  const system = item?.system ?? {};
+  if (("method" in system) || typeof system.prepared === "number") {
+    const method = system.method || "spell";
+    const prepared = Number(system.prepared ?? 0);
+    return { method, prepared: Number.isFinite(prepared) ? prepared : 0 };
+  }
+
+  const legacy = system.preparation;
+  const mode = legacy?.mode || "prepared";
+  if (mode === "always") return { method: "spell", prepared: 2 };
+  if (mode === "atwill" || mode === "innate" || mode === "ritual") {
+    return { method: mode, prepared: 2 };
+  }
+  if (mode === "pact") return { method: "pact", prepared: legacy?.prepared === false ? 0 : 1 };
+  return { method: "spell", prepared: legacy?.prepared === false ? 0 : 1 };
+}
+
+/**
+ * Spell methods that do not spend a slot.
+ * @param {string} method
+ * @returns {boolean}
+ */
+function isSlotlessSpellMethod(method) {
+  if (method === "atwill" || method === "innate" || method === "ritual") return true;
+  const config = CONFIG?.DND5E?.spellcasting?.[method];
+  return config?.slots === false || config?.static === true;
+}
+
+/**
+ * Methods whose spells can sit unprepared (paladin, cleric, wizard).
+ * @param {string} method
+ * @returns {boolean}
+ */
+function spellMethodPrepares(method) {
+  const prepares = CONFIG?.DND5E?.spellcasting?.[method]?.prepares;
+  if (prepares != null) return !!prepares;
+  return method === "spell" || method === "prepared";
+}
+
+/**
  * Whether a spell should contribute to the Cast Spell level ring / spell ring.
  * Cantrips: known spells always count.
  * Leveled: must pass prep/known rules and have a usable slot source (or be at-will/innate).
@@ -424,22 +472,21 @@ export function isSpellAvailableForHud(actor, item) {
   if (!item || item.type !== "spell") return false;
 
   const level = Number(item.system?.level ?? 0);
-  const mode = item.system?.preparation?.mode || "prepared";
-  const prepared = item.system?.preparation?.prepared;
+  const { method, prepared } = spellCastingState(item);
 
   // Cantrips never consume slots
   if (level === 0) return true;
 
-  // At-will / innate: no slot gate
-  if (mode === "atwill" || mode === "innate") return true;
+  // At-will / innate / ritual: no slot gate
+  if (isSlotlessSpellMethod(method)) return true;
 
   // Prepared casters: skip unprepared spells entirely (do not create empty/grey levels for them)
-  if (mode === "prepared" && prepared === false) return false;
+  if (spellMethodPrepares(method) && prepared <= 0) return false;
 
   // Pact magic
-  if (mode === "pact") return hasPactSlots(actor);
+  if (method === "pact") return hasPactSlots(actor);
 
-  // always / prepared / default known casters: need a slot at this level (or higher upcast source)
+  // always (prepared 2) / prepared / known casters: need a slot at this level (or higher upcast source)
   return hasSpellSlotForLevel(actor, level);
 }
 
@@ -592,11 +639,9 @@ export function canAttemptUse(activity, item) {
   if (activity && activity.canUse === false) {
     return { ok: false, reason: t("Notify.Unavailable") };
   }
-  // Prepared spells with preparation.value === false
   if (item.type === "spell") {
-    const mode = item.system?.preparation?.mode;
-    const prepared = item.system?.preparation?.prepared;
-    if (mode === "prepared" && prepared === false) {
+    const { method, prepared } = spellCastingState(item);
+    if (spellMethodPrepares(method) && prepared <= 0) {
       return { ok: false, reason: "Spell is not prepared." };
     }
   }
