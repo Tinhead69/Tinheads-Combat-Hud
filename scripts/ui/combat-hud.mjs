@@ -10,7 +10,11 @@ import {
   getSpellLevels,
   t
 } from "../data/actor-options.mjs";
-import { buildActionRingEntries } from "../data/basic-actions.mjs";
+import {
+  buildActionRingEntries,
+  getAttackNestEntries,
+  getReadyNestEntries
+} from "../data/basic-actions.mjs";
 import { getEndTurnState, endCombatTurn } from "../data/combat-turn.mjs";
 import { getUsableInventoryItems } from "../data/use-items.mjs";
 import {
@@ -21,10 +25,7 @@ import {
   getAbilityOptions,
   getAbilityRollOptions
 } from "../data/ability-checks.mjs";
-import {
-  getWeaponAbilityOptions,
-  getWeaponMenuOptions
-} from "../data/weapon-abilities.mjs";
+import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
   arcSegmentsForParent,
@@ -52,80 +53,11 @@ function nextClipId(prefix = "tch-clip") {
 }
 
 /**
- * Name on its own lines, use-count underneath, sized to the wedge chord
- * so neighboring labels no longer run into each other.
- * @param {string} caption
- * @param {number} startDeg
- * @param {number} endDeg
- * @param {number} innerR
- * @param {number} outerR
- * @returns {{ lines: string[], uses: string, fontSize: number }}
- */
-function wedgeCaptionLayout(caption, startDeg, endDeg, innerR, outerR) {
-  const raw = String(caption ?? "").trim();
-  const splitAt = raw.lastIndexOf(" · ");
-  const name = splitAt > 0 ? raw.slice(0, splitAt).trim() : raw;
-  const uses = splitAt > 0 ? raw.slice(splitAt + 3).trim() : "";
-
-  const sweep = endDeg < startDeg ? endDeg + 360 - startDeg : endDeg - startDeg;
-  const midR = (Number(innerR) + Number(outerR)) / 2;
-  const chord = 2 * midR * Math.sin((Math.min(Math.abs(sweep), 180) * Math.PI) / 360);
-  const usable = Math.max(40, chord * 0.78);
-  const fontSize = usable < 78 ? 11 : 12;
-  const maxChars = Math.max(7, Math.floor(usable / (fontSize * 0.56)));
-
-  return {
-    lines: wrapWedgeName(name, maxChars),
-    uses,
-    fontSize
-  };
-}
-
-/**
- * @param {string} name
- * @param {number} maxChars
- * @returns {string[]}
- */
-function wrapWedgeName(name, maxChars) {
-  const words = String(name ?? "").split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const lines = [];
-  let current = "";
-  let index = 0;
-  while (index < words.length && lines.length < 2) {
-    const word = words[index];
-    const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxChars) {
-      current = next;
-      index += 1;
-      continue;
-    }
-    if (current) {
-      lines.push(current);
-      current = "";
-      continue;
-    }
-    lines.push(word.length > maxChars ? `${word.slice(0, Math.max(1, maxChars - 1))}…` : word);
-    index += 1;
-    current = "";
-  }
-  if (current && lines.length < 2) lines.push(current);
-  if (index < words.length && lines.length) {
-    const last = lines[lines.length - 1];
-    lines[lines.length - 1] = last.endsWith("…") ? last : `${last.replace(/\s+\S*$/, "")}…`.replace(/^…$/, "…");
-    if (!lines[lines.length - 1] || lines[lines.length - 1] === "…") {
-      lines[lines.length - 1] = `${last.slice(0, Math.max(1, maxChars - 1))}…`;
-    }
-  }
-  return lines;
-}
-
-/**
  * Compact SVG viewBox + ring radii (px).
  * Main Action/BA/R is intentionally smaller so nested partial arcs stay on-screen.
  * Keep preview/radial-preview.html RINGS in sync with these values.
  */
-export const SIZE = 920;
+export const SIZE = 760;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
 
@@ -135,20 +67,23 @@ const CY = SIZE / 2;
  *  actionInner: number, actionOuter: number,
  *  nest1Inner: number, nest1Outer: number,
  *  nest2Inner: number, nest2Outer: number,
+ *  nest3Inner: number, nest3Outer: number,
  *  flatInner: number, flatOuter: number
  * }>} */
 export const RINGS = Object.freeze({
-  hub: 40,
-  mainInner: 50,
-  mainOuter: 132,
-  actionInner: 144,
-  actionOuter: 272,
-  nest1Inner: 284,
-  nest1Outer: 384,
-  nest2Inner: 396,
-  nest2Outer: 448,
-  flatInner: 144,
-  flatOuter: 272
+  hub: 34,
+  mainInner: 42,
+  mainOuter: 108,
+  actionInner: 116,
+  actionOuter: 178,
+  nest1Inner: 186,
+  nest1Outer: 238,
+  nest2Inner: 246,
+  nest2Outer: 292,
+  nest3Inner: 300,
+  nest3Outer: 352,
+  flatInner: 116,
+  flatOuter: 178
 });
 
 /** @type {CombatHud|null} */
@@ -173,7 +108,7 @@ export class CombatHud {
       section: null,       // action | checks | bonus | reaction
       castSpell: false,
       useItem: false,
-      weaponNestId: null,  // equipped weapon id with Attack / Use Ability nest
+      weaponNestId: null,  // special weapon: its attack plus abilities
       useAbility: false,   // weapon ability modes nest open
       featureNestId: null, // multi-mode class feature (Channel Divinity, …)
       abilityId: null,     // checks nest: str|dex|…
@@ -310,12 +245,15 @@ export class CombatHud {
 
     if (this.state.section === "action") {
       this._drawActionRing();
-      if (this.state.weaponNestId) {
-        this._drawWeaponMenuRing();
-        if (this.state.useAbility) this._drawWeaponAbilityRing();
-      }
+      if (this.state.readyOpen) this._drawReadyNest();
+      else if (this.state.attackOpen) this._drawAttackNest(2);
+      else if (this.state.abilitiesOpen) this._drawAbilitiesNest(2);
+      else if (this.state.useItem) this._drawUseItemRing();
+
+      if (this.state.readyOpen && this.state.attackOpen) this._drawAttackNest(3);
+      if (this.state.readyOpen && this.state.abilitiesOpen) this._drawAbilitiesNest(3);
+      if (this.state.weaponNestId) this._drawSpecialWeaponRing();
       if (this.state.featureNestId) this._drawFeatureModeRing();
-      if (this.state.useItem) this._drawUseItemRing();
       if (this.state.castSpell) {
         this._drawSpellLevelRing();
         if (this.state.spellLevel != null) this._drawSpellRing(this.state.spellLevel);
@@ -457,12 +395,95 @@ export class CombatHud {
   }
 
   _resetActionNests() {
+    this.state.attackOpen = false;
+    this.state.readyOpen = false;
+    this.state.abilitiesOpen = false;
     this.state.castSpell = false;
     this.state.useItem = false;
     this.state.weaponNestId = null;
     this.state.useAbility = false;
     this.state.featureNestId = null;
     this.state.spellLevel = null;
+  }
+
+  _nestKey() {
+    const state = this.state;
+    return [
+      state.attackOpen, state.readyOpen, state.abilitiesOpen, state.useItem,
+      state.castSpell, state.weaponNestId, state.featureNestId, state.spellLevel
+    ].join("|");
+  }
+
+  /**
+   * Open or close the nest that belongs to this wedge.
+   * @param {object} entry
+   * @param {"action"|"ready"|"attack"|"abilities"} source
+   * @returns {boolean} true when the radial needs a redraw
+   */
+  _applyHub(entry, source) {
+    const before = this._nestKey();
+    const kind = entry?.kind;
+    if (source === "action") {
+      this.state.attackOpen = kind === "attack";
+      this.state.readyOpen = kind === "ready";
+      this.state.abilitiesOpen = kind === "abilities";
+      this.state.useItem = kind === "useItem";
+      this.state.castSpell = false;
+      this.state.weaponNestId = null;
+      this.state.featureNestId = null;
+      this.state.spellLevel = null;
+      this.state.useAbility = false;
+    } else if (source === "ready") {
+      this.state.attackOpen = kind === "attack";
+      this.state.abilitiesOpen = kind === "abilities";
+      this.state.castSpell = kind === "cast";
+      this.state.weaponNestId = null;
+      this.state.featureNestId = null;
+      this.state.spellLevel = null;
+      this.state.useAbility = false;
+    } else if (source === "attack") {
+      this.state.castSpell = kind === "cast";
+      this.state.weaponNestId = (kind === "weapon" && entry.hasSpecial) ? entry.id : null;
+      this.state.spellLevel = null;
+      this.state.useAbility = false;
+      this.state.featureNestId = null;
+    } else if (source === "abilities") {
+      this.state.featureNestId = (kind === "feature" && entry.hasNest) ? entry.id : null;
+      this.state.castSpell = false;
+      this.state.spellLevel = null;
+    }
+    return before !== this._nestKey();
+  }
+
+  _isNestHub(entry) {
+    return entry?.kind === "cast"
+      || entry?.kind === "useItem"
+      || entry?.kind === "attack"
+      || entry?.kind === "ready"
+      || entry?.kind === "abilities"
+      || (entry?.kind === "weapon" && entry.hasSpecial)
+      || (entry?.kind === "feature" && entry.hasNest);
+  }
+
+  _entryActive(entry) {
+    if (entry.kind === "attack") {
+      return this.state.attackOpen && (this.state.readyOpen ? entry.id === "ready-attack" : entry.id === "attack");
+    }
+    if (entry.kind === "abilities") {
+      return this.state.abilitiesOpen && (this.state.readyOpen ? entry.id === "ready-other" : entry.id === "abilities");
+    }
+    return (entry.kind === "ready" && this.state.readyOpen)
+      || (entry.kind === "cast" && this.state.castSpell)
+      || (entry.kind === "useItem" && this.state.useItem)
+      || (entry.kind === "weapon" && entry.id === this.state.weaponNestId)
+      || (entry.kind === "feature" && entry.id === this.state.featureNestId);
+  }
+
+  _band(depth) {
+    if (depth <= 1) return { inner: RINGS.actionInner, outer: RINGS.actionOuter };
+    if (depth === 2) return { inner: RINGS.nest1Inner, outer: RINGS.nest1Outer };
+    if (depth === 3) return { inner: RINGS.nest2Inner, outer: RINGS.nest2Outer };
+    return { inner: RINGS.nest3Inner, outer: RINGS.nest3Outer };
   }
 
   _resetChecksNests() {
@@ -628,94 +649,164 @@ export class CombatHud {
   }
 
   _drawActionRing() {
-    const weapons = getEquippedWeapons(this.actor);
-    const entries = buildActionRingEntries(this.actor, weapons);
+    const entries = buildActionRingEntries(this.actor, getEquippedWeapons(this.actor));
     const actionMain = mainSectionById("action");
-    const segs = arcSegmentsForParent(
-      Math.max(entries.length, 1),
-      actionMain.start,
-      actionMain.end
-    );
-    this._layout = {
-      actionSegs: segs,
-      actionEntries: entries,
-      levelSegs: [],
-      levelInfos: []
-    };
+    this._drawChoiceRing(entries, {
+      depth: 1,
+      parent: actionMain,
+      source: "action",
+      groupName: "action",
+      store: "action"
+    });
+  }
 
-    const group = this._ringGroup("action");
-    if (!weapons.length) {
-      this._emptyLabel(group, t("Empty.NoEquippedWeapons"), (RINGS.actionInner + RINGS.actionOuter) / 2 - 10);
+  _drawReadyNest() {
+    const entries = getReadyNestEntries();
+    this._drawChoiceRing(entries, {
+      depth: 2,
+      parent: this._parentSeg("ready"),
+      source: "ready",
+      groupName: "ready"
+    });
+  }
+
+  _drawAttackNest(depth) {
+    const weapons = getEquippedWeapons(this.actor);
+    const entries = getAttackNestEntries(this.actor, weapons);
+    const parent = depth >= 3
+      ? (this._layout?.readyAttackSeg ?? this._parentSeg("attack"))
+      : this._parentSeg("attack");
+    this._drawChoiceRing(entries, {
+      depth,
+      parent,
+      source: "attack",
+      groupName: "attack-nest",
+      store: "attack"
+    });
+  }
+
+  _drawAbilitiesNest(depth) {
+    const entries = getClassFeatureOptions(this.actor, "action");
+    const parent = depth >= 3
+      ? (this._layout?.readyOtherSeg ?? this._parentSeg("abilities"))
+      : this._parentSeg("abilities");
+    this._layout = { ...(this._layout || {}), featureDepth: depth };
+    this._drawChoiceRing(entries, {
+      depth,
+      parent,
+      source: "abilities",
+      groupName: "abilities",
+      store: "abilities",
+      empty: t("Empty.NoFeatureModes")
+    });
+  }
+
+  _drawSpecialWeaponRing() {
+    const entries = this._layout?.attackEntries ?? [];
+    const segs = this._layout?.attackSegs ?? [];
+    const idx = entries.findIndex(entry => entry.id === this.state.weaponNestId);
+    const weapon = entries[idx];
+    if (!weapon) return;
+    const parent = segs[idx] ?? this._parentSeg("attack");
+    const options = getSpecialWeaponOptions(weapon);
+    this._drawChoiceRing(options, {
+      depth: (this._layout?.attackDepth ?? 2) + 1,
+      parent,
+      source: "weapon",
+      groupName: "weapon-special"
+    });
+  }
+
+  /**
+   * @param {Array<object>} entries
+   * @param {{
+   *   depth: number,
+   *   parent: { start: number, end: number },
+   *   source: string,
+   *   groupName: string,
+   *   store?: string,
+   *   empty?: string
+   * }} cfg
+   */
+  _drawChoiceRing(entries, cfg) {
+    const band = this._band(cfg.depth);
+    const group = this._ringGroup(cfg.groupName, cfg.source === "action" ? "action" : this.state.section);
+    const parent = cfg.parent ?? mainSectionById("action");
+    if (!entries.length) {
+      const mid = (band.inner + band.outer) / 2;
+      this._emptyLabel(group, cfg.empty || t("Empty.NoEquippedWeapons"), mid);
+      this.svg.appendChild(group);
+      return;
     }
 
-    entries.forEach((entry, i) => {
-      const seg = segs[i] ?? segs[0];
-      const isNestHub = entry.kind === "cast"
-        || entry.kind === "useItem"
-        || (entry.kind === "weapon" && entry.hasSpecial)
-        || (entry.kind === "feature" && entry.hasNest);
-      const caption = entry.usesLabel
-        ? `${entry.name} · ${entry.usesLabel}`
-        : entry.name;
+    const segs = arcSegmentsForParent(
+      entries.length,
+      parent.start,
+      parent.end,
+      { maxSpanDeg: cfg.depth >= 3 ? 240 : 280 }
+    );
+
+    if (cfg.store === "action") {
+      this._layout = {
+        actionSegs: segs,
+        actionEntries: entries,
+        levelSegs: [],
+        levelInfos: []
+      };
+    } else if (cfg.store === "attack") {
+      this._layout = {
+        ...(this._layout || {}),
+        attackEntries: entries,
+        attackSegs: segs,
+        attackDepth: cfg.depth
+      };
+    } else if (cfg.store === "abilities") {
+      this._layout = {
+        ...(this._layout || {}),
+        abilityEntries: entries,
+        abilitySegs: segs,
+        featureDepth: cfg.depth
+      };
+    }
+
+    entries.forEach((entry, index) => {
+      const seg = segs[index] ?? segs[0];
+      if (entry.kind === "cast") {
+        this._layout.castSeg = seg;
+        this._layout.castDepth = cfg.depth;
+      }
+      if (cfg.source === "ready" && entry.kind === "attack") this._layout.readyAttackSeg = seg;
+      if (cfg.source === "ready" && entry.kind === "abilities") this._layout.readyOtherSeg = seg;
+
+      const hub = this._isNestHub(entry);
+      const onAction = cfg.depth <= 1 && hub && entry.kind !== "weapon" && entry.kind !== "feature";
+      const caption = entry.usesLabel ? `${entry.name} · ${entry.usesLabel}` : entry.name;
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
-        inner: RINGS.actionInner,
-        outer: RINGS.actionOuter,
-        label: (entry.kind === "cast" || entry.kind === "useItem") ? entry.name : "",
-        caption: (entry.kind === "cast" || entry.kind === "useItem") ? "" : caption,
+        inner: band.inner,
+        outer: band.outer,
+        label: onAction ? entry.name : "",
+        caption: onAction ? "" : caption,
         img: entry.img,
         unavailable: entry.available === false,
-        active: (entry.kind === "cast" && this.state.castSpell)
-          || (entry.kind === "useItem" && this.state.useItem)
-          || (entry.kind === "weapon" && entry.id === this.state.weaponNestId)
-          || (entry.kind === "feature" && entry.id === this.state.featureNestId)
+        active: this._entryActive(entry)
       });
 
       g.addEventListener("pointerenter", () => {
         this._clearCollapse();
-        if (entry.kind === "cast") {
-          this._resetActionNests();
-          this.state.castSpell = true;
-          this._draw();
-          this.showTooltip(entry.tooltip || { title: entry.name }, g);
-        } else if (entry.kind === "useItem") {
-          this._resetActionNests();
-          this.state.useItem = true;
-          this._draw();
-          this.showTooltip(entry.tooltip || { title: entry.name }, g);
-        } else if (entry.kind === "weapon" && entry.hasSpecial) {
-          this._resetActionNests();
-          this.state.weaponNestId = entry.id;
-          this._draw();
-          this.showTooltip({ title: entry.name, description: entry.tooltip?.description }, g);
-        } else if (entry.kind === "feature" && entry.hasNest) {
-          this._resetActionNests();
-          this.state.featureNestId = entry.id;
-          this._draw();
-          this.showTooltip(entry.tooltip || { title: entry.name }, g);
-        } else {
-          const hadNest = this.state.castSpell
-            || this.state.useItem
-            || this.state.weaponNestId
-            || this.state.useAbility
-            || this.state.featureNestId
-            || this.state.spellLevel != null;
-          if (hadNest) {
-            this._resetActionNests();
-            this._draw();
-          }
-          if (entry.tooltip) this.showTooltip(entry.tooltip, g);
-          else this.showTooltip({ title: entry.name }, g);
-        }
+        const changed = cfg.source === "weapon" ? false : this._applyHub(entry, cfg.source);
+        if (entry.tooltip) this.showTooltip(entry.tooltip, g);
+        else this.showTooltip({ title: entry.name, description: entry.reason || "" }, g);
+        if (changed) this._draw();
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
-        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("action");
+        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse(cfg.source === "weapon" ? "weapon" : cfg.source);
       });
       g.addEventListener("pointerdown", async (ev) => {
         ev.stopPropagation();
-        if (isNestHub) return;
+        if (hub) return;
         await this._onLeafClick(entry);
       });
 
@@ -724,122 +815,18 @@ export class CombatHud {
 
     this.svg.appendChild(group);
   }
-
-  _weaponOptionById(id) {
-    return (this._layout?.actionEntries ?? []).find(e => e.id === id) ?? null;
-  }
-
-  _drawWeaponMenuRing() {
-    const weapon = this._weaponOptionById(this.state.weaponNestId);
-    if (!weapon) return;
-    const parent = this._parentSegByEntryId(weapon.id);
-    const menu = getWeaponMenuOptions(weapon);
-    const group = this._ringGroup("weapon-menu");
-    const segs = arcSegmentsForParent(menu.length, parent.start, parent.end, { maxSpanDeg: 120 });
-
-    if (this._layout) {
-      this._layout.weaponMenuSegs = segs;
-      this._layout.weaponMenuEntries = menu;
-    }
-
-    menu.forEach((opt, i) => {
-      const seg = segs[i];
-      const g = this._leafSegment({
-        start: seg.start,
-        end: seg.end,
-        inner: RINGS.nest1Inner,
-        outer: RINGS.nest1Outer,
-        label: opt.name,
-        img: opt.img,
-        unavailable: opt.available === false,
-        active: opt.kind === "weapon-use-ability" && this.state.useAbility
-      });
-
-      g.addEventListener("pointerenter", () => {
-        this._clearCollapse();
-        if (opt.kind === "weapon-use-ability") {
-          this.state.useAbility = true;
-          this._draw();
-        } else if (this.state.useAbility) {
-          this.state.useAbility = false;
-          this._draw();
-        }
-        this.showTooltip(opt.tooltip || { title: opt.name }, g);
-      });
-      g.addEventListener("pointerleave", (ev) => {
-        this.hideTooltip();
-        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("weapon");
-      });
-      g.addEventListener("pointerdown", async (ev) => {
-        ev.stopPropagation();
-        if (opt.isNest || opt.kind === "weapon-use-ability") return;
-        await this._onLeafClick(opt);
-      });
-
-      group.appendChild(g);
-    });
-
-    this.svg.appendChild(group);
-  }
-
-  _drawWeaponAbilityRing() {
-    const weapon = this._weaponOptionById(this.state.weaponNestId);
-    if (!weapon) return;
-    const abilities = getWeaponAbilityOptions(weapon);
-    const group = this._ringGroup("weapon-abilities");
-
-    let parent = this._parentSegByEntryId(weapon.id);
-    const menu = this._layout?.weaponMenuEntries ?? [];
-    const menuSegs = this._layout?.weaponMenuSegs ?? [];
-    const useIdx = menu.findIndex(m => m.kind === "weapon-use-ability");
-    if (useIdx >= 0 && menuSegs[useIdx]) parent = menuSegs[useIdx];
-
-    if (!abilities.length) {
-      this._emptyLabel(group, t("Empty.NoWeaponAbilities"), (RINGS.nest2Inner + RINGS.nest2Outer) / 2);
-      this.svg.appendChild(group);
-      return;
-    }
-
-    const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, { maxSpanDeg: 240 });
-    abilities.forEach((opt, i) => {
-      const seg = segs[i];
-      const g = this._leafSegment({
-        start: seg.start,
-        end: seg.end,
-        inner: RINGS.nest2Inner,
-        outer: RINGS.nest2Outer,
-        caption: opt.name,
-        img: opt.img,
-        unavailable: !opt.available
-      });
-
-      g.addEventListener("pointerenter", (ev) => {
-        this._clearCollapse();
-        this.showTooltip(opt.tooltip || { title: opt.name }, g, ev);
-      });
-      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
-      g.addEventListener("pointerleave", (ev) => {
-        this.hideTooltip();
-        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("useAbility");
-      });
-      g.addEventListener("pointerdown", async (ev) => {
-        ev.stopPropagation();
-        await this._onLeafClick(opt);
-      });
-
-      group.appendChild(g);
-    });
-
-    this.svg.appendChild(group);
-  }
-
   _featureById(id) {
-    return (this._layout?.actionEntries ?? []).find(e => e.id === id)
+    return (this._layout?.abilityEntries ?? []).find(e => e.id === id)
+      ?? (this._layout?.actionEntries ?? []).find(e => e.id === id)
       ?? (this._layout?.economyEntries ?? []).find(e => e.id === id)
       ?? null;
   }
 
   _parentSegForFeature(feature) {
+    const abilityEntries = this._layout?.abilityEntries ?? [];
+    const abilitySegs = this._layout?.abilitySegs ?? [];
+    const abilityIdx = abilityEntries.findIndex(entry => entry.id === feature.id);
+    if (abilityIdx >= 0 && abilitySegs[abilityIdx]) return abilitySegs[abilityIdx];
     if (this.state.section === "action") return this._parentSegByEntryId(feature.id);
     const entries = this._layout?.economyEntries ?? [];
     const segs = this._layout?.economySegs ?? [];
@@ -854,22 +841,23 @@ export class CombatHud {
     const modes = getFeatureModeOptions(feature);
     const group = this._ringGroup("feature-modes");
     const parent = this._parentSegForFeature(feature);
+    const band = this._band((this._layout?.featureDepth ?? 1) + 1);
 
     if (!modes.length) {
-      this._emptyLabel(group, t("Empty.NoFeatureModes"), (RINGS.nest1Inner + RINGS.nest1Outer) / 2);
+      this._emptyLabel(group, t("Empty.NoFeatureModes"), (band.inner + band.outer) / 2);
       this.svg.appendChild(group);
       return;
     }
 
-    const segs = arcSegmentsForParent(modes.length, parent.start, parent.end, { maxSpanDeg: 260 });
+    const segs = arcSegmentsForParent(modes.length, parent.start, parent.end, { maxSpanDeg: 170 });
     modes.forEach((opt, i) => {
       const seg = segs[i];
       const caption = opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name;
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
-        inner: RINGS.nest1Inner,
-        outer: RINGS.nest1Outer,
+        inner: band.inner,
+        outer: band.outer,
         caption,
         img: opt.img,
         unavailable: !opt.available
@@ -904,7 +892,7 @@ export class CombatHud {
       abilities.length,
       main.start,
       main.end,
-      { maxSpanDeg: 280 }
+      { maxSpanDeg: 200 }
     );
 
     if (this._layout) {
@@ -1004,7 +992,7 @@ export class CombatHud {
       items.length,
       parent.start,
       parent.end,
-      { maxSpanDeg: 280 }
+      { maxSpanDeg: 170 }
     );
     items.forEach((opt, i) => {
       const seg = segs[i];
@@ -1056,13 +1044,15 @@ export class CombatHud {
   }
 
   _drawSpellLevelRing() {
-    // Partial arc anchored on Cast Spell hub — section count = available levels only.
+    // Partial arc anchored on Cast Spell — section count = available levels only.
     const { levels, empty } = getSpellLevels(this.actor);
     const group = this._ringGroup("levels");
-    const parent = this._parentSeg("cast");
+    const parent = this._layout?.castSeg ?? this._parentSeg("cast");
+    const band = this._band((this._layout?.castDepth ?? 2) + 1);
+    if (this._layout) this._layout.levelDepth = (this._layout.castDepth ?? 2) + 1;
 
     if (empty) {
-      this._emptyLabel(group, t("Empty.NoSpellLevels"), (RINGS.nest1Inner + RINGS.nest1Outer) / 2);
+      this._emptyLabel(group, t("Empty.NoSpellLevels"), (band.inner + band.outer) / 2);
       this.svg.appendChild(group);
       return;
     }
@@ -1071,7 +1061,7 @@ export class CombatHud {
       levels.length,
       parent.start,
       parent.end,
-      { maxSpanDeg: 280 }
+      { maxSpanDeg: 170 }
     );
     if (this._layout) {
       this._layout.levelSegs = segs;
@@ -1083,8 +1073,8 @@ export class CombatHud {
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
-        inner: RINGS.nest1Inner,
-        outer: RINGS.nest1Outer,
+        inner: band.inner,
+        outer: band.outer,
         label: levelInfo.label,
         img: spellLevelIcon(levelInfo.level),
         unavailable: false,
@@ -1123,8 +1113,10 @@ export class CombatHud {
     const li = layoutLevels.findIndex(l => l.level === level);
     if (li >= 0 && layoutSegs[li]) parent = layoutSegs[li];
 
+    const spellBand = this._band((this._layout?.levelDepth ?? 3) + 1);
+
     if (!spells.length) {
-      this._emptyLabel(group, t("Empty.NoSpellsAtLevel"), (RINGS.nest2Inner + RINGS.nest2Outer) / 2);
+      this._emptyLabel(group, t("Empty.NoSpellsAtLevel"), (spellBand.inner + spellBand.outer) / 2);
       this.svg.appendChild(group);
       return;
     }
@@ -1133,15 +1125,15 @@ export class CombatHud {
       spells.length,
       parent.start,
       parent.end,
-      { maxSpanDeg: 280 }
+      { maxSpanDeg: 160 }
     );
     spells.forEach((spell, i) => {
       const seg = segs[i];
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
-        inner: RINGS.nest2Inner,
-        outer: RINGS.nest2Outer,
+        inner: spellBand.inner,
+        outer: spellBand.outer,
         caption: spell.name,
         img: spell.img,
         unavailable: !spell.available
@@ -1190,13 +1182,14 @@ export class CombatHud {
       entries.length,
       main.start,
       main.end,
-      { maxSpanDeg: 280 }
+      { maxSpanDeg: 160 }
     );
     this._layout = {
       ...(this._layout || {}),
       economyEntries: entries,
       economySegs: segs,
-      economyActivation: activation
+      economyActivation: activation,
+      featureDepth: 1
     };
 
     entries.forEach((opt, i) => {
@@ -1299,31 +1292,13 @@ export class CombatHud {
     }
 
     if (cfg.caption) {
-      const layout = wedgeCaptionLayout(cfg.caption, cfg.start, cfg.end, cfg.inner, cfg.outer);
-      const lineH = layout.fontSize + 2;
-      const rowCount = layout.lines.length + (layout.uses ? 1 : 0);
-      const startY = anchor.y - ((rowCount - 1) * lineH) / 2;
       const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
       const asLabel = !cfg.label;
       cap.classList.add(asLabel ? "tch-segment__label" : "tch-segment__caption");
       cap.setAttribute("x", String(anchor.x));
-      cap.setAttribute("y", String(startY));
-      cap.style.fontSize = `${layout.fontSize}px`;
-      layout.lines.forEach((line, index) => {
-        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-        tspan.setAttribute("x", String(anchor.x));
-        tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
-        tspan.textContent = line;
-        cap.appendChild(tspan);
-      });
-      if (layout.uses) {
-        const uses = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-        uses.classList.add("tch-segment__uses");
-        uses.setAttribute("x", String(anchor.x));
-        uses.setAttribute("dy", String(lineH));
-        uses.textContent = layout.uses;
-        cap.appendChild(uses);
-      }
+      cap.setAttribute("y", String(anchor.y + (cfg.label ? 8 : 0)));
+      const short = cfg.caption.length > 14 ? `${cfg.caption.slice(0, 12)}…` : cfg.caption;
+      cap.textContent = short;
       g.appendChild(cap);
     }
 
@@ -1358,11 +1333,9 @@ export class CombatHud {
   }
 
   async _onLeafClick(option) {
-    // activity.use() / item.use() open configure dialogs and do not resolve
-    // until those dialogs close. Drop the radial first so the popups are visible.
-    const actor = this.actor;
-    this.close();
-    await resolveHudOption(option, { actor });
+    const result = await resolveHudOption(option, { actor: this.actor });
+    if (result.closed) this.close();
+    else this._draw();
   }
 
   showTooltip(data, _segment, event) {
@@ -1440,6 +1413,21 @@ export class CombatHud {
       }
       if (keep === "weapon") {
         this.state.useAbility = false;
+      } else if (keep === "attack") {
+        this.state.weaponNestId = null;
+        this.state.castSpell = false;
+        this.state.spellLevel = null;
+        this.state.useAbility = false;
+      } else if (keep === "ready") {
+        this.state.attackOpen = false;
+        this.state.abilitiesOpen = false;
+        this.state.castSpell = false;
+        this.state.spellLevel = null;
+        this.state.weaponNestId = null;
+        this.state.featureNestId = null;
+        this.state.useAbility = false;
+      } else if (keep === "abilities") {
+        this.state.featureNestId = null;
       } else if (keep === "checks") {
         this.state.abilityId = null;
       } else if (keep === "bonus" || keep === "reaction") {

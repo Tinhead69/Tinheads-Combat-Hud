@@ -90,7 +90,14 @@ export function getAbilityRollOptions(abilityOption) {
  * @param {object} option ability-check | ability-save
  */
 export async function rollAbilityHudOption(actor, option) {
-  if (!actor || !option?.abilityId) {
+  if (!actor) throw new Error("Missing actor or ability for roll");
+
+  if (option?.kind === "skill-check") {
+    if (!option.skillId) throw new Error("Missing skill for roll");
+    return rollSkillCheck(actor, option.skillId);
+  }
+
+  if (!option?.abilityId) {
     throw new Error("Missing actor or ability for roll");
   }
   const ability = option.abilityId;
@@ -116,6 +123,23 @@ export async function rollAbilityHudOption(actor, option) {
   }
 
   throw new Error(`Unknown ability roll kind: ${option.kind}`);
+}
+
+/**
+ * Stealth and other skill checks. dnd5e 4+ takes { skill }; 3.x takes the skill id.
+ * @param {Actor} actor
+ * @param {string} skillId
+ */
+async function rollSkillCheck(actor, skillId) {
+  if (typeof actor.rollSkill !== "function") {
+    throw new Error("Actor.rollSkill unavailable");
+  }
+  const version = String(game.system?.version ?? "");
+  const modern = typeof foundry?.utils?.isNewerVersion === "function"
+    ? foundry.utils.isNewerVersion(version || "0.0.0", "3.9.99")
+    : true;
+  if (modern) return actor.rollSkill({ skill: skillId });
+  return actor.rollSkill(skillId);
 }
 
 async function callLegacyRoll(fn, ability) {

@@ -76,11 +76,11 @@ export async function resolveHudOption(option, ctx = {}) {
   }
 
   try {
-    if (option.kind === "ability-check" || option.kind === "ability-save") {
+    if (option.kind === "ability-check" || option.kind === "ability-save" || option.kind === "skill-check") {
       await rollAbilityHudOption(actor, option);
       return { closed: true, ok: true };
     }
-    await useOption(option);
+    await useOption(option, actor);
     return { closed: true, ok: true };
   } catch (err) {
     console.error("Tinhead's Combat Hud | resolve failed", err);
@@ -104,6 +104,7 @@ export function serializeResolveOption(option, actor) {
     name: option.name ?? null,
     img: option.img ?? null,
     abilityId: option.abilityId ?? null,
+    skillId: option.skillId ?? null,
     targetUuids: getSelectedTargetUuids(),
     requiresTarget: !!(option.requiresTarget
       ?? optionRequiresTarget(option.activity, option.item))
@@ -122,10 +123,11 @@ export async function executeResolvePayload(payload, ctx = {}) {
       : null);
   if (!actor) throw new Error(t("Notify.NoActor"));
 
-  if (payload.kind === "ability-check" || payload.kind === "ability-save") {
+  if (payload.kind === "ability-check" || payload.kind === "ability-save" || payload.kind === "skill-check") {
     await rollAbilityHudOption(actor, {
       kind: payload.kind,
-      abilityId: payload.abilityId
+      abilityId: payload.abilityId,
+      skillId: payload.skillId
     });
     return { ok: true, closed: true };
   }
@@ -276,47 +278,24 @@ function weaponAttackActivity(option) {
 }
 
 /**
- * First equipped ammunition choice for a ranged attack, when the weapon lists any.
- * @param {Item|null} item
- * @returns {string|null}
- */
-function defaultAmmunitionId(item) {
-  const options = item?.system?.ammunitionOptions;
-  if (!Array.isArray(options)) return null;
-  const choice = options.find(entry => entry?.value);
-  return choice?.value ?? null;
-}
-
-function midiQolActive() {
-  return !!game.modules?.get?.("midi-qol")?.active;
-}
-
-/**
- * Post the activity card (Attack / Damage buttons) and roll against the current target.
- * displayCard() only posts the item description, so the attack controls never appear.
- * The usage dialog stays closed. Midi-QOL applies its own attack workflow from activity.use().
+ * Post the activity chat card only.
+ * dnd5e opens the Attack Roll dialog from the activity's follow-up action.
+ * subsequentActions: false leaves that for the Attack button on the card.
  * @param {object} option
  */
 async function useWeaponAttack(option) {
   const item = option.item ?? null;
   const activity = weaponAttackActivity(option);
+  const usageConfig = { subsequentActions: false };
+  const dialogConfig = { configure: false };
+  const messageConfig = { create: true };
 
   if (activity && typeof activity.use === "function") {
-    const usage = await activity.use({}, { configure: false }, { create: true });
-    if (usage && hasActiveTargets() && !midiQolActive() && typeof activity.rollAttack === "function") {
-      const ammunition = defaultAmmunitionId(item);
-      const config = ammunition ? { ammunition } : {};
-      await activity.rollAttack(config, { configure: false }, { create: true });
-    }
-    return usage;
+    return activity.use(usageConfig, dialogConfig, messageConfig);
   }
 
   if (item && typeof item.use === "function") {
-    return item.use({}, { configure: false }, { create: true });
-  }
-
-  if (item && typeof item.rollAttack === "function") {
-    return item.rollAttack({ configure: false });
+    return item.use(usageConfig, dialogConfig, messageConfig);
   }
 
   if (item && typeof item.displayCard === "function") {
@@ -327,11 +306,11 @@ async function useWeaponAttack(option) {
 }
 
 /**
- * Prefer activity.use(); weapon attacks post an activity card and roll.
+ * Prefer activity.use(); weapon attacks post the chat card without the roll dialog.
  * Fall back to item.use(); then basic-action chat.
  * @param {object} option
  */
-async function useOption(option) {
+async function useOption(option, actor = null) {
   const { activity, item } = option;
 
   if (isWeaponAttackOption(option)) {
@@ -351,7 +330,10 @@ async function useOption(option) {
   }
 
   if (option.kind === "basic") {
-    return postBasicActionChat(option);
+    return postBasicActionChat({
+      ...option,
+      actor: option.actor ?? option.item?.actor ?? actor
+    });
   }
 
   throw new Error("No usable activity or item.use() on option");

@@ -15,28 +15,28 @@ const STORAGE_KEY = "tinheads-combat-hud:hud-center";
  * @param {object} rings RINGS constants
  */
 export function contentOuterRadius(state, rings) {
-  if (!state) return rings.mainOuter;
+  if (!state?.section) return rings.mainOuter;
 
-  const deepNest = state.spellLevel != null || state.useAbility;
-  if (deepNest) return rings.nest2Outer;
-
-  // Checks: abilities on actionOuter; Check|Save nest on nest1
-  if (state.section === "checks" && state.abilityId) return rings.nest1Outer;
-
-  const midNest = state.castSpell
-    || state.useItem
-    || state.weaponNestId
-    || state.featureNestId;
-  if (midNest) return rings.nest1Outer;
-
-  if (state.section === "checks"
-    || state.section === "bonus"
-    || state.section === "reaction"
-    || state.section === "action") {
-    return rings.actionOuter;
+  if (state.section === "checks") {
+    return state.abilityId ? rings.nest1Outer : rings.actionOuter;
   }
+  if (state.section === "bonus" || state.section === "reaction") {
+    return state.featureNestId ? rings.nest1Outer : rings.actionOuter;
+  }
+  if (state.section !== "action") return rings.mainOuter;
 
-  return rings.mainOuter;
+  let depth = 1;
+  if (state.attackOpen || state.readyOpen || state.abilitiesOpen || state.useItem) depth = 2;
+  if (state.readyOpen && (state.attackOpen || state.abilitiesOpen)) depth = 3;
+  if (state.castSpell) depth += 1;
+  if (state.spellLevel != null) depth += 1;
+  if (state.weaponNestId) depth += 1;
+  if (state.featureNestId && state.abilitiesOpen) depth += 1;
+  depth = Math.min(depth, 4);
+  if (depth <= 1) return rings.actionOuter;
+  if (depth === 2) return rings.nest1Outer;
+  if (depth === 3) return rings.nest2Outer;
+  return rings.nest3Outer ?? rings.nest2Outer;
 }
 
 /**

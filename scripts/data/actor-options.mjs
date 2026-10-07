@@ -35,6 +35,22 @@ export function isWeaponItem(item) {
 }
 
 /**
+ * Unarmed Strike is offered on the Attack nest even when it is not equipped.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isUnarmedItem(item) {
+  const name = String(item?.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const ident = String(item?.system?.identifier || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const typeValue = String(item?.system?.type?.value ?? "").toLowerCase();
+  const base = String(item?.system?.type?.baseItem ?? "").toLowerCase();
+  return name === "unarmed strike"
+    || ident === "unarmed strike"
+    || typeValue === "unarmed"
+    || base === "unarmed";
+}
+
+/**
  * dnd5e inventory equipped flag (`item.system.equipped`).
  * @param {Item} item
  * @returns {boolean}

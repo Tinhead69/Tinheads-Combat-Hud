@@ -6,9 +6,14 @@
  * chat announcement (no invented rules automation).
  */
 
-import { getActivities, getActivationType, t } from "./actor-options.mjs";
+import {
+  getActivities,
+  getActivationType,
+  getAttackHandle,
+  isUnarmedItem,
+  t
+} from "./actor-options.mjs";
 import { enrichWeaponOption } from "./weapon-abilities.mjs";
-import { getClassFeatureOptions } from "./action-features.mjs";
 import { CHROME, preferDocumentImg } from "./module-icons.mjs";
 
 /** @typedef {"dash"|"disengage"|"dodge"|"ready"} BasicActionId */
@@ -209,37 +214,173 @@ function safeLocalize(key, fallback) {
 }
 
 /**
- * Ordered Action sub-radial leaves: weapons → basics → Use Item → Cast Spell.
+ * First Action radial: Attack, Dodge, Dash, Disengage, Ready, then Abilities and Use Item.
+ * Weapons and spells live under Attack. Class features live under Abilities.
+ * @param {Actor} actor
+ * @param {Array<object>} [_weapons] kept so existing callers can still pass equipped weapons
+ * @returns {Array<object>}
+ */
+export function buildActionRingEntries(actor, _weapons) {
+  const basics = Object.fromEntries(getBasicActionOptions(actor).map(entry => [entry.basicId, entry]));
+  const ready = basics.ready;
+  return [
+    attackHub(),
+    basics.dodge,
+    basics.dash,
+    basics.disengage,
+    {
+      ...ready,
+      kind: "ready",
+      tooltip: {
+        title: ready.name,
+        description: t("ReadyNest.Hint")
+      }
+    },
+    {
+      kind: "abilities",
+      id: "abilities",
+      name: t("Abilities.Label"),
+      img: CHROME.classFeature,
+      available: true,
+      tooltip: {
+        title: t("Abilities.Label"),
+        description: t("Abilities.Hint")
+      }
+    },
+    useItemHub()
+  ];
+}
+
+/**
+ * Attack nest: equipped weapons, Unarmed Strike, Cast Spell.
  * @param {Actor} actor
  * @param {Array<object>} weapons from getEquippedWeapons
  * @returns {Array<object>}
  */
-export function buildActionRingEntries(actor, weapons) {
+export function getAttackNestEntries(actor, weapons) {
+  const armed = (weapons ?? [])
+    .filter(weapon => !isUnarmedItem(weapon.item))
+    .map(weapon => enrichWeaponOption({ kind: "weapon", ...weapon }));
+  return [...armed, unarmedStrikeOption(actor), castSpellHub()];
+}
+
+/**
+ * Ready nest: the action being readied.
+ * @returns {Array<object>}
+ */
+export function getReadyNestEntries() {
   return [
-    ...weapons.map(w => enrichWeaponOption({ kind: "weapon", ...w })),
-    ...getBasicActionOptions(actor),
-    ...getClassFeatureOptions(actor, "action"),
+    castSpellHub(),
     {
-      kind: "useItem",
-      id: "use-item",
-      name: t("Sections.UseItem"),
-      img: CHROME.useItem,
+      kind: "attack",
+      id: "ready-attack",
+      name: t("ReadyNest.Attack"),
+      img: CHROME.attack,
       available: true,
       tooltip: {
-        title: t("Sections.UseItem"),
-        description: t("Sections.UseItemHint")
+        title: t("ReadyNest.Attack"),
+        description: t("AttackNest.Hint")
       }
     },
     {
-      kind: "cast",
-      id: "cast-spell",
-      name: t("Sections.CastSpell"),
-      img: CHROME.castSpell,
+      kind: "abilities",
+      id: "ready-other",
+      name: t("ReadyNest.Other"),
+      img: CHROME.classFeature,
       available: true,
       tooltip: {
-        title: t("Sections.CastSpell"),
-        description: t("Sections.CastSpellHint")
+        title: t("ReadyNest.Other"),
+        description: t("ReadyNest.OtherHint")
       }
     }
   ];
+}
+
+function attackHub() {
+  return {
+    kind: "attack",
+    id: "attack",
+    name: t("AttackNest.Label"),
+    img: CHROME.attack,
+    available: true,
+    tooltip: {
+      title: t("AttackNest.Label"),
+      description: t("AttackNest.Hint")
+    }
+  };
+}
+
+function castSpellHub() {
+  return {
+    kind: "cast",
+    id: "cast-spell",
+    name: t("Sections.CastSpell"),
+    img: CHROME.castSpell,
+    available: true,
+    tooltip: {
+      title: t("Sections.CastSpell"),
+      description: t("Sections.CastSpellHint")
+    }
+  };
+}
+
+function useItemHub() {
+  return {
+    kind: "useItem",
+    id: "use-item",
+    name: t("Sections.UseItem"),
+    img: CHROME.useItem,
+    available: true,
+    tooltip: {
+      title: t("Sections.UseItem"),
+      description: t("Sections.UseItemHint")
+    }
+  };
+}
+
+/**
+ * The sheet's Unarmed Strike when present, otherwise a chat announcement.
+ * @param {Actor} actor
+ * @returns {object}
+ */
+function unarmedStrikeOption(actor) {
+  let found = null;
+  for (const item of actor?.items ?? []) {
+    if (!isUnarmedItem(item)) continue;
+    found = item;
+    break;
+  }
+
+  const label = safeLocalize("AttackNest.Unarmed", "Unarmed Strike");
+  if (!found) {
+    return {
+      id: "unarmed",
+      kind: "basic",
+      basicId: "unarmed",
+      name: label,
+      img: CHROME.attack,
+      item: null,
+      activity: null,
+      actor,
+      available: true,
+      requiresTarget: true,
+      source: "module",
+      tooltip: {
+        title: label,
+        description: t("AttackNest.UnarmedHint")
+      }
+    };
+  }
+
+  const handle = getAttackHandle(found);
+  return enrichWeaponOption({
+    kind: "weapon",
+    id: `weapon:${found.id}`,
+    name: found.name || label,
+    img: preferDocumentImg(found.img, CHROME.attack),
+    item: handle.item,
+    activity: handle.activity,
+    available: true,
+    requiresTarget: true
+  });
 }

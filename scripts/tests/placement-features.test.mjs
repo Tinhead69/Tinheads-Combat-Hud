@@ -53,9 +53,13 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
   const collapsed = contentOuterRadius({ section: null }, RINGS);
   assert(collapsed === RINGS.mainOuter, "collapsed uses main outer");
   const nested = contentOuterRadius({
-    section: "action", castSpell: true, spellLevel: 1
+    section: "action", attackOpen: true, castSpell: true, spellLevel: 0
   }, RINGS);
-  assert(nested === RINGS.nest2Outer, "spell nest uses nest2");
+  assert(nested === RINGS.nest3Outer, "spells under Attack use nest3");
+  const readyAttack = contentOuterRadius({
+    section: "action", readyOpen: true, attackOpen: true
+  }, RINGS);
+  assert(readyAttack === RINGS.nest2Outer, "Ready then Attack uses nest2");
   const checks = contentOuterRadius({
     section: "checks", abilityId: "str"
   }, RINGS);
@@ -130,5 +134,42 @@ const modes = getFeatureModeOptions(font);
 assert(modes.length === 2, "two flexible-casting modes (no recover)");
 assert(!modes.some(m => /recover/i.test(m.name)), "recover sorcery not in BA nest");
 assert(font.usesLabel === "4/4", "sorcery uses pool visible");
+
+const cunningFeat = {
+  id: "cunning",
+  name: "Cunning Action",
+  type: "feat",
+  img: "",
+  isOwner: true,
+  system: {
+    identifier: "cunning-action",
+    activities: [
+      { id: "use", name: "Cunning Action", type: "utility", activation: { type: "bonus" } }
+    ]
+  }
+};
+const rogue = {
+  id: "R1",
+  items: [
+    { id: "cls", name: "Rogue", type: "class", system: { identifier: "rogue" } },
+    cunningFeat
+  ]
+};
+const rogueBonus = getClassFeatureOptions(rogue, "bonus");
+const cunning = rogueBonus.find(f => f.name === "Cunning Action");
+assert(cunning?.hasNest === true && cunning?.cunningAction === true, "rogue Cunning Action opens a nest");
+const cunningModes = getFeatureModeOptions(cunning);
+assert(cunningModes.map(m => m.skillId || m.basicId).join(",") === "ste,dash,disengage", "Hide, Dash, Disengage");
+assert(cunningModes[0].kind === "skill-check", "Hide is a Stealth check");
+
+const fighter = {
+  id: "F1",
+  items: [
+    { id: "cls", name: "Fighter", type: "class", system: { identifier: "fighter" } },
+    cunningFeat
+  ]
+};
+const fighterCunning = getClassFeatureOptions(fighter, "bonus").find(f => f.name === "Cunning Action");
+assert(fighterCunning && !fighterCunning.cunningAction, "non-rogue Cunning Action stays a single wedge");
 
 console.log(`\n${passed} assertions passed`);

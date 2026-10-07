@@ -170,13 +170,28 @@ export function getWeaponMenuOptions(weaponOption) {
 }
 
 /**
+ * Special-weapon nest: the attack itself, then each real ability.
+ * One ring, so Ready → Attack → weapon still fits.
+ * @param {object} weaponOption enriched weapon
+ * @returns {Array<object>}
+ */
+export function getSpecialWeaponOptions(weaponOption) {
+  const attack = getWeaponMenuOptions(weaponOption).find(option => option.kind === "weapon-attack");
+  return [attack, ...getWeaponAbilityOptions(weaponOption)].filter(Boolean);
+}
+
+/**
  * Ability mode leaves under Use Ability (Cube of Force modes, etc.).
  * @param {object} weaponOption enriched weapon
  */
 export function getWeaponAbilityOptions(weaponOption) {
   const specials = weaponOption.specialActivities ?? [];
   return specials.map((activity, index) => {
-    const available = canAttemptUse(activity, weaponOption.item);
+    const usesLabel = abilityUsesLabel(weaponOption.item, activity);
+    const depleted = usesLabel != null && usesLabel.startsWith("0/");
+    const available = depleted
+      ? { ok: false, reason: t("Empty.NoItemUses") }
+      : canAttemptUse(activity, weaponOption.item);
     return {
       id: `${weaponOption.id}:ability:${activity.id ?? activity._id ?? index}`,
       kind: "weapon-ability",
@@ -191,10 +206,55 @@ export function getWeaponAbilityOptions(weaponOption) {
       reason: available.reason,
       requiresTarget: optionRequiresTarget(activity, weaponOption.item),
       parentWeaponId: weaponOption.id,
+      usesLabel,
       tooltip: {
         title: activity.name || weaponOption.name,
-        description: t("WeaponNest.AbilityHint")
+        description: depleted
+          ? t("Empty.NoItemUses")
+          : t("WeaponNest.AbilityHint")
       }
     };
   });
+}
+
+/**
+ * Remaining/max for the pool this ability spends. Null when the ability is unlimited.
+ * @param {Item} item
+ * @param {object} activity
+ * @returns {string|null}
+ */
+function abilityUsesLabel(item, activity) {
+  const pool = abilityUsesPool(item, activity);
+  if (!pool) return null;
+  const max = Number(pool.max);
+  if (!Number.isFinite(max) || max <= 0) return null;
+  const spent = Number(pool.spent);
+  const value = Number(pool.value);
+  const remaining = Number.isFinite(spent)
+    ? Math.max(0, max - spent)
+    : (Number.isFinite(value) ? value : max);
+  return `${remaining}/${max}`;
+}
+
+/**
+ * Item charge pool when the activity spends it, otherwise the activity's own uses.
+ * @param {Item} item
+ * @param {object} activity
+ * @returns {object|null}
+ */
+function abilityUsesPool(item, activity) {
+  const targets = activity?.consumption?.targets ?? [];
+  const list = Array.isArray(targets) ? targets : Object.values(targets ?? {});
+  const spendsItem = list.some(target => target?.type === "itemUses");
+  const activityUses = activity?.uses;
+  const itemUses = item?.system?.uses;
+  if (spendsItem && hasNumericMax(itemUses)) return itemUses;
+  if (hasNumericMax(activityUses)) return activityUses;
+  if (hasNumericMax(itemUses)) return itemUses;
+  return null;
+}
+
+function hasNumericMax(uses) {
+  const max = Number(uses?.max);
+  return Number.isFinite(max) && max > 0;
 }

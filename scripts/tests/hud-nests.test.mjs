@@ -29,9 +29,9 @@ const { enrichWeaponOption, getWeaponMenuOptions, getWeaponAbilityOptions } =
 const { getEndTurnState, endCombatTurn } = await import("../data/combat-turn.mjs");
 const { getAbilityOptions, getAbilityRollOptions, rollAbilityHudOption } =
   await import("../data/ability-checks.mjs");
-const { getActionFeatureOptions, getFeatureModeOptions, formatUses } =
+const { getActionFeatureOptions, getClassFeatureOptions, getFeatureModeOptions, formatUses, isSuppressedActionFeature } =
   await import("../data/action-features.mjs");
-const { buildActionRingEntries } = await import("../data/basic-actions.mjs");
+const { buildActionRingEntries, getAttackNestEntries } = await import("../data/basic-actions.mjs");
 const { mainSectionAngles } = await import("../ui/radial-geometry.mjs");
 
 let passed = 0;
@@ -130,6 +130,45 @@ assert(hazModes.includes("Detect Magic"), "midi-qol activity is an action");
 assert(!hazModes.includes("Increased Potency"), "passive rider is not an action");
 assert(!hazModes.includes("Wounding"), "automation-only midi rider is not a button");
 assert(!hazModes.includes("Attack"), "attack stays off the ability list");
+
+const spentStaff = enrichWeaponOption({
+  id: "staff",
+  name: "Staff of Frost",
+  img: "",
+  item: {
+    id: "staff",
+    name: "Staff of Frost",
+    type: "weapon",
+    img: "",
+    isOwner: true,
+    system: {
+      uses: { spent: 10, max: 10 },
+      activities: [
+        { id: "atk", name: "Attack", type: "attack", activation: { type: "action" } },
+        {
+          id: "cone",
+          name: "Cone of Cold",
+          type: "save",
+          activation: { type: "action" },
+          consumption: { targets: [{ type: "itemUses", value: "1" }] }
+        },
+        {
+          id: "fog",
+          name: "Fog Cloud",
+          type: "utility",
+          activation: { type: "action" },
+          consumption: { targets: [{ type: "itemUses", value: "1" }] }
+        }
+      ]
+    }
+  },
+  activity: null
+});
+assert(spentStaff.hasSpecial === true, "spent weapon still opens Use Ability");
+const spentModes = getWeaponAbilityOptions(spentStaff);
+assert(spentModes.map(mode => mode.name).join(",") === "Cone of Cold,Fog Cloud", "spent abilities stay listed");
+assert(spentModes.every(mode => mode.available === false), "spent abilities are not usable");
+assert(spentModes.every(mode => mode.usesLabel === "0/10"), "spent pool still shows");
 
 // --- End Turn ---
 game.combat = null;
@@ -272,7 +311,20 @@ const splitPaladin = {
       system: {
         type: { value: "class", subtype: "channelDivinity" },
         activities: [
-          { id: "sw", name: "Sacred Weapon", type: "utility", activation: { type: "action" } }
+          { id: "sw", name: "Channel Divinity", type: "utility", activation: { type: "action" } }
+        ]
+      }
+    },
+    {
+      id: "vow",
+      name: "Channel Divinity: Vow of Enmity",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        activation: { type: "bonus" },
+        activities: [
+          { id: "vow", name: "Channel Divinity", type: "utility", activation: { type: "bonus" } }
         ]
       }
     }
@@ -285,12 +337,60 @@ assert(splitCd.hasNest === true, "split Channel Divinity opens a nest");
 const splitModes = getFeatureModeOptions(splitCd).map(mode => mode.name);
 assert(splitModes.includes("Turn Undead"), "parent modes stay in the nest");
 assert(splitModes.includes("Abjure Enemies"), "named option is nested");
-assert(splitModes.includes("Sacred Weapon"), "subtype option is nested");
-assert(!splitFeatures.some(f => f.name.includes("Abjure")), "option is not its own wedge");
+assert(splitModes.includes("Sacred Weapon"), "feature title wins over a generic activity name");
+assert(splitModes.includes("Vow of Enmity"), "bonus divinity is listed with its own title");
+assert(!splitModes.some(name => name === "Channel Divinity"), "generic activity is not a divinity title");
+assert(!splitFeatures.some(f => f.name.includes("Abjure") || f.name.includes("Vow")), "options are not their own wedges");
+const bonusFeatures = getClassFeatureOptions(splitPaladin, "bonus");
+assert(!bonusFeatures.some(f => /channel divinity|vow of enmity/i.test(f.name)), "divinities stay off the bonus ring");
 
 const ring = buildActionRingEntries(paladin, []);
-assert(ring.some(e => e.kind === "feature"), "features in Action ring entries");
-assert(ring.filter(e => e.kind === "basic").length === 4, "still four basics");
+assert(ring.some(e => e.kind === "abilities"), "abilities hub on the Action ring");
+assert(ring.filter(e => e.kind === "basic").length === 3, "Dodge Dash Disengage stay leaves");
+assert(getClassFeatureOptions(paladin, "action").some(f => f.name === "Lay on Hands"), "Lay on Hands is an ability");
+const noisy = {
+  ...paladin,
+  items: [
+    ...paladin.items,
+    {
+      id: "ea",
+      name: "Extra Attack",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        identifier: "extra-attack",
+        activation: { type: "action" },
+        activities: [{ id: "ea", name: "Extra Attack", type: "attack", activation: { type: "action" } }]
+      }
+    },
+    {
+      id: "midi",
+      name: "Midi Use",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        activation: { type: "action" },
+        activities: [{ id: "mu", name: "Midi Use", type: "utility", activation: { type: "action" }, flags: { "midi-qol": { automationOnly: false } } }]
+      }
+    },
+    {
+      id: "unarmed",
+      name: "Unarmed Strike",
+      type: "weapon",
+      img: "",
+      isOwner: true,
+      system: { equipped: false, type: { value: "unarmed" }, activities: [{ id: "ua", name: "Unarmed Strike", type: "attack", activation: { type: "action" } }] }
+    }
+  ]
+};
+assert(isSuppressedActionFeature(noisy.items.find(i => i.name === "Extra Attack")), "Extra Attack is not a button");
+assert(!getClassFeatureOptions(noisy, "action").some(f => f.name === "Extra Attack"), "Extra Attack stays off Abilities");
+assert(!getClassFeatureOptions(noisy, "action").some(f => f.name === "Midi Use"), "Midi Use stays off Abilities");
+const attacks = getAttackNestEntries(noisy, []);
+assert(attacks.some(e => e.name === "Unarmed Strike"), "sheet Unarmed Strike is on the Attack nest");
+assert(!attacks.some(e => e.name === "Extra Attack"), "Extra Attack is not an attack choice");
 
 // --- Main radial 4 wedges ---
 const mains = mainSectionAngles();

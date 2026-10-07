@@ -14,7 +14,7 @@ import {
   t
 } from "./actor-options.mjs";
 import { isAttackActivity } from "./weapon-abilities.mjs";
-import { classFeatureChromeIcon, preferDocumentImg } from "./module-icons.mjs";
+import { CHROME, classFeatureChromeIcon, preferDocumentImg } from "./module-icons.mjs";
 
 /** Mirror of core Action names so Dash/etc. stay on the basics wedges only. */
 const BASIC_NAMES = new Set([
@@ -25,6 +25,32 @@ const BASIC_NAMES = new Set([
   "ready action",
   "ready an action"
 ]);
+
+/**
+ * Sheet feats that are not buttons.
+ * Extra Attack only changes the Attack action. "Attack" and "Unarmed Strike"
+ * are the Attack nest itself. "Midi Use" is a Midi-QOL activity name, not a
+ * player action — those items still live on the actor, they just are not wedges.
+ */
+const SUPPRESSED_FEATURES = new Set([
+  "extra attack",
+  "extra attacks",
+  "midi use",
+  "midi qol",
+  "midiqol",
+  "attack",
+  "unarmed strike"
+]);
+
+/**
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isSuppressedActionFeature(item) {
+  const name = normalize(item?.name);
+  const ident = normalize(item?.system?.identifier);
+  return SUPPRESSED_FEATURES.has(name) || SUPPRESSED_FEATURES.has(ident);
+}
 
 /** Activations that never belong on Action / BA / Reaction combat rings. */
 const NON_COMBAT_ACTIVATIONS = new Set([
@@ -52,17 +78,17 @@ export function getClassFeatureOptions(actor, activation = "action") {
     if (BASIC_NAMES.has(normalize(item.name)) || BASIC_NAMES.has(normalize(item.system?.identifier))) {
       continue;
     }
+    if (isSuppressedActionFeature(item)) continue;
     feats.push(item);
   }
 
   const shells = feats.filter(isChannelDivinityParent);
   const parent = pickChannelParent(shells);
-  const childItems = feats.filter(item =>
-    isChannelDivinityOption(item, parent) && featureMatchesActivation(item, activation)
-  );
+  // Every divinity, including bonus-action options such as Vow of Enmity.
+  const channelOptions = feats.filter(item => isChannelDivinityOption(item, parent));
   const hiddenIds = new Set([
     ...shells.map(item => item.id),
-    ...childItems.map(item => item.id)
+    ...channelOptions.map(item => item.id)
   ]);
 
   const options = [];
@@ -72,6 +98,11 @@ export function getClassFeatureOptions(actor, activation = "action") {
 
     const { matching, legacyMatch } = activationMatch(item, activation);
     if (!matching.length && !legacyMatch) continue;
+
+    if (activation === "bonus" && isRogueActor(actor) && isCunningActionItem(item)) {
+      options.push(makeCunningActionLeaf(item, activation));
+      continue;
+    }
 
     if (!matching.length && legacyMatch) {
       options.push(makeLeaf({
@@ -86,8 +117,12 @@ export function getClassFeatureOptions(actor, activation = "action") {
       continue;
     }
 
-    // Skip pure attack feats unless that's the only matching activity.
-    const usable = matching.filter(a => !isAttackActivity(a) || matching.length === 1);
+    // Attack riders on a multi-activity feat are not their own button.
+    // Midi automationOnly activities are internal triggers.
+    const usable = matching.filter(activity => {
+      if (isAutomationOnlyActivity(activity)) return false;
+      return !isAttackActivity(activity) || matching.length === 1;
+    });
     if (!usable.length) continue;
 
     const hasNest = usable.length > 1;
@@ -103,7 +138,7 @@ export function getClassFeatureOptions(actor, activation = "action") {
     }));
   }
 
-  const channelLeaf = buildChannelLeaf(shells, parent, childItems, activation);
+  const channelLeaf = buildChannelLeaf(shells, parent, channelOptions, activation);
   if (channelLeaf) options.push(channelLeaf);
 
   return options.sort((a, b) => a.name.localeCompare(b.name));
@@ -119,6 +154,9 @@ export function getActionFeatureOptions(actor) {
  * @param {object} featureOption
  */
 export function getFeatureModeOptions(featureOption) {
+  if (featureOption?.cunningAction) return cunningActionModes(featureOption);
+  if (featureOption?.channelDivinity) return channelDivinityModes(featureOption);
+
   const fromActivities = (featureOption.nestActivities ?? []).map((activity, index) => {
     const available = canAttemptUse(activity, featureOption.item);
     return {
@@ -164,6 +202,114 @@ export function getFeatureModeOptions(featureOption) {
   });
 
   return [...fromActivities, ...fromItems];
+}
+
+/**
+ * Rogue Cunning Action opens Hide, Dash, and Disengage instead of using the parent feat.
+ * @param {Item} item
+ * @param {"action"|"bonus"|"reaction"} activation
+ */
+function makeCunningActionLeaf(item, activation) {
+  const leaf = makeLeaf({
+    item,
+    activity: null,
+    hasNest: true,
+    nestActivities: [],
+    available: canAttemptUse(null, item),
+    activation
+  });
+  return {
+    ...leaf,
+    cunningAction: true,
+    tooltip: {
+      title: item.name,
+      description: t("CunningAction.Hint")
+    }
+  };
+}
+
+/**
+ * @param {object} featureOption
+ * @returns {Array<object>}
+ */
+function cunningActionModes(featureOption) {
+  const actor = featureOption.item?.actor ?? null;
+  const parentId = featureOption.id;
+  const base = {
+    item: null,
+    activity: null,
+    actor,
+    available: true,
+    requiresTarget: false,
+    parentFeatureId: parentId
+  };
+  return [
+    {
+      ...base,
+      id: `${parentId}:hide`,
+      kind: "skill-check",
+      skillId: "ste",
+      name: t("CunningAction.Hide"),
+      img: CHROME.abilities.dex,
+      tooltip: {
+        title: t("CunningAction.Hide"),
+        description: t("CunningAction.HideHint")
+      }
+    },
+    {
+      ...base,
+      id: `${parentId}:dash`,
+      kind: "basic",
+      basicId: "dash",
+      name: t("BasicActions.Dash"),
+      img: CHROME.dash,
+      tooltip: {
+        title: t("BasicActions.Dash"),
+        description: t("CunningAction.DashHint")
+      }
+    },
+    {
+      ...base,
+      id: `${parentId}:disengage`,
+      kind: "basic",
+      basicId: "disengage",
+      name: t("BasicActions.Disengage"),
+      img: CHROME.disengage,
+      tooltip: {
+        title: t("BasicActions.Disengage"),
+        description: t("CunningAction.DisengageHint")
+      }
+    }
+  ];
+}
+
+/**
+ * Midi-QOL marks triggered riders automationOnly. They are not buttons.
+ * @param {object} activity
+ * @returns {boolean}
+ */
+function isAutomationOnlyActivity(activity) {
+  const flags = activity?.flags?.["midi-qol"]
+    ?? activity?.system?.midiProperties
+    ?? activity?.midiProperties
+    ?? null;
+  return flags?.automationOnly === true;
+}
+
+function isRogueActor(actor) {
+  if (actor?.classes?.rogue || actor?.system?.classes?.rogue) return true;
+  for (const item of actor?.items ?? []) {
+    if (item?.type !== "class") continue;
+    const id = normalize(item.system?.identifier || item.name);
+    if (id === "rogue") return true;
+  }
+  return false;
+}
+
+function isCunningActionItem(item) {
+  const name = normalize(item?.name);
+  const ident = normalize(item?.system?.identifier);
+  return name === "cunning action" || ident === "cunning action";
 }
 
 function makeLeaf({ item, activity, hasNest, nestActivities, childItems = [], available, activation, usesLabel = null }) {
@@ -248,10 +394,11 @@ function isRestOnlyItem(item) {
  */
 function buildChannelLeaf(shells, parent, childItems, activation) {
   if (!parent && !childItems.length) return null;
+  if (channelButtonRing(parent, shells) !== activation) return null;
 
   const activities = [];
   for (const shell of shells) {
-    for (const activity of usableActivities(shell, activation)) {
+    for (const activity of combatActivities(shell)) {
       if (activity && !activity.item && !activity.parent) activity.item = shell;
       activities.push(activity);
     }
@@ -260,14 +407,13 @@ function buildChannelLeaf(shells, parent, childItems, activation) {
   const modes = channelModeActivities(activities, childItems.length > 0);
   const hasNest = childItems.length > 0 || modes.length > 1;
   const host = parent ?? syntheticChannelParent(childItems);
-  const primary = modes[0] ?? null;
-  const poolMatches = parent ? featureMatchesActivation(parent, activation) : false;
+  const primary = modes[0] ?? firstCombatActivity(host);
   const anyModes = modes.length > 0 || childItems.length > 0;
-  if (!anyModes && !poolMatches && !shells.some(shell => featureMatchesActivation(shell, activation))) {
+  if (!anyModes && !shells.some(shell => featureMatchesActivation(shell, activation))) {
     return null;
   }
 
-  return makeLeaf({
+  const leaf = makeLeaf({
     item: host,
     activity: hasNest ? null : primary,
     hasNest,
@@ -276,6 +422,110 @@ function buildChannelLeaf(shells, parent, childItems, activation) {
     available: canAttemptUse(hasNest ? null : primary, primary?.item ?? host),
     activation,
     usesLabel: formatUses(host, null)
+  });
+  return { ...leaf, channelDivinity: true };
+}
+
+/**
+ * The uses-pool button stays on the ring that matches the Channel Divinity shell.
+ * Individual divinities may be actions or bonus actions; they still list under that button.
+ * @param {Item|null} parent
+ * @param {Item[]} shells
+ * @returns {"action"|"bonus"|"reaction"}
+ */
+function channelButtonRing(parent, shells) {
+  const host = parent ?? shells[0] ?? null;
+  if (!host) return "action";
+  const action = featureMatchesActivation(host, "action");
+  const bonus = featureMatchesActivation(host, "bonus");
+  const reaction = featureMatchesActivation(host, "reaction");
+  if (bonus && !action) return "bonus";
+  if (reaction && !action && !bonus) return "reaction";
+  return "action";
+}
+
+/**
+ * Channel Divinity nest titles come from the feature name, not a generic activity.
+ * @param {object} featureOption
+ * @returns {Array<object>}
+ */
+function channelDivinityModes(featureOption) {
+  const fromItems = (featureOption.childItems ?? []).map(item => {
+    const activity = firstCombatActivity(item);
+    const name = channelOptionLabel(item.name);
+    const available = canAttemptUse(activity, item);
+    return {
+      id: `${featureOption.id}:item:${item.id}`,
+      kind: "feature-mode",
+      name,
+      img: preferDocumentImg(activity?.img || item.img, featureOption.img),
+      item,
+      activity,
+      available: available.ok,
+      reason: available.reason,
+      requiresTarget: optionRequiresTarget(activity, item),
+      parentFeatureId: featureOption.id,
+      usesLabel: formatUses(item, activity),
+      tooltip: {
+        title: name,
+        description: usesLine(item, activity)
+      }
+    };
+  });
+
+  const titles = new Set(fromItems.map(mode => normalize(mode.name)));
+  const fromActivities = (featureOption.nestActivities ?? []).flatMap((activity, index) => {
+    const name = channelOptionLabel(activity?.name || "");
+    const key = normalize(name);
+    if (!key || key === "channel divinity" || titles.has(key)) return [];
+    titles.add(key);
+    const item = activity?.item ?? activity?.parent ?? featureOption.item;
+    const available = canAttemptUse(activity, item);
+    return [{
+      id: `${featureOption.id}:mode:${activity.id ?? activity._id ?? index}`,
+      kind: "feature-mode",
+      name,
+      img: preferDocumentImg(activity.img || item?.img, featureOption.img),
+      item,
+      activity,
+      available: available.ok,
+      reason: available.reason,
+      requiresTarget: optionRequiresTarget(activity, item),
+      parentFeatureId: featureOption.id,
+      usesLabel: formatUses(item, activity),
+      tooltip: {
+        title: name,
+        description: usesLine(item, activity)
+      }
+    }];
+  });
+
+  return [...fromActivities, ...fromItems];
+}
+
+/**
+ * First activity a feature can actually use in combat.
+ * @param {Item} item
+ * @returns {object|null}
+ */
+function firstCombatActivity(item) {
+  const activities = combatActivities(item);
+  return activities[0] ?? null;
+}
+
+/**
+ * Combat activities on a Channel Divinity shell, action and bonus alike.
+ * @param {Item} item
+ * @returns {object[]}
+ */
+function combatActivities(item) {
+  const activities = getActivities(item);
+  return activities.filter(activity => {
+    if (isRestOnlyActivity(activity, item)) return false;
+    if (isAttackActivity(activity) && activities.length > 1) return false;
+    const type = String(getActivationType(activity, item) ?? "").toLowerCase().trim();
+    if (NON_COMBAT_ACTIVATIONS.has(type)) return false;
+    return true;
   });
 }
 

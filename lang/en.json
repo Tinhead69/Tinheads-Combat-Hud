@@ -12,7 +12,7 @@
       "Reaction": "Reaction",
       "CastSpell": "Cast Spell",
       "UseItem": "Use Item",
-      "ActionHint": "Attacks, movement actions, items, and spells.",
+      "ActionHint": "Attack, Dodge, Dash, Disengage, or Ready.",
       "ChecksHint": "Ability checks and saving throws.",
       "BonusHint": "Bonus Action options from your sheet.",
       "ReactionHint": "Reaction options from your sheet.",
@@ -27,6 +27,13 @@
       "Hint": "Core combat action — announces in chat if no matching sheet item.",
       "FromSheet": "Uses the matching item or activity from the character sheet."
     },
+    "CunningAction": {
+      "Hide": "Hide",
+      "HideHint": "Make a Stealth check.",
+      "DashHint": "Dash as a bonus action.",
+      "DisengageHint": "Disengage as a bonus action.",
+      "Hint": "Hover for Hide, Dash, and Disengage."
+    },
     "Features": {
       "ClassFeatureHint": "Class feature from your character sheet.",
       "UsesRemaining": "Uses remaining: {uses}",
@@ -38,6 +45,22 @@
       "AbilityHint": "Roll using the dnd5e ability helpers.",
       "Mod": "Check mod {mod}",
       "SaveMod": "Save mod {mod}"
+    },
+    "AttackNest": {
+      "Label": "Attack",
+      "Hint": "Equipped weapons, unarmed strike, or a spell.",
+      "Unarmed": "Unarmed Strike",
+      "UnarmedHint": "Strike without a weapon."
+    },
+    "ReadyNest": {
+      "Hint": "Choose the action you are readying.",
+      "Attack": "Attack",
+      "Other": "Other Action",
+      "OtherHint": "Ready a class feature or another action from your sheet."
+    },
+    "Abilities": {
+      "Label": "Abilities",
+      "Hint": "Class features and other actions from your character sheet."
     },
     "WeaponNest": {
       "Attack": "Attack",

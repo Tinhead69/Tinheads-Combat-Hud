@@ -11,7 +11,7 @@ globalThis.foundry = { utils: { duplicate: (v) => JSON.parse(JSON.stringify(v)) 
 globalThis.CONFIG = { DND5E: { defaultArtwork: { Item: {} } } };
 globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 
-const { buildActionRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions } =
+const { buildActionRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions, getAttackNestEntries, getReadyNestEntries } =
   await import("../data/basic-actions.mjs");
 const { getUsableInventoryItems } = await import("../data/use-items.mjs");
 const { getEquippedWeapons } = await import("../data/actor-options.mjs");
@@ -89,11 +89,18 @@ assert(basics.find(b => b.basicId === "dash").source === "module", "dash module 
 const weapons = [];
 const entries = buildActionRingEntries(actor, weapons);
 assert(entries.some(e => e.kind === "useItem"), "has Use Item hub");
-assert(entries.some(e => e.kind === "cast"), "has Cast Spell hub");
-assert(entries.filter(e => e.kind === "basic").length === 4, "four basic wedges");
+assert(entries.some(e => e.kind === "attack"), "has Attack hub");
+assert(entries.some(e => e.kind === "abilities"), "has Abilities hub");
+assert(entries.some(e => e.kind === "ready"), "Ready is a nest");
+assert(!entries.some(e => e.kind === "cast"), "Cast Spell is not on the first Action ring");
+assert(entries.filter(e => e.kind === "basic").length === 3, "Dodge, Dash, and Disengage");
 const kinds = entries.map(e => e.kind);
-assert(kinds.indexOf("basic") < kinds.indexOf("useItem"), "basics before Use Item");
-assert(kinds.indexOf("useItem") < kinds.indexOf("cast"), "Use Item before Cast Spell");
+assert(kinds.join(",") === "attack,basic,basic,basic,ready,abilities,useItem", "Attack, Dodge, Dash, Disengage, Ready, Abilities, Use Item");
+const attackNest = getAttackNestEntries(actor, []);
+assert(attackNest.some(e => e.kind === "cast"), "Cast Spell is under Attack");
+assert(attackNest.some(e => e.name === "Unarmed Strike"), "Unarmed Strike is under Attack");
+const readyNest = getReadyNestEntries();
+assert(readyNest.map(e => e.kind).join(",") === "cast,attack,abilities", "Ready opens Cast Spell, Attack, Other Action");
 
 const inv = getUsableInventoryItems(actor);
 assert(inv.some(i => i.name === "Potion of Healing"), "includes potion");
