@@ -133,6 +133,7 @@
     { "name": "Protection from Poison (Legacy)", "type": "spell", "img": "icons/magic/defensive/shield-barrier-flaming-diamond-teal-purple.webp", "level": 2, "prepared": 1, "activation": "action" },
     { "name": "Searing Smite (Legacy)", "type": "spell", "img": "icons/magic/fire/dagger-rune-enchant-flame-orange.webp", "level": 1, "prepared": 1, "activation": "bonus" },
 
-    { "name": "Potion of Healing (Superior)", "type": "consumable", "img": "icons/consumables/potions/bottle-round-corked-red.webp", "identifier": "potion-of-healing-superior", "quantity": 11, "description": "Drink this potion to regain hit points.", "activities": [{ "name": "Drink", "type": "heal", "activation": "action" }] }
+    { "name": "Potion of Healing (Superior)", "type": "consumable", "img": "icons/consumables/potions/bottle-round-corked-red.webp", "identifier": "potion-of-healing-superior", "quantity": 11, "description": "Drink this potion to regain hit points.", "activities": [{ "name": "Drink", "type": "heal", "activation": "action" }] },
+    { "name": "Potion of Speed", "type": "consumable", "img": "icons/consumables/potions/bottle-round-corked-pink.webp", "identifier": "potion-of-speed", "quantity": 1, "description": "Drink this potion as a bonus action. You gain the effect of the haste spell.", "activities": [{ "name": "Drink", "type": "utility", "activation": "bonus" }] }
   ]
 }

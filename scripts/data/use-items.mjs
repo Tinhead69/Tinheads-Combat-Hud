@@ -1,6 +1,8 @@
 /**
- * Usable inventory for the Action → Use Item nest.
+ * Usable inventory for Use Item nests.
  * Consumables only (potions, scrolls, and similar).
+ * Action lists action, special, and unset consumables.
+ * Bonus lists consumables whose activation is a bonus action.
  */
 
 import {
@@ -20,17 +22,18 @@ const USE_ITEM_TYPES = new Set(["consumable"]);
 
 /**
  * @param {Actor} actor
+ * @param {"action"|"bonus"} [economy]
  * @returns {Array<object>}
  */
-export function getUsableInventoryItems(actor) {
+export function getUsableInventoryItems(actor, economy = "action") {
   const options = [];
 
   for (const item of actor.items ?? []) {
     if (!USE_ITEM_TYPES.has(item.type)) continue;
-    if (!itemIsActionUsable(item)) continue;
+    if (!itemMatchesUseEconomy(item, economy)) continue;
 
     const activities = getActivities(item);
-    const activity = pickUseActivity(item, activities);
+    const activity = pickUseActivity(item, activities, economy);
     const qty = Number(item.system?.quantity ?? 1);
     const depleted = Number.isFinite(qty) && qty <= 0;
     const attempt = depleted
@@ -60,6 +63,20 @@ export function getUsableInventoryItems(actor) {
 
 /**
  * @param {Item} item
+ * @param {"action"|"bonus"} economy
+ * @returns {boolean}
+ */
+function itemMatchesUseEconomy(item, economy) {
+  if (economy === "action") return itemIsActionUsable(item);
+  const activities = getActivities(item);
+  if (activities.length) {
+    return activities.some(activity => getActivationType(activity, item) === economy);
+  }
+  return (item.system?.activation?.type ?? "") === economy;
+}
+
+/**
+ * @param {Item} item
  * @returns {boolean}
  */
 function itemIsActionUsable(item) {
@@ -82,15 +99,21 @@ function itemIsActionUsable(item) {
 /**
  * @param {Item} item
  * @param {object[]} activities
+ * @param {"action"|"bonus"} [economy]
  */
-function pickUseActivity(item, activities) {
-  if (!activities.length) return null;
-  // Prefer utility / heal / enchant over attack (weapons are the equipped wedges)
-  return activities.find(a => a.type === "utility")
-    ?? activities.find(a => a.type === "heal")
-    ?? activities.find(a => a.type === "consume")
-    ?? activities.find(a => a.type !== "attack")
-    ?? activities[0]
+function pickUseActivity(item, activities, economy = "action") {
+  const matching = activities.filter(activity => {
+    const type = getActivationType(activity, item);
+    if (economy === "action") return !type || type === "action" || type === "special" || type === "";
+    return type === economy;
+  });
+  const pool = matching.length ? matching : (economy === "action" ? activities : []);
+  if (!pool.length) return null;
+  return pool.find(activity => activity.type === "utility")
+    ?? pool.find(activity => activity.type === "heal")
+    ?? pool.find(activity => activity.type === "consume")
+    ?? pool.find(activity => activity.type !== "attack")
+    ?? pool[0]
     ?? getAttackHandle(item).activity;
 }
 

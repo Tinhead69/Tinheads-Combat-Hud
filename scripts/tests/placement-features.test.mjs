@@ -72,6 +72,8 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
   assert(bonusCast === RINGS.flatNestOuter, "bonus Cast Spell opens the level nest");
   const bonusSpells = contentOuterRadius({ section: "bonus", castSpell: true, spellLevel: 1 }, RINGS);
   assert(bonusSpells === RINGS.flatSpellOuter, "bonus spell names sit outside the level nest");
+  const bonusItems = contentOuterRadius({ section: "bonus", useItem: true }, RINGS);
+  assert(bonusItems === RINGS.flatNestOuter, "bonus Use Item opens the item nest");
 }
 
 assert(matchesActivation("action", "action"), "action matches action");

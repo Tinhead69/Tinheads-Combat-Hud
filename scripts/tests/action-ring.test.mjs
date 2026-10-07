@@ -214,9 +214,15 @@ assert(bonus.find(o => o.item.name === "Hex")?.name === "Hex Damage", "real acti
 assert(!bonus.some(o => o.item?.type === "spell"), "bonus spells are not activity wedges");
 const bonusRing = buildEconomyRingEntries(bonusActor, "bonus");
 assert(bonusRing[0]?.kind === "cast" && bonusRing[0].economy === "bonus", "bonus ring starts with Cast Spell");
+assert(bonusRing[1]?.kind === "useItem" && bonusRing[1].economy === "bonus", "bonus ring has Use Item beside Cast Spell");
 assert(!bonusRing.some(e => e.kind === "spell" || e.name === "Misty Step"), "bonus spells stay inside Cast Spell");
 assert(!bonusRing.some(e => e.name === "Bless"), "action spells stay off the bonus ring");
 assert(!bonusRing.some(e => e.name === "Cast"), "a bonus spell's Cast activity is not its own wedge");
+assert(!bonusRing.some(e => e.item?.type === "consumable"), "bonus potions stay inside Use Item");
+const bonusItems = getUsableInventoryItems(bonusActor, "bonus");
+assert(bonusItems.map(entry => entry.name).join(",") === "Hex,Potion of Greater Healing,Potion of Healing", "bonus Use Item lists bonus consumables");
+assert(bonusItems.find(entry => entry.name === "Potion of Healing")?.activity.name === "Midi Heal", "bonus potion still resolves its drink activity");
+assert(!getUsableInventoryItems(bonusActor).some(entry => entry.name === "Potion of Healing"), "bonus potions stay off Action Use Item");
 const actionSpells = getSpellLevels(bonusActor, "action").levels.flatMap(level => level.spells.map(spell => spell.name));
 const bonusSpells = getSpellLevels(bonusActor, "bonus").levels.flatMap(level => level.spells.map(spell => spell.name));
 assert(actionSpells.includes("Bless") && !actionSpells.includes("Misty Step"), "action Cast Spell lists only action spells");

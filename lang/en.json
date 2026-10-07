@@ -14,10 +14,11 @@
       "UseItem": "Use Item",
       "ActionHint": "Attack, Cast Spell, Dodge, Dash, Disengage, Help, Ready, or Other.",
       "ChecksHint": "Ability checks and saving throws.",
-      "BonusHint": "Bonus actions and spells you cast as a bonus action.",
+      "BonusHint": "Bonus actions, bonus-action spells, and items you use as a bonus action.",
       "ReactionHint": "Attack of Opportunity, plus reactions from your sheet.",
       "CastSpellHint": "Choose a spell level, then a spell to cast.",
-      "UseItemHint": "Potions, scrolls, and other consumables."
+      "UseItemHint": "Potions, scrolls, and other consumables.",
+      "UseItemBonusHint": "Potions and other consumables you use as a bonus action."
     },
     "BasicActions": {
       "Dash": "Dash",

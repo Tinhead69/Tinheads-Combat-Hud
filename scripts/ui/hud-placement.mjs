@@ -23,7 +23,7 @@ export function contentOuterRadius(state, rings) {
   if (state.section === "bonus" || state.section === "reaction") {
     if (state.castSpell && state.spellLevel != null) return rings.flatSpellOuter;
     if (state.opportunityOpen && state.weaponNestId) return rings.flatSpellOuter;
-    if (state.featureNestId || state.castSpell || state.opportunityOpen) return rings.flatNestOuter;
+    if (state.featureNestId || state.castSpell || state.opportunityOpen || state.useItem) return rings.flatNestOuter;
     return rings.flatOuter;
   }
   if (state.section !== "action") return rings.mainOuter;

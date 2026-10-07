@@ -277,7 +277,8 @@ const OPPORTUNITY_NAMES = new Set([
 /**
  * Bonus Action or Reaction ring.
  * Spells of that economy stay inside Cast Spell. They are not their own wedges.
- * Bonus always offers Cast Spell. Reaction always offers Attack of Opportunity,
+ * Bonus-action consumables stay inside Use Item. They are not their own wedges.
+ * Bonus always offers Cast Spell and Use Item. Reaction always offers Attack of Opportunity,
  * and Cast Spell only when reaction spells exist.
  * @param {Actor} actor
  * @param {"bonus"|"reaction"} activation
@@ -288,10 +289,12 @@ export function buildEconomyRingEntries(actor, activation) {
   const features = getClassFeatureOptions(actor, activation)
     .filter(entry => !isOpportunityName(entry.name));
   const others = getActivationOptions(actor, activation)
-    .filter(entry => !isOpportunityName(entry.name));
+    .filter(entry => !isOpportunityName(entry.name))
+    .filter(entry => !(activation === "bonus" && entry.item?.type === "consumable"));
   const entries = [];
   if (activation === "reaction") entries.push(opportunityHub());
   if (activation === "bonus" || !spells.empty) entries.push(castSpellHub(activation));
+  if (activation === "bonus") entries.push(useItemHub("bonus"));
   return [...entries, ...features, ...others];
 }
 
@@ -408,16 +411,17 @@ function otherHub() {
   };
 }
 
-function useItemHub() {
+function useItemHub(economy = "action") {
   return {
     kind: "useItem",
-    id: "use-item",
+    id: economy === "action" ? "use-item" : `use-item-${economy}`,
+    economy,
     name: t("Sections.UseItem"),
     img: CHROME.useItem,
     available: true,
     tooltip: {
       title: t("Sections.UseItem"),
-      description: t("Sections.UseItemHint")
+      description: economy === "bonus" ? t("Sections.UseItemBonusHint") : t("Sections.UseItemHint")
     }
   };
 }

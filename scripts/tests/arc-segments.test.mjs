@@ -9,6 +9,7 @@ import {
   arcSegmentsForParent,
   centerArcOnIndex,
   mainSectionById,
+  nestSpanDeg,
   normalizeMid
 } from "../ui/radial-geometry.mjs";
 
@@ -54,10 +55,17 @@ function assert(cond, msg) {
   const action = mainSectionById("action");
   const segs = arcSegmentsForParent(12, action.start, action.end);
   const span = segs[11].end - segs[0].start;
-  const sweep = segs[0].end - segs[0].start;
-  assert(span > 240, "crowded action nest spreads into readable wedges");
-  assert(sweep > 18, "each crowded wedge stays wide enough to read");
-  assert(span < 360, "crowded nest still leaves a gap");
+  assert(Math.abs(span - 360) < 1, "more than 10 options use the whole circle");
+  assert(nestSpanDeg(11) === 360 && nestSpanDeg(10) === 360 && nestSpanDeg(9) === 180, "full circle from 10 options, half circle below that");
+}
+
+{
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(6, action.start, action.end);
+  const span = segs[5].end - segs[0].start;
+  const mid = normalizeMid(action.start, action.end);
+  assert(Math.abs(span - 180) < 1, "fewer than 10 options use a half circle");
+  assert(Math.abs(((segs[0].start + segs[5].end) / 2) - mid) < 2, "half circle stays centered on the parent");
 }
 
 {

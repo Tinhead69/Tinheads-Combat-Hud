@@ -63,6 +63,8 @@ function nextClipId(prefix = "tch-clip") {
 export const SIZE = 760;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
+/** How long the open ring stays up after the pointer slips off it. */
+const COLLAPSE_DELAY_MS = 500;
 
 /** @type {Readonly<{
  *  hub: number,
@@ -289,6 +291,7 @@ export class CombatHud {
     } else if (this.state.section === "bonus") {
       this._drawEconomyRing("bonus");
       if (this.state.featureNestId) this._drawFeatureModeRing();
+      if (this.state.useItem) this._drawUseItemRing();
       if (this.state.castSpell) {
         this._drawSpellLevelRing();
         if (this.state.spellLevel != null) this._drawSpellRing(this.state.spellLevel);
@@ -1070,12 +1073,17 @@ export class CombatHud {
   }
 
   _drawUseItemRing() {
-    const items = getUsableInventoryItems(this.actor);
+    const onBonus = this.state.section === "bonus";
+    const items = getUsableInventoryItems(this.actor, onBonus ? "bonus" : "action");
     const group = this._ringGroup("use-items");
-    const parent = this._parentSeg("useItem");
+    const parent = onBonus
+      ? (this._layout?.useItemSeg ?? mainSectionById("bonus"))
+      : this._parentSeg("useItem");
+    const inner = onBonus ? RINGS.flatNestInner : RINGS.nest1Inner;
+    const outer = onBonus ? RINGS.flatNestOuter : RINGS.nest1Outer;
 
     if (!items.length) {
-      this._emptyLabel(group, t("Empty.NoUsableItems"), (RINGS.nest1Inner + RINGS.nest1Outer) / 2);
+      this._emptyLabel(group, t("Empty.NoUsableItems"), (inner + outer) / 2);
       this.svg.appendChild(group);
       return;
     }
@@ -1091,8 +1099,8 @@ export class CombatHud {
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
-        inner: RINGS.nest1Inner,
-        outer: RINGS.nest1Outer,
+        inner,
+        outer,
         caption: opt.name,
         img: opt.img,
         unavailable: !opt.available
@@ -1272,7 +1280,8 @@ export class CombatHud {
   }
 
   /**
-   * Bonus Action / Reaction ring: Cast Spell, spells of that economy, class features, other items.
+   * Bonus Action / Reaction ring: Cast Spell, Use Item, class features, and other activities.
+   * Bonus-action consumables open from Use Item. Spells stay inside Cast Spell.
    * Multi-mode features nest the same way as on Action.
    * @param {"bonus"|"reaction"} activation
    */
@@ -1306,8 +1315,10 @@ export class CombatHud {
       const seg = segs[i];
       const isFeatureNest = opt.kind === "feature" && opt.hasNest;
       const isCast = opt.kind === "cast";
+      const isUseItem = opt.kind === "useItem";
       const isOpportunity = opt.kind === "opportunity";
       if (isOpportunity) this._layout.opportunitySeg = seg;
+      if (isUseItem) this._layout.useItemSeg = seg;
       if (isCast) {
         this._layout.castSeg = seg;
         this._layout.castDepth = 1;
@@ -1323,6 +1334,7 @@ export class CombatHud {
         unavailable: opt.available === false,
         active: (isFeatureNest && opt.id === this.state.featureNestId)
           || (isCast && this.state.castSpell)
+          || (isUseItem && this.state.useItem)
           || (isOpportunity && this.state.opportunityOpen)
       });
 
@@ -1333,36 +1345,53 @@ export class CombatHud {
           const changed = !this.state.castSpell
             || this.state.spellEconomy !== economy
             || this.state.featureNestId
-            || this.state.opportunityOpen;
+            || this.state.opportunityOpen
+            || this.state.useItem;
           this.state.featureNestId = null;
           this.state.opportunityOpen = false;
           this.state.weaponNestId = null;
+          this.state.useItem = false;
           this.state.castSpell = true;
           this.state.spellEconomy = economy;
           if (changed) this.state.spellLevel = null;
           if (changed) this._draw();
-        } else if (isOpportunity) {
-          const changed = !this.state.opportunityOpen || this.state.castSpell || this.state.featureNestId;
+        } else if (isUseItem) {
+          const changed = !this.state.useItem
+            || this.state.castSpell
+            || this.state.featureNestId
+            || this.state.opportunityOpen;
           this.state.featureNestId = null;
           this.state.castSpell = false;
           this.state.spellLevel = null;
+          this.state.opportunityOpen = false;
+          this.state.weaponNestId = null;
+          this.state.useItem = true;
+          if (changed) this._draw();
+        } else if (isOpportunity) {
+          const changed = !this.state.opportunityOpen || this.state.castSpell || this.state.featureNestId || this.state.useItem;
+          this.state.featureNestId = null;
+          this.state.castSpell = false;
+          this.state.spellLevel = null;
+          this.state.useItem = false;
           this.state.opportunityOpen = true;
           if (changed) this.state.weaponNestId = null;
           if (changed) this._draw();
         } else if (isFeatureNest) {
-          const changed = this.state.featureNestId !== opt.id || this.state.castSpell || this.state.opportunityOpen;
+          const changed = this.state.featureNestId !== opt.id || this.state.castSpell || this.state.opportunityOpen || this.state.useItem;
           this.state.castSpell = false;
           this.state.spellLevel = null;
           this.state.opportunityOpen = false;
           this.state.weaponNestId = null;
+          this.state.useItem = false;
           this.state.featureNestId = opt.id;
           if (changed) this._draw();
-        } else if (this.state.featureNestId || this.state.castSpell || this.state.opportunityOpen) {
+        } else if (this.state.featureNestId || this.state.castSpell || this.state.opportunityOpen || this.state.useItem) {
           this.state.featureNestId = null;
           this.state.castSpell = false;
           this.state.spellLevel = null;
           this.state.opportunityOpen = false;
           this.state.weaponNestId = null;
+          this.state.useItem = false;
           this._draw();
         }
         this.showTooltip(opt.tooltip || { title: opt.name, description: opt.reason || "" }, g, ev);
@@ -1373,7 +1402,7 @@ export class CombatHud {
       });
       g.addEventListener("pointerdown", async (ev) => {
         ev.stopPropagation();
-        if (isFeatureNest || isCast || isOpportunity) return;
+        if (isFeatureNest || isCast || isOpportunity || isUseItem) return;
         await this._onLeafClick(opt);
       });
 
@@ -1596,6 +1625,7 @@ export class CombatHud {
         this.state.spellEconomy = "action";
         this.state.opportunityOpen = false;
         this.state.weaponNestId = null;
+        this.state.useItem = false;
       } else if (keep === "cast") {
         this.state.spellLevel = null;
       } else if (keep === "useItem") {
@@ -1613,7 +1643,7 @@ export class CombatHud {
       }
       this.hideTooltip();
       this._draw();
-    }, 140);
+    }, COLLAPSE_DELAY_MS);
   }
 }
 

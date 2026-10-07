@@ -1,14 +1,17 @@
 /**
- * SVG path helpers for annular wedge segments and partial nest arcs.
+ * SVG path helpers for annular wedge segments and nest arcs.
  *
  * Angle convention: 0° = north, clockwise positive (combat HUD).
- * Nested rings use partial arcs anchored to a parent wedge mid-angle —
- * they do NOT fill a full 360° unless the option count needs the max span.
+ * An opened ring is centered on its parent wedge.
+ * Ten or more options use the whole circle. Fewer than ten use a half circle.
  */
+
+/** Option count below this opens a half circle. Ten or more use the whole circle. */
+export const NEST_FULL_CIRCLE_AFTER = 10;
 
 /** Defaults for nested / leaf arcs (Action options, spells, Use Item, BA/R). */
 export const ARC_DEFAULTS = Object.freeze({
-  /** Cap total arc span so a large list stays readable and leaves a gap. */
+  /** Fallback cap when a caller does not use the half / full nest rule. */
   maxSpanDeg: 300,
   /** Preferred wedge width when there is room. */
   idealSegmentDeg: 42,
@@ -87,13 +90,23 @@ export function equalSegments(count, gapDeg = 2, startDeg = 0) {
 }
 
 /**
+ * Opened rings: ten or more options fill the circle. Fewer than ten use a half circle.
+ * @param {number} count
+ * @returns {number}
+ */
+export function nestSpanDeg(count) {
+  return count >= NEST_FULL_CIRCLE_AFTER ? 360 : 180;
+}
+
+/**
  * Partial arc of `count` equal wedges centered on `midAngle`.
- * Span grows with count up to `maxSpanDeg`, always leaving an empty gap when below 360°.
+ * Span grows with count up to `maxSpanDeg`, unless `fixedSpanDeg` sets it.
  *
  * @param {number} count
  * @param {object} [opts]
  * @param {number} [opts.midAngle=0] Arc center (0 = north)
  * @param {number} [opts.maxSpanDeg]
+ * @param {number} [opts.fixedSpanDeg] Use this span instead of growing toward the cap
  * @param {number} [opts.idealSegmentDeg]
  * @param {number} [opts.minSegmentDeg]
  * @param {number} [opts.gapDeg]
@@ -109,12 +122,15 @@ export function arcSegments(count, opts = {}) {
   const midAngle = opts.midAngle ?? 0;
 
   const gapTotal = gapDeg * Math.max(count - 1, 0);
-  let span = Math.min(maxSpanDeg, count * idealSegmentDeg);
-  span = Math.max(span, Math.min(maxSpanDeg, count * minSegmentDeg + gapTotal));
-
-  // Compress if min widths would exceed max span
-  const minNeeded = count * minSegmentDeg + gapTotal;
-  if (minNeeded > maxSpanDeg) span = maxSpanDeg;
+  let span;
+  if (Number.isFinite(opts.fixedSpanDeg)) {
+    span = opts.fixedSpanDeg;
+  } else {
+    span = Math.min(maxSpanDeg, count * idealSegmentDeg);
+    span = Math.max(span, Math.min(maxSpanDeg, count * minSegmentDeg + gapTotal));
+    const minNeeded = count * minSegmentDeg + gapTotal;
+    if (minNeeded > maxSpanDeg) span = maxSpanDeg;
+  }
 
   const usable = Math.max(span - gapTotal, count * 4);
   const segSweep = usable / count;
@@ -133,8 +149,8 @@ export function arcSegments(count, opts = {}) {
 }
 
 /**
- * Arc centered on a parent wedge (nests fan over the hovered parent).
- * Child max span is capped and also nudged not to wildly exceed the parent wedge.
+ * Arc centered on a parent wedge.
+ * Ten or more options use the whole circle. Fewer than ten use a half circle.
  *
  * @param {number} count
  * @param {number} parentStart
@@ -143,14 +159,8 @@ export function arcSegments(count, opts = {}) {
  */
 export function arcSegmentsForParent(count, parentStart, parentEnd, opts = {}) {
   const mid = normalizeMid(parentStart, parentEnd);
-  const parentSpan = parentSweep(parentStart, parentEnd);
-  const minSegmentDeg = opts.minSegmentDeg ?? ARC_DEFAULTS.minSegmentDeg;
-  const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
-  const ceiling = Math.min(opts.maxSpanDeg ?? ARC_DEFAULTS.maxSpanDeg, ARC_DEFAULTS.maxSpanDeg);
-  // A 90° parent cannot hold a long option list. Grow until each wedge is readable.
-  const readable = count * minSegmentDeg + gapDeg * Math.max(count - 1, 0);
-  const maxSpanDeg = Math.min(ceiling, Math.max(parentSpan + 40, 110, Math.min(readable, ceiling)));
-  return arcSegments(count, { ...opts, midAngle: mid, maxSpanDeg });
+  const fixedSpanDeg = nestSpanDeg(count);
+  return arcSegments(count, { ...opts, midAngle: mid, fixedSpanDeg, maxSpanDeg: fixedSpanDeg });
 }
 
 /**

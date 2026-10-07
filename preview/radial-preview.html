@@ -165,6 +165,7 @@
       other: [],
       abilities: [],
       inventory: [],
+      bonusInventory: [],
       levels: [],
       bonus: [],
       reaction: [],
@@ -291,6 +292,7 @@
       } else if (state.section === "bonus") {
         drawFlat(sheet.bonus);
         if (state.featureNestId) drawFeatureModes(RINGS.flatNestInner, RINGS.flatNestOuter);
+        if (state.useItem) drawInventory();
         if (state.castSpell) {
           drawLevels();
           if (state.spellLevel != null) drawSpells(state.spellLevel);
@@ -656,17 +658,25 @@
     }
 
     function drawInventory() {
-      const parent = parentSeg("useItem");
-      const segs = arcSegmentsForParent(Math.max(sheet.inventory.length, 1), parent.start, parent.end, { maxSpanDeg: 280 });
-      sheet.inventory.forEach((item, i) => {
+      const onBonus = state.section === "bonus";
+      const items = onBonus ? (sheet.bonusInventory || []) : sheet.inventory;
+      const parent = onBonus
+        ? (actionLayout.useItemSeg || mainSectionById("bonus"))
+        : parentSeg("useItem");
+      const inner = onBonus ? RINGS.flatNestInner : RINGS.nest1Inner;
+      const outer = onBonus ? RINGS.flatNestOuter : RINGS.nest1Outer;
+      const segs = arcSegmentsForParent(Math.max(items.length, 1), parent.start, parent.end, { maxSpanDeg: 280 });
+      items.forEach((item, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          inner, outer,
           caption: item.name,
           img: item.img
         });
         g.addEventListener("pointerenter", (ev) => showTooltip(item.tooltip || { title: item.name }, ev));
+        g.addEventListener("pointermove", (ev) => positionTooltip(ev));
+        g.addEventListener("pointerleave", hideTooltip);
         svg.appendChild(g);
       });
     }
@@ -737,10 +747,12 @@
       options.forEach((opt, i) => {
         const seg = segs[i];
         const isCast = opt.kind === "cast";
+        const isUseItem = opt.kind === "useItem";
         const isFeature = opt.kind === "feature" && opt.hasNest;
         const isOpportunity = opt.kind === "opportunity";
         if (opt.id === state.featureNestId) actionLayout.featureSeg = seg;
         if (isCast) actionLayout.castSeg = seg;
+        if (isUseItem) actionLayout.useItemSeg = seg;
         if (isOpportunity) actionLayout.opportunitySeg = seg;
         const caption = opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name;
         const g = leaf({
@@ -748,16 +760,30 @@
           inner: RINGS.flatInner, outer: RINGS.flatOuter,
           caption,
           img: opt.img,
-          active: (isFeature && opt.id === state.featureNestId) || (isCast && state.castSpell) || (isOpportunity && state.opportunityOpen)
+          active: (isFeature && opt.id === state.featureNestId)
+            || (isCast && state.castSpell)
+            || (isUseItem && state.useItem)
+            || (isOpportunity && state.opportunityOpen)
         });
         g.addEventListener("pointerenter", (ev) => {
           clearCollapse();
           if (isCast) {
             state.featureNestId = null;
             state.opportunityOpen = false;
+            state.useItem = false;
             state.castSpell = true;
             state.spellEconomy = opt.economy || state.section;
             state.spellLevel = null;
+            draw();
+            showTooltip(opt.tooltip || { title: opt.name }, ev);
+            return;
+          }
+          if (isUseItem) {
+            state.featureNestId = null;
+            state.opportunityOpen = false;
+            state.castSpell = false;
+            state.spellLevel = null;
+            state.useItem = true;
             draw();
             showTooltip(opt.tooltip || { title: opt.name }, ev);
             return;
@@ -766,15 +792,17 @@
             state.featureNestId = null;
             state.castSpell = false;
             state.spellLevel = null;
+            state.useItem = false;
             state.opportunityOpen = true;
             draw();
             showTooltip(opt.tooltip || { title: opt.name }, ev);
             return;
           }
-          if (state.castSpell || state.opportunityOpen) {
+          if (state.castSpell || state.opportunityOpen || state.useItem) {
             state.castSpell = false;
             state.spellLevel = null;
             state.opportunityOpen = false;
+            state.useItem = false;
           }
           const open = isFeature ? opt.id : null;
           const changed = open !== state.featureNestId;
@@ -921,6 +949,7 @@
         sheet.other = getOtherActionOptions(actor);
         sheet.abilities = getClassFeatureOptions(actor, "action");
         sheet.inventory = getUsableInventoryItems(actor);
+        sheet.bonusInventory = getUsableInventoryItems(actor, "bonus");
         sheet.levels = getSpellLevels(actor, "action").levels;
         sheet.bonusLevels = getSpellLevels(actor, "bonus").levels;
         sheet.reactionLevels = getSpellLevels(actor, "reaction").levels;
