@@ -21,7 +21,7 @@ export function contentOuterRadius(state, rings) {
     return state.abilityId ? rings.nest1Outer : rings.actionOuter;
   }
   if (state.section === "bonus" || state.section === "reaction") {
-    return state.featureNestId ? rings.nest1Outer : rings.actionOuter;
+    return state.featureNestId ? rings.flatNestOuter : rings.flatOuter;
   }
   if (state.section !== "action") return rings.mainOuter;
 

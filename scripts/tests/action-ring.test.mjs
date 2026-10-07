@@ -14,7 +14,7 @@ globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 const { buildActionRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions, getAttackNestEntries, getReadyNestEntries } =
   await import("../data/basic-actions.mjs");
 const { getUsableInventoryItems } = await import("../data/use-items.mjs");
-const { getEquippedWeapons } = await import("../data/actor-options.mjs");
+const { getEquippedWeapons, getActivationOptions } = await import("../data/actor-options.mjs");
 
 let passed = 0;
 function assert(cond, msg) {
@@ -84,7 +84,24 @@ assert(!dashMatch, "bonus-only Dash not used for Action ring");
 const basics = getBasicActionOptions(actor);
 assert(basics.length === 4, "four basics");
 assert(basics.find(b => b.basicId === "dodge").source !== "module", "dodge from sheet");
+assert(basics.find(b => b.basicId === "dodge").name === "Dodge", "dodge keeps its action name");
 assert(basics.find(b => b.basicId === "dash").source === "module", "dash module fallback");
+
+const midiNamed = {
+  ...actor,
+  items: [
+    ...actor.items,
+    item({
+      name: "Disengage",
+      type: "feat",
+      identifier: "disengage",
+      activities: [{ id: "midi", name: "Midi Use", type: "utility", activation: { type: "action" } }]
+    })
+  ]
+};
+const disengage = getBasicActionOptions(midiNamed).find(b => b.basicId === "disengage");
+assert(disengage.name === "Disengage", "Midi Use activity still labels the wedge Disengage");
+assert(disengage.activity.name === "Midi Use", "sheet activity is still the one that resolves");
 
 const weapons = [];
 const entries = buildActionRingEntries(actor, weapons);
@@ -124,5 +141,30 @@ const equipped = getEquippedWeapons(equippedActor);
 assert(equipped.map(w => w.name).join(",") === "Longsword,Shortbow", "equipped weapons only, in sheet order");
 assert(equipped.every(w => w.name !== "Dagger"), "unequipped favorite stays off the ring");
 assert(equipped.every(w => w.name !== "Shield"), "equipped non-weapons stay off the ring");
+
+const bonusActor = {
+  items: [
+    item({
+      name: "Potion of Healing",
+      type: "consumable",
+      activities: [{ id: "h1", name: "Midi Heal", type: "heal", activation: { type: "bonus" } }]
+    }),
+    item({
+      name: "Potion of Greater Healing",
+      type: "consumable",
+      activities: [{ id: "h2", name: "Midi Heal", type: "heal", activation: { type: "bonus" } }]
+    }),
+    item({
+      name: "Hex",
+      type: "spell",
+      activities: [{ id: "hex", name: "Hex Damage", type: "damage", activation: { type: "bonus" } }]
+    })
+  ]
+};
+const bonus = getActivationOptions(bonusActor, "bonus");
+assert(bonus.find(o => o.item.name === "Potion of Healing")?.name === "Potion of Healing", "Midi Heal wedge uses the potion name");
+assert(bonus.find(o => o.item.name === "Potion of Greater Healing")?.name === "Potion of Greater Healing", "each potion keeps its own name");
+assert(bonus.find(o => o.item.name === "Potion of Healing")?.activity.name === "Midi Heal", "potion still resolves the Midi Heal activity");
+assert(bonus.find(o => o.item.name === "Hex")?.name === "Hex Damage", "real activity names stay on the wedge");
 
 console.log(`\n${passed} assertions passed`);

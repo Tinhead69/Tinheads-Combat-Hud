@@ -301,6 +301,34 @@ export function getCastActivity(item) {
 }
 
 /**
+ * Midi-QOL labels its generic activities "Midi Heal", "Midi Use", "Midi Save", and similar.
+ * Those are not the player-facing action. A potion should read as the potion.
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isGenericMidiActivityName(name) {
+  const normalized = String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return normalized === "midi"
+    || normalized.startsWith("midi ")
+    || normalized === "midiqol"
+    || normalized.startsWith("midiqol ");
+}
+
+/**
+ * Wedge label for an item activity. Real activity names stay (Hex Damage).
+ * Generic Midi-QOL names fall back to the item (Potion of Healing).
+ * @param {Item} item
+ * @param {object|null} activity
+ * @returns {string}
+ */
+export function activityOptionName(item, activity) {
+  const activityName = String(activity?.name ?? "").trim();
+  const itemName = String(item?.name ?? "").trim();
+  if (!activityName || isGenericMidiActivityName(activityName)) return itemName || activityName;
+  return activityName;
+}
+
+/**
  * Bonus Action / Reaction leaf options from matching activities (or legacy activation).
  * @param {Actor} actor
  * @param {"bonus"|"reaction"} activation
@@ -324,7 +352,7 @@ export function getActivationOptions(actor, activation) {
         const available = canAttemptUse(activity, item);
         options.push({
           id: `act:${key}`,
-          name: activity.name || item.name,
+          name: activityOptionName(item, activity),
           img: activity.img || item.img || getDefaultIcon(item.type),
           item,
           activity,

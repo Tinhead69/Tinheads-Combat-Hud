@@ -64,6 +64,10 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
     section: "checks", abilityId: "str"
   }, RINGS);
   assert(checks === RINGS.nest1Outer, "check|save nest uses nest1");
+  const bonus = contentOuterRadius({ section: "bonus" }, RINGS);
+  assert(bonus === RINGS.flatOuter, "bonus options use the thicker flat ring");
+  const bonusNest = contentOuterRadius({ section: "bonus", featureNestId: "font" }, RINGS);
+  assert(bonusNest === RINGS.flatNestOuter, "bonus feature nest sits outside the flat ring");
 }
 
 assert(matchesActivation("action", "action"), "action matches action");

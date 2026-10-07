@@ -68,7 +68,8 @@ const CY = SIZE / 2;
  *  nest1Inner: number, nest1Outer: number,
  *  nest2Inner: number, nest2Outer: number,
  *  nest3Inner: number, nest3Outer: number,
- *  flatInner: number, flatOuter: number
+ *  flatInner: number, flatOuter: number,
+ *  flatNestInner: number, flatNestOuter: number
  * }>} */
 export const RINGS = Object.freeze({
   hub: 34,
@@ -83,7 +84,9 @@ export const RINGS = Object.freeze({
   nest3Inner: 300,
   nest3Outer: 352,
   flatInner: 116,
-  flatOuter: 178
+  flatOuter: 236,
+  flatNestInner: 244,
+  flatNestOuter: 308
 });
 
 /** @type {CombatHud|null} */
@@ -841,7 +844,10 @@ export class CombatHud {
     const modes = getFeatureModeOptions(feature);
     const group = this._ringGroup("feature-modes");
     const parent = this._parentSegForFeature(feature);
-    const band = this._band((this._layout?.featureDepth ?? 1) + 1);
+    const onEconomy = this.state.section === "bonus" || this.state.section === "reaction";
+    const band = onEconomy
+      ? { inner: RINGS.flatNestInner, outer: RINGS.flatNestOuter }
+      : this._band((this._layout?.featureDepth ?? 1) + 1);
 
     if (!modes.length) {
       this._emptyLabel(group, t("Empty.NoFeatureModes"), (band.inner + band.outer) / 2);
@@ -1182,7 +1188,7 @@ export class CombatHud {
       entries.length,
       main.start,
       main.end,
-      { maxSpanDeg: 160 }
+      { maxSpanDeg: 300, minSegmentDeg: 32, idealSegmentDeg: 46 }
     );
     this._layout = {
       ...(this._layout || {}),

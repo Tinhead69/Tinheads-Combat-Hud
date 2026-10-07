@@ -131,7 +131,9 @@
       nest2Inner: 246,
       nest2Outer: 292,
       nest3Inner: 300,
-      nest3Outer: 352
+      nest3Outer: 352,
+      flatInner: 116,
+      flatOuter: 236
     };
 
     function icon(bg, glyph, fg = "#f4f7fb") {
@@ -183,7 +185,13 @@
       ],
       bonus: [
         { name: "Second Wind", img: icon("#6a5a20", "2") },
-        { name: "Misty Step", img: icon("#3a5a6a", "MS") }
+        { name: "Misty Step", img: icon("#3a5a6a", "MS") },
+        { name: "Healing Word", img: icon("#2f5a4a", "H") },
+        { name: "Hunter's Mark", img: icon("#5a3030", "HM") },
+        { name: "Sacred Oath", img: icon("#6a4a20", "O") },
+        { name: "Great Weapon", img: icon("#4a5564", "G") },
+        { name: "Bonus Damage", img: icon("#3a3a40", "B") },
+        { name: "Cast", img: icon("#2e3f7a", "C") }
       ],
       reaction: [
         { name: "Shield", img: icon("#2f5a4a", "Sh", "#d8fff0") },
@@ -736,12 +744,14 @@
 
     function drawFlat(options) {
       const main = mainSectionById(state.section === "reaction" ? "reaction" : "bonus");
-      const segs = arcSegmentsForParent(options.length, main.start, main.end, { maxSpanDeg: 280 });
+      const segs = arcSegmentsForParent(options.length, main.start, main.end, {
+        maxSpanDeg: 300, minSegmentDeg: 32, idealSegmentDeg: 46
+      });
       options.forEach((opt, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.actionInner, outer: RINGS.actionOuter,
+          inner: RINGS.flatInner, outer: RINGS.flatOuter,
           caption: opt.name,
           img: opt.img
         });

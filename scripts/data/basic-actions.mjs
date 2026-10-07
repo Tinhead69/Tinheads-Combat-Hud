@@ -78,7 +78,7 @@ function resolveBasicAction(actor, def) {
       id: `basic:${def.id}`,
       kind: "basic",
       basicId: def.id,
-      name: match.name || label,
+      name: label,
       img: preferDocumentImg(match.img, def.img),
       item: match.item,
       activity: match.activity,
@@ -86,7 +86,7 @@ function resolveBasicAction(actor, def) {
       requiresTarget: false,
       source: match.source,
       tooltip: {
-        title: match.name || label,
+        title: label,
         description: match.source === "item"
           ? t("BasicActions.FromSheet")
           : t("BasicActions.Hint")
