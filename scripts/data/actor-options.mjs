@@ -133,7 +133,7 @@ export function getEquippedWeapons(actor) {
     weapons.push({
       id: `weapon:${item.id}`,
       name: item.name,
-      img: item.img || getDefaultIcon("weapon"),
+      img: itemArtwork(item, handle.activity) || getDefaultIcon("weapon"),
       item: handle.item,
       activity: handle.activity,
       available: available.ok,
@@ -158,13 +158,86 @@ export function getDefaultIcon(kind = "item") {
   return "icons/svg/sword.svg";
 }
 
+/** Foundry / Midi-QOL placeholders. `aura.svg` is the usual Midi activity icon. */
+const GENERIC_ACTIVITY_FILES = new Set([
+  "aura.svg",
+  "activity.svg",
+  "item-bag.svg",
+  "mystery-man.svg",
+  "book.svg",
+  "sword.svg",
+  "combat.svg",
+  "explosion.svg"
+]);
+
+/**
+ * @param {string|null|undefined} img
+ * @returns {string}
+ */
+function cleanImg(img) {
+  return typeof img === "string" ? img.trim() : "";
+}
+
+/**
+ * Shared activity icons are not the picture on the character sheet.
+ * Midi-QOL's module icons (`modules/midi-qol/...`) count as placeholders too.
+ * @param {string|null|undefined} img
+ * @returns {boolean}
+ */
+export function isGenericActivityArtwork(img) {
+  const path = cleanImg(img).toLowerCase().split("?")[0].split("#")[0];
+  if (!path) return true;
+  if (path.includes("midi-qol") || path.includes("midiqol")) return true;
+  const file = path.split("/").pop();
+  if (GENERIC_ACTIVITY_FILES.has(file) || file.startsWith("midi-")) return true;
+  const defaults = CONFIG?.DND5E?.defaultArtwork;
+  if (!defaults) return false;
+  const values = [];
+  const walk = (node) => {
+    if (typeof node === "string") values.push(node);
+    else if (node && typeof node === "object") Object.values(node).forEach(walk);
+  };
+  walk(defaults);
+  return values.some(value => String(value).toLowerCase().split("?")[0].split("#")[0] === path);
+}
+
+/**
+ * Real sheet or activity art. Midi-QOL placeholders are skipped.
+ * The item portrait wins. A custom activity image is used only when the item has none.
+ * @param {Item|null|undefined} item
+ * @param {object|null|undefined} activity
+ * @returns {string}
+ */
+export function itemArtwork(item, activity) {
+  const itemImg = cleanImg(item?.img);
+  if (itemImg && !isGenericActivityArtwork(itemImg)) return itemImg;
+  const activityImg = cleanImg(activity?.img);
+  if (activityImg && !isGenericActivityArtwork(activityImg)) return activityImg;
+  return "";
+}
+
+/**
+ * Mode art for one activity on a shared item (weapon modes, Channel Divinity).
+ * Custom activity art stays. A Midi-QOL default falls back to the item portrait.
+ * @param {Item|null|undefined} item
+ * @param {object|null|undefined} activity
+ * @returns {string}
+ */
+export function activityArtwork(item, activity) {
+  const activityImg = cleanImg(activity?.img);
+  const itemImg = cleanImg(item?.img);
+  if (activityImg && !isGenericActivityArtwork(activityImg)) return activityImg;
+  if (itemImg && !isGenericActivityArtwork(itemImg)) return itemImg;
+  return "";
+}
+
 /**
  * Castable spells grouped by **available** spell levels only.
  * Section count for the spell-level ring = `levels.length` (never a fixed 0–9 ring).
  * A level appears only when the actor has ≥1 HUD-usable spell at that level.
  *
  * @param {Actor} actor
- * @returns {{ levels: Array<{ level: number, label: string, spells: object[] }>, empty: boolean }}
+ * @returns {{ levels: Array<{ level: number, label: string, slots: string|null, slotHint: string, spells: object[] }>, empty: boolean }}
  */
 export function getSpellLevels(actor) {
   const byLevel = new Map();
@@ -181,7 +254,7 @@ export function getSpellLevels(actor) {
     byLevel.get(level).push({
       id: `spell:${item.id}`,
       name: item.name,
-      img: item.img || getDefaultIcon("spell"),
+      img: itemArtwork(item, cast) || getDefaultIcon("spell"),
       item,
       activity: cast,
       level,
@@ -195,11 +268,16 @@ export function getSpellLevels(actor) {
   // Only levels that actually have spells — UI lays them on a partial arc via arcSegmentsForParent.
   const levels = Array.from(byLevel.keys())
     .sort((a, b) => a - b)
-    .map(level => ({
-      level,
-      label: spellLevelLabel(level),
-      spells: byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name))
-    }))
+    .map(level => {
+      const slotCounts = spellSlotCounts(actor, level);
+      return {
+        level,
+        label: spellLevelLabel(level),
+        slots: formatSpellSlots(slotCounts),
+        slotHint: formatSpellSlotHint(slotCounts),
+        spells: byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name))
+      };
+    })
     .filter(entry => entry.spells.length > 0);
 
   return { levels, empty: levels.length === 0 };
@@ -218,6 +296,119 @@ function spellLevelLabel(level) {
   if (level === 2) return "2nd";
   if (level === 3) return "3rd";
   return `${level}th`;
+}
+
+/**
+ * Remaining spell slots for one ring level.
+ * Regular slots live on `system.spells.spellN`. Pact slots show on `pact.level`.
+ * Cantrips have no pool. `value` is remaining; `override` replaces `max` when set.
+ * @param {Actor} actor
+ * @param {number} level
+ * @returns {{ regular: { value: number, max: number }|null, pact: { value: number, max: number }|null }|null}
+ */
+export function spellSlotCounts(actor, level) {
+  if (level <= 0) return null;
+  const spells = actor?.system?.spells;
+  if (!spells) return null;
+
+  const regular = readSlotPool(spells[`spell${level}`]);
+  const pact = spells.pact;
+  const pactPool = readSlotPool(pact);
+  const pactHere = pactPool && Number(pact?.level ?? 0) === level ? pactPool : null;
+  if (!regular && !pactHere) return null;
+  return { regular, pact: pactHere };
+}
+
+/**
+ * @param {object|null|undefined} slot
+ * @returns {{ value: number, max: number }|null}
+ */
+function readSlotPool(slot) {
+  if (!slot) return null;
+  const max = effectiveSlotMax(slot);
+  if (!(max > 0)) return null;
+  const raw = Number(slot.value ?? 0);
+  const value = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  return { value, max };
+}
+
+/**
+ * A pool is usable when it has a maximum (including override) or remaining slots
+ * were exported without a maximum.
+ * @param {object|null|undefined} slot
+ * @returns {boolean}
+ */
+function slotPoolOpen(slot) {
+  if (!slot || typeof slot !== "object") return false;
+  if (effectiveSlotMax(slot) > 0) return true;
+  const value = Number(slot.value ?? 0);
+  return Number.isFinite(value) && value > 0;
+}
+
+/**
+ * dnd5e uses `override` as the effective maximum when it is set.
+ * @param {object} slot
+ * @returns {number}
+ */
+function effectiveSlotMax(slot) {
+  if (slot.override != null && slot.override !== "") {
+    const override = Number(slot.override);
+    if (Number.isFinite(override)) return override;
+  }
+  const max = Number(slot.max ?? 0);
+  return Number.isFinite(max) ? max : 0;
+}
+
+/**
+ * Wedge caption, e.g. "3/4" or "3/4 · P 1/2" when pact slots share the level.
+ * @param {{ regular: { value: number, max: number }|null, pact: { value: number, max: number }|null }|null} counts
+ * @returns {string|null}
+ */
+export function formatSpellSlots(counts) {
+  if (!counts) return null;
+  const parts = [];
+  if (counts.regular) parts.push(`${counts.regular.value}/${counts.regular.max}`);
+  if (counts.pact) {
+    const pact = `${counts.pact.value}/${counts.pact.max}`;
+    parts.push(counts.regular ? `P ${pact}` : pact);
+  }
+  return parts.join(" · ") || null;
+}
+
+/**
+ * @param {{ regular: { value: number, max: number }|null, pact: { value: number, max: number }|null }|null} counts
+ * @returns {string}
+ */
+function formatSpellSlotHint(counts) {
+  if (!counts) return "";
+  const parts = [];
+  if (counts.regular) {
+    parts.push(slotSentence(
+      "SpellLevels.SlotsHint",
+      counts.regular,
+      `${counts.regular.value} of ${counts.regular.max} slots left.`
+    ));
+  }
+  if (counts.pact) {
+    parts.push(slotSentence(
+      "SpellLevels.PactSlotsHint",
+      counts.pact,
+      `${counts.pact.value} of ${counts.pact.max} pact slots left.`
+    ));
+  }
+  return parts.join(" ");
+}
+
+/**
+ * @param {string} key
+ * @param {{ value: number, max: number }} data
+ * @param {string} fallback
+ */
+function slotSentence(key, data, fallback) {
+  const localized = t(key, data);
+  const fullKey = `TINHEADS_COMBAT_HUD.${key}`;
+  if (!localized || localized === fullKey || String(localized).endsWith(key)) return fallback;
+  return localized;
 }
 
 /**
@@ -265,13 +456,11 @@ export function hasSpellSlotForLevel(actor, level) {
     return true;
   }
 
-  const slot = spells[`spell${level}`];
-  if (slot && Number(slot.max ?? 0) > 0) return true;
+  if (slotPoolOpen(spells[`spell${level}`])) return true;
 
-  // Higher-level slots can cast lower-level spells; if any higher max exists, include the level.
+  // Higher-level slots can cast lower-level spells; if any higher pool is open, include the level.
   for (let n = level + 1; n <= 9; n++) {
-    const higher = spells[`spell${n}`];
-    if (higher && Number(higher.max ?? 0) > 0) return true;
+    if (slotPoolOpen(spells[`spell${n}`])) return true;
   }
 
   // Pact slot usable for this spell level
@@ -353,7 +542,7 @@ export function getActivationOptions(actor, activation) {
         options.push({
           id: `act:${key}`,
           name: activityOptionName(item, activity),
-          img: activity.img || item.img || getDefaultIcon(item.type),
+          img: itemArtwork(item, activity) || getDefaultIcon(item.type),
           item,
           activity,
           available: available.ok,
@@ -369,7 +558,7 @@ export function getActivationOptions(actor, activation) {
       options.push({
         id: key,
         name: item.name,
-        img: item.img || getDefaultIcon(item.type),
+        img: itemArtwork(item, null) || getDefaultIcon(item.type),
         item,
         activity: null,
         available: available.ok,

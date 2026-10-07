@@ -19,7 +19,8 @@ import { getEndTurnState, endCombatTurn } from "../data/combat-turn.mjs";
 import { getUsableInventoryItems } from "../data/use-items.mjs";
 import {
   getClassFeatureOptions,
-  getFeatureModeOptions
+  getFeatureModeOptions,
+  getOtherActionOptions
 } from "../data/action-features.mjs";
 import {
   getAbilityOptions,
@@ -250,11 +251,11 @@ export class CombatHud {
       this._drawActionRing();
       if (this.state.readyOpen) this._drawReadyNest();
       else if (this.state.attackOpen) this._drawAttackNest(2);
+      else if (this.state.otherOpen) this._drawOtherNest(2);
       else if (this.state.abilitiesOpen) this._drawAbilitiesNest(2);
       else if (this.state.useItem) this._drawUseItemRing();
 
       if (this.state.readyOpen && this.state.attackOpen) this._drawAttackNest(3);
-      if (this.state.readyOpen && this.state.abilitiesOpen) this._drawAbilitiesNest(3);
       if (this.state.weaponNestId) this._drawSpecialWeaponRing();
       if (this.state.featureNestId) this._drawFeatureModeRing();
       if (this.state.castSpell) {
@@ -400,6 +401,7 @@ export class CombatHud {
   _resetActionNests() {
     this.state.attackOpen = false;
     this.state.readyOpen = false;
+    this.state.otherOpen = false;
     this.state.abilitiesOpen = false;
     this.state.castSpell = false;
     this.state.useItem = false;
@@ -412,7 +414,7 @@ export class CombatHud {
   _nestKey() {
     const state = this.state;
     return [
-      state.attackOpen, state.readyOpen, state.abilitiesOpen, state.useItem,
+      state.attackOpen, state.readyOpen, state.otherOpen, state.abilitiesOpen, state.useItem,
       state.castSpell, state.weaponNestId, state.featureNestId, state.spellLevel
     ].join("|");
   }
@@ -429,6 +431,7 @@ export class CombatHud {
     if (source === "action") {
       this.state.attackOpen = kind === "attack";
       this.state.readyOpen = kind === "ready";
+      this.state.otherOpen = kind === "other";
       this.state.abilitiesOpen = kind === "abilities";
       this.state.useItem = kind === "useItem";
       this.state.castSpell = false;
@@ -438,7 +441,7 @@ export class CombatHud {
       this.state.useAbility = false;
     } else if (source === "ready") {
       this.state.attackOpen = kind === "attack";
-      this.state.abilitiesOpen = kind === "abilities";
+      this.state.abilitiesOpen = false;
       this.state.castSpell = kind === "cast";
       this.state.weaponNestId = null;
       this.state.featureNestId = null;
@@ -450,7 +453,7 @@ export class CombatHud {
       this.state.spellLevel = null;
       this.state.useAbility = false;
       this.state.featureNestId = null;
-    } else if (source === "abilities") {
+    } else if (source === "abilities" || source === "other") {
       this.state.featureNestId = (kind === "feature" && entry.hasNest) ? entry.id : null;
       this.state.castSpell = false;
       this.state.spellLevel = null;
@@ -464,6 +467,7 @@ export class CombatHud {
       || entry?.kind === "attack"
       || entry?.kind === "ready"
       || entry?.kind === "abilities"
+      || entry?.kind === "other"
       || (entry?.kind === "weapon" && entry.hasSpecial)
       || (entry?.kind === "feature" && entry.hasNest);
   }
@@ -472,9 +476,8 @@ export class CombatHud {
     if (entry.kind === "attack") {
       return this.state.attackOpen && (this.state.readyOpen ? entry.id === "ready-attack" : entry.id === "attack");
     }
-    if (entry.kind === "abilities") {
-      return this.state.abilitiesOpen && (this.state.readyOpen ? entry.id === "ready-other" : entry.id === "abilities");
-    }
+    if (entry.kind === "abilities") return this.state.abilitiesOpen && entry.id === "abilities";
+    if (entry.kind === "other") return this.state.otherOpen && entry.id === "other";
     return (entry.kind === "ready" && this.state.readyOpen)
       || (entry.kind === "cast" && this.state.castSpell)
       || (entry.kind === "useItem" && this.state.useItem)
@@ -664,7 +667,7 @@ export class CombatHud {
   }
 
   _drawReadyNest() {
-    const entries = getReadyNestEntries();
+    const entries = getReadyNestEntries(this.actor);
     this._drawChoiceRing(entries, {
       depth: 2,
       parent: this._parentSeg("ready"),
@@ -675,7 +678,7 @@ export class CombatHud {
 
   _drawAttackNest(depth) {
     const weapons = getEquippedWeapons(this.actor);
-    const entries = getAttackNestEntries(this.actor, weapons);
+    const entries = getAttackNestEntries(this.actor, weapons, { includeCast: depth < 3 });
     const parent = depth >= 3
       ? (this._layout?.readyAttackSeg ?? this._parentSeg("attack"))
       : this._parentSeg("attack");
@@ -685,6 +688,20 @@ export class CombatHud {
       source: "attack",
       groupName: "attack-nest",
       store: "attack"
+    });
+  }
+
+  _drawOtherNest(depth) {
+    const entries = getOtherActionOptions(this.actor);
+    const parent = this._parentSeg("other");
+    this._layout = { ...(this._layout || {}), featureDepth: depth };
+    this._drawChoiceRing(entries, {
+      depth,
+      parent,
+      source: "other",
+      groupName: "other",
+      store: "other",
+      empty: t("Empty.NoOtherActions")
     });
   }
 
@@ -763,11 +780,12 @@ export class CombatHud {
         attackSegs: segs,
         attackDepth: cfg.depth
       };
-    } else if (cfg.store === "abilities") {
+    } else if (cfg.store === "abilities" || cfg.store === "other") {
+      const key = cfg.store === "other" ? "other" : "ability";
       this._layout = {
         ...(this._layout || {}),
-        abilityEntries: entries,
-        abilitySegs: segs,
+        [`${key}Entries`]: entries,
+        [`${key}Segs`]: segs,
         featureDepth: cfg.depth
       };
     }
@@ -819,13 +837,18 @@ export class CombatHud {
     this.svg.appendChild(group);
   }
   _featureById(id) {
-    return (this._layout?.abilityEntries ?? []).find(e => e.id === id)
+    return (this._layout?.otherEntries ?? []).find(e => e.id === id)
+      ?? (this._layout?.abilityEntries ?? []).find(e => e.id === id)
       ?? (this._layout?.actionEntries ?? []).find(e => e.id === id)
       ?? (this._layout?.economyEntries ?? []).find(e => e.id === id)
       ?? null;
   }
 
   _parentSegForFeature(feature) {
+    const otherEntries = this._layout?.otherEntries ?? [];
+    const otherSegs = this._layout?.otherSegs ?? [];
+    const otherIdx = otherEntries.findIndex(entry => entry.id === feature.id);
+    if (otherIdx >= 0 && otherSegs[otherIdx]) return otherSegs[otherIdx];
     const abilityEntries = this._layout?.abilityEntries ?? [];
     const abilitySegs = this._layout?.abilitySegs ?? [];
     const abilityIdx = abilityEntries.findIndex(entry => entry.id === feature.id);
@@ -1082,6 +1105,7 @@ export class CombatHud {
         inner: band.inner,
         outer: band.outer,
         label: levelInfo.label,
+        caption: levelInfo.slots || undefined,
         img: spellLevelIcon(levelInfo.level),
         unavailable: false,
         active: this.state.spellLevel === levelInfo.level
@@ -1091,9 +1115,12 @@ export class CombatHud {
         this._clearCollapse();
         this.state.spellLevel = levelInfo.level;
         this._draw();
+        const description = [t("SpellLevels.PickHint", { label: levelInfo.label }), levelInfo.slotHint]
+          .filter(Boolean)
+          .join(" ");
         this.showTooltip({
-          title: levelInfo.label,
-          description: t("SpellLevels.PickHint", { label: levelInfo.label })
+          title: levelInfo.slots ? `${levelInfo.label} · ${levelInfo.slots}` : levelInfo.label,
+          description
         }, g);
       });
       g.addEventListener("pointerleave", (ev) => {
@@ -1432,7 +1459,7 @@ export class CombatHud {
         this.state.weaponNestId = null;
         this.state.featureNestId = null;
         this.state.useAbility = false;
-      } else if (keep === "abilities") {
+      } else if (keep === "abilities" || keep === "other") {
         this.state.featureNestId = null;
       } else if (keep === "checks") {
         this.state.abilityId = null;

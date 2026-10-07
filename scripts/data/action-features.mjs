@@ -1,8 +1,8 @@
 /**
  * Class features / limited-use options routed by dnd5e activation.
  * Action → Action ring; Bonus → BA; Reaction → R.
- * Multi-mode feats (Channel Divinity, Font of Magic) nest their modes.
- * Separate "Channel Divinity: …" feats collapse onto one Channel Divinity button.
+ * Multi-mode feats (Channel Divinity, Metamagic, Font of Magic) nest their modes.
+ * Separate "Channel Divinity: …" and "Metamagic: …" feats collapse onto one button.
  * Rest-only recovery (e.g. Recover Sorcery Points) is never a combat leaf.
  */
 
@@ -10,6 +10,8 @@ import {
   canAttemptUse,
   getActivities,
   getActivationType,
+  activityArtwork,
+  itemArtwork,
   optionRequiresTarget,
   t
 } from "./actor-options.mjs";
@@ -21,6 +23,7 @@ const BASIC_NAMES = new Set([
   "dash",
   "disengage",
   "dodge",
+  "help",
   "ready",
   "ready action",
   "ready an action"
@@ -29,9 +32,37 @@ const BASIC_NAMES = new Set([
 /**
  * Sheet feats that are not buttons.
  * Extra Attack only changes the Attack action. "Attack" and "Unarmed Strike"
- * are the Attack nest itself. "Midi Use" is a Midi-QOL activity name, not a
- * player action — those items still live on the actor, they just are not wedges.
+ * are the Attack nest itself. "Magic" is Cast Spell, already under Action.
+ * "Midi Use" is a Midi-QOL activity name, not a player action — those items
+ * still live on the actor, they just are not wedges.
  */
+/**
+ * Mundane combat actions. They sit under Action → Other, not Abilities.
+ * Names and identifiers are compared after normalize().
+ */
+const OTHER_ACTION_NAMES = new Set([
+  "grapple",
+  "shove",
+  "mount",
+  "dismount",
+  "mount or dismount",
+  "hide",
+  "influence",
+  "search",
+  "study",
+  "utilize",
+  "use an object",
+  "squeeze",
+  "stabilize",
+  "jump",
+  "knock out",
+  "knockout",
+  "improvise",
+  "improvised action",
+  "improvisation",
+  "escape a grapple"
+]);
+
 const SUPPRESSED_FEATURES = new Set([
   "extra attack",
   "extra attacks",
@@ -39,7 +70,8 @@ const SUPPRESSED_FEATURES = new Set([
   "midi qol",
   "midiqol",
   "attack",
-  "unarmed strike"
+  "unarmed strike",
+  "magic"
 ]);
 
 /**
@@ -51,6 +83,26 @@ export function isSuppressedActionFeature(item) {
   const ident = normalize(item?.system?.identifier);
   return SUPPRESSED_FEATURES.has(name) || SUPPRESSED_FEATURES.has(ident);
 }
+
+/**
+ * Shove, grapple, mount, and the other plain actions from the sheet.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isOtherActionItem(item) {
+  const name = normalize(item?.name);
+  const ident = normalize(item?.system?.identifier);
+  return OTHER_ACTION_NAMES.has(name) || OTHER_ACTION_NAMES.has(ident);
+}
+
+/**
+ * Named feature families. The shell (or a synthetic one) is the only wedge.
+ * "Family: Option" feats and subtype-tagged options open on the next radial.
+ */
+const FEATURE_FAMILIES = [
+  { id: "channel-divinity", name: "Channel Divinity", key: "channel divinity", subtype: "channeldivinity" },
+  { id: "metamagic", name: "Metamagic", key: "metamagic", subtype: "metamagic" }
+];
 
 /** Activations that never belong on Action / BA / Reaction combat rings. */
 const NON_COMBAT_ACTIVATIONS = new Set([
@@ -72,6 +124,24 @@ const NON_COMBAT_ACTIVATIONS = new Set([
  * @returns {Array<object>}
  */
 export function getClassFeatureOptions(actor, activation = "action") {
+  return collectFeatureOptions(actor, activation, false);
+}
+
+/**
+ * Action → Other. Shove, grapple, mount, and similar sheet actions.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getOtherActionOptions(actor) {
+  return collectFeatureOptions(actor, "action", true);
+}
+
+/**
+ * @param {Actor} actor
+ * @param {"action"|"bonus"|"reaction"} activation
+ * @param {boolean} otherOnly
+ */
+function collectFeatureOptions(actor, activation, otherOnly) {
   const feats = [];
   for (const item of actor.items ?? []) {
     if (item?.type !== "feat") continue;
@@ -79,17 +149,20 @@ export function getClassFeatureOptions(actor, activation = "action") {
       continue;
     }
     if (isSuppressedActionFeature(item)) continue;
+    if (otherOnly ? !isOtherActionItem(item) : isOtherActionItem(item)) continue;
     feats.push(item);
   }
 
-  const shells = feats.filter(isChannelDivinityParent);
-  const parent = pickChannelParent(shells);
-  // Every divinity, including bonus-action options such as Vow of Enmity.
-  const channelOptions = feats.filter(item => isChannelDivinityOption(item, parent));
-  const hiddenIds = new Set([
-    ...shells.map(item => item.id),
-    ...channelOptions.map(item => item.id)
-  ]);
+  // Channel Divinity and Metamagic: one button, options on the next radial.
+  const groups = FEATURE_FAMILIES.map(family => {
+    const shells = feats.filter(item => isFamilyParent(item, family));
+    const parent = pickFamilyParent(shells);
+    const children = feats.filter(item => isFamilyOption(item, parent, family));
+    return { family, shells, parent, children };
+  });
+  const hiddenIds = new Set(
+    groups.flatMap(group => [...group.shells, ...group.children].map(item => item.id))
+  );
 
   const options = [];
 
@@ -138,8 +211,10 @@ export function getClassFeatureOptions(actor, activation = "action") {
     }));
   }
 
-  const channelLeaf = buildChannelLeaf(shells, parent, channelOptions, activation);
-  if (channelLeaf) options.push(channelLeaf);
+  for (const group of groups) {
+    const leaf = buildFamilyLeaf(group.family, group.shells, group.parent, group.children, activation);
+    if (leaf) options.push(leaf);
+  }
 
   return options.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -155,7 +230,7 @@ export function getActionFeatureOptions(actor) {
  */
 export function getFeatureModeOptions(featureOption) {
   if (featureOption?.cunningAction) return cunningActionModes(featureOption);
-  if (featureOption?.channelDivinity) return channelDivinityModes(featureOption);
+  if (featureOption?.featureFamily || featureOption?.channelDivinity) return familyModes(featureOption);
 
   const fromActivities = (featureOption.nestActivities ?? []).map((activity, index) => {
     const available = canAttemptUse(activity, featureOption.item);
@@ -163,7 +238,7 @@ export function getFeatureModeOptions(featureOption) {
       id: `${featureOption.id}:mode:${activity.id ?? activity._id ?? index}`,
       kind: "feature-mode",
       name: activity.name || featureOption.name,
-      img: preferDocumentImg(activity.img || featureOption.item?.img, featureOption.img),
+      img: preferDocumentImg(activityArtwork(featureOption.item, activity), featureOption.img),
       item: activity?.item ?? activity?.parent ?? featureOption.item,
       activity,
       available: available.ok,
@@ -181,12 +256,15 @@ export function getFeatureModeOptions(featureOption) {
   const fromItems = (featureOption.childItems ?? []).map(item => {
     const activity = primaryActivity(item, featureOption.activation);
     const available = canAttemptUse(activity, item);
-    const name = channelOptionLabel(item.name);
+    const name = FEATURE_FAMILIES.reduce(
+      (label, family) => familyOptionLabel(label, family),
+      item.name
+    );
     return {
       id: `${featureOption.id}:item:${item.id}`,
       kind: "feature-mode",
       name,
-      img: preferDocumentImg(activity?.img || item.img, featureOption.img),
+      img: preferDocumentImg(itemArtwork(item, activity), featureOption.img),
       item,
       activity,
       available: available.ok,
@@ -318,7 +396,7 @@ function makeLeaf({ item, activity, hasNest, nestActivities, childItems = [], av
     id: `feature:${activation}:${item.id}`,
     kind: "feature",
     name: item.name,
-    img: preferDocumentImg(item.img, classFeatureChromeIcon(item)),
+    img: preferDocumentImg(itemArtwork(item, activity), classFeatureChromeIcon(item)),
     item,
     activity,
     hasNest,
@@ -385,16 +463,16 @@ function isRestOnlyItem(item) {
 }
 
 /**
- * One Channel Divinity button. Every same-named shell and "Channel Divinity: …" option
- * hangs off it, so the Action ring never shows two Channel Divinity wedges.
+ * One button for a feature family. Every shell and "Family: …" option hangs off it.
+ * @param {{ id: string, name: string, key: string }} family
  * @param {Item[]} shells
  * @param {Item|null} parent
  * @param {Item[]} childItems
  * @param {"action"|"bonus"|"reaction"} activation
  */
-function buildChannelLeaf(shells, parent, childItems, activation) {
+function buildFamilyLeaf(family, shells, parent, childItems, activation) {
   if (!parent && !childItems.length) return null;
-  if (channelButtonRing(parent, shells) !== activation) return null;
+  if (familyButtonRing(parent, shells) !== activation) return null;
 
   const activities = [];
   for (const shell of shells) {
@@ -404,9 +482,9 @@ function buildChannelLeaf(shells, parent, childItems, activation) {
     }
   }
 
-  const modes = channelModeActivities(activities, childItems.length > 0);
+  const modes = familyModeActivities(activities, childItems.length > 0, family);
   const hasNest = childItems.length > 0 || modes.length > 1;
-  const host = parent ?? syntheticChannelParent(childItems);
+  const host = parent ?? syntheticFamilyParent(family, childItems);
   const primary = modes[0] ?? firstCombatActivity(host);
   const anyModes = modes.length > 0 || childItems.length > 0;
   if (!anyModes && !shells.some(shell => featureMatchesActivation(shell, activation))) {
@@ -423,7 +501,11 @@ function buildChannelLeaf(shells, parent, childItems, activation) {
     activation,
     usesLabel: formatUses(host, null)
   });
-  return { ...leaf, channelDivinity: true };
+  return {
+    ...leaf,
+    featureFamily: family,
+    channelDivinity: family.id === "channel-divinity"
+  };
 }
 
 /**
@@ -433,7 +515,7 @@ function buildChannelLeaf(shells, parent, childItems, activation) {
  * @param {Item[]} shells
  * @returns {"action"|"bonus"|"reaction"}
  */
-function channelButtonRing(parent, shells) {
+function familyButtonRing(parent, shells) {
   const host = parent ?? shells[0] ?? null;
   if (!host) return "action";
   const action = featureMatchesActivation(host, "action");
@@ -445,20 +527,22 @@ function channelButtonRing(parent, shells) {
 }
 
 /**
- * Channel Divinity nest titles come from the feature name, not a generic activity.
+ * Nest titles come from the feature name, not a generic "Metamagic" or "Channel Divinity" activity.
  * @param {object} featureOption
  * @returns {Array<object>}
  */
-function channelDivinityModes(featureOption) {
+function familyModes(featureOption) {
+  const family = featureOption.featureFamily
+    ?? FEATURE_FAMILIES.find(entry => entry.id === "channel-divinity");
   const fromItems = (featureOption.childItems ?? []).map(item => {
     const activity = firstCombatActivity(item);
-    const name = channelOptionLabel(item.name);
+    const name = familyOptionLabel(item.name, family);
     const available = canAttemptUse(activity, item);
     return {
       id: `${featureOption.id}:item:${item.id}`,
       kind: "feature-mode",
       name,
-      img: preferDocumentImg(activity?.img || item.img, featureOption.img),
+      img: preferDocumentImg(itemArtwork(item, activity), featureOption.img),
       item,
       activity,
       available: available.ok,
@@ -475,9 +559,9 @@ function channelDivinityModes(featureOption) {
 
   const titles = new Set(fromItems.map(mode => normalize(mode.name)));
   const fromActivities = (featureOption.nestActivities ?? []).flatMap((activity, index) => {
-    const name = channelOptionLabel(activity?.name || "");
+    const name = familyOptionLabel(activity?.name || "", family);
     const key = normalize(name);
-    if (!key || key === "channel divinity" || titles.has(key)) return [];
+    if (!key || key === family.key || titles.has(key)) return [];
     titles.add(key);
     const item = activity?.item ?? activity?.parent ?? featureOption.item;
     const available = canAttemptUse(activity, item);
@@ -485,7 +569,7 @@ function channelDivinityModes(featureOption) {
       id: `${featureOption.id}:mode:${activity.id ?? activity._id ?? index}`,
       kind: "feature-mode",
       name,
-      img: preferDocumentImg(activity.img || item?.img, featureOption.img),
+      img: preferDocumentImg(activityArtwork(item, activity), featureOption.img),
       item,
       activity,
       available: available.ok,
@@ -539,7 +623,7 @@ function usableActivities(item, activation) {
  * @param {Item[]} shells
  * @returns {Item|null}
  */
-function pickChannelParent(shells) {
+function pickFamilyParent(shells) {
   if (!shells.length) return null;
   return [...shells].sort((a, b) => channelPoolScore(b) - channelPoolScore(a))[0];
 }
@@ -555,41 +639,68 @@ function channelPoolScore(item) {
 }
 
 /**
- * The Channel Divinity uses pool, not an individual option.
+ * The uses-pool feature, not an individual option.
  * @param {Item} item
+ * @param {{ key: string }} family
  */
-function isChannelDivinityParent(item) {
-  return normalize(item?.name) === "channel divinity"
-    || normalize(item?.system?.identifier) === "channel divinity";
+function isFamilyParent(item, family) {
+  return normalize(item?.name) === family.key
+    || normalize(item?.system?.identifier) === family.key;
 }
 
 /**
- * A separate feat that is one Channel Divinity option (e.g. "Channel Divinity: Abjure Enemies").
+ * A separate feat that is one option (e.g. "Metamagic: Twinned Spell").
  * @param {Item} item
  * @param {Item|null} parent
+ * @param {{ id: string, name: string, key: string, subtype: string }} family
  */
-function isChannelDivinityOption(item, parent) {
+function isFamilyOption(item, parent, family) {
   if (!item || item.type !== "feat") return false;
   if (parent && item.id === parent.id) return false;
-  if (isChannelDivinityParent(item)) return false;
+  if (isFamilyParent(item, family)) return false;
+
+  if (hasFamilySeparator(item.name, family) || hasFamilySeparator(item.system?.identifier, family)) {
+    return true;
+  }
 
   const name = normalize(item.name);
   const ident = normalize(item.system?.identifier);
-  if (name.startsWith("channel divinity ") || ident.startsWith("channel divinity ")) return true;
+  // "Channel Divinity: …" stays an option after punctuation is normalized away.
+  if (family.id === "channel-divinity"
+    && (name.startsWith(`${family.key} `) || ident.startsWith(`${family.key} `))) {
+    return true;
+  }
 
   const subtype = String(item.system?.type?.subtype ?? "").toLowerCase().replace(/[^a-z]/g, "");
-  if (subtype === "channeldivinity") return true;
+  if (subtype && subtype === family.subtype) return true;
 
   return !!(parent && consumesItem(item, parent));
 }
 
 /**
- * Drop a generic "Channel Divinity" activity once real options exist, so the nest is only those options.
+ * "Metamagic: Twinned Spell" is an option. "Metamagic Adept" is not.
+ * @param {string|undefined} value
+ * @param {{ name: string }} family
+ */
+function hasFamilySeparator(value, family) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return false;
+  const pattern = new RegExp(`^${escapeRegExp(family.name)}\\s*[:\\-–—]\\s*\\S`, "i");
+  return pattern.test(raw);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Drop a generic family activity once real options exist.
  * @param {object[]} usable
  * @param {boolean} hasChildren
+ * @param {{ key: string }} family
  */
-function channelModeActivities(usable, hasChildren) {
-  const specific = usable.filter(activity => normalize(activity?.name) !== "channel divinity");
+function familyModeActivities(usable, hasChildren, family) {
+  const specific = usable.filter(activity => normalize(activity?.name) !== family.key);
   const source = (hasChildren || specific.length) ? specific : usable;
   const seen = new Set();
   const unique = [];
@@ -602,19 +713,20 @@ function channelModeActivities(usable, hasChildren) {
   return unique;
 }
 
-function syntheticChannelParent(children) {
+function syntheticFamilyParent(family, children) {
   return {
-    id: "channel-divinity",
-    name: "Channel Divinity",
+    id: family.id,
+    name: family.name,
     type: "feat",
     img: children.find(child => child.img)?.img || "",
-    system: { identifier: "channel-divinity", uses: children[0]?.system?.uses ?? null }
+    system: { identifier: family.id, uses: children[0]?.system?.uses ?? null }
   };
 }
 
-function channelOptionLabel(name) {
-  const stripped = String(name ?? "").replace(/^channel divinity\s*[:\-–—]?\s*/i, "").trim();
-  return stripped || String(name ?? "Channel Divinity");
+function familyOptionLabel(name, family) {
+  const pattern = new RegExp(`^${escapeRegExp(family.name)}\\s*[:\\-–—]?\\s*`, "i");
+  const stripped = String(name ?? "").replace(pattern, "").trim();
+  return stripped || String(name ?? family.name);
 }
 
 function featureMatchesActivation(item, activation) {

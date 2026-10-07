@@ -1,0 +1,138 @@
+{
+  "name": "Cornholio the lesser",
+  "type": "character",
+  "img": "ddb-images/characters/cornholio%20new.png",
+  "system": {
+    "details": {
+      "race": "Half-Orc",
+      "background": "Haunted One",
+      "originalClass": "Paladin",
+      "subclass": "Oath of Vengeance",
+      "level": 14
+    },
+    "abilities": {
+      "str": { "value": 20, "mod": 5, "proficient": 0 },
+      "dex": { "value": 18, "mod": 4, "proficient": 0 },
+      "con": { "value": 17, "mod": 3, "proficient": 0 },
+      "int": { "value": 13, "mod": 1, "proficient": 0 },
+      "wis": { "value": 13, "mod": 1, "proficient": 1 },
+      "cha": { "value": 10, "mod": 0, "proficient": 1 }
+    },
+    "attributes": {
+      "hp": { "value": 0, "temp": 0 },
+      "movement": { "walk": 30 }
+    },
+    "spells": {
+      "spell1": { "value": 3, "override": 4 },
+      "spell2": { "value": 2, "override": null },
+      "spell3": { "value": 0, "override": null },
+      "spell4": { "value": 0, "override": null }
+    },
+    "resources": {
+      "primary": { "label": "Lay on Hands Pool", "value": 65, "max": 65 },
+      "secondary": { "label": "Harness Divine Power", "value": 2, "max": 2 },
+      "tertiary": { "label": "Relentless Endurance", "value": 1, "max": 1 }
+    }
+  },
+  "items": [
+    { "name": "Divine Sense", "type": "feat", "img": "icons/creatures/eyes/human-single-blue.webp", "identifier": "divine-sense", "uses": { "max": "1 + @abilities.cha.mod", "spent": 0 }, "activities": [{ "name": "Divine Sense", "type": "utility", "activation": "action" }] },
+    { "name": "Lay On Hands", "type": "feat", "img": "icons/magic/light/orbs-hand-gray.webp", "identifier": "lay-on-hands", "uses": { "max": "@classes.paladin.levels * 5", "spent": 35 }, "activities": [
+      { "name": "Lay on Hands: Heal", "type": "heal", "activation": "action", "img": "icons/magic/light/orbs-hand-gray.webp" },
+      { "name": "Lay on Hands: Cure Disease", "type": "utility", "activation": "action", "img": "icons/magic/light/orbs-hand-gray.webp" },
+      { "name": "Lay on Hands: Neutralize Poison", "type": "utility", "activation": "action", "img": "icons/magic/light/orbs-hand-gray.webp" }
+    ] },
+    { "name": "Sacred Oath", "type": "feat", "img": "icons/sundries/documents/document-sealed-red-yellow.webp", "identifier": "sacred-oath", "uses": { "max": "1", "spent": 0 }, "activities": [
+      { "name": "Channel Divinity (Utility)", "type": "utility", "activation": "action" },
+      { "name": "Channel Divinity (Utility)", "type": "utility", "activation": "bonus" }
+    ] },
+    { "name": "Channel Divinity", "type": "feat", "img": "icons/magic/holy/barrier-shield-winged-blue.webp", "identifier": "channel-divinity", "subtype": "channelDivinity", "uses": { "max": "1", "spent": 0 }, "activities": [] },
+    { "name": "Relentless Endurance", "type": "feat", "img": "icons/magic/death/undead-zombie-grave-green.webp", "identifier": "relentless-endurance", "uses": { "max": "1", "spent": 1 }, "activities": [{ "name": "Relentless Endurance", "type": "utility", "activation": "special" }] },
+    { "name": "Great Weapon Master", "type": "feat", "img": "icons/weapons/axes/axe-battle-skull-black.webp", "identifier": "great-weapon-master", "activities": [
+      { "name": "Toggle", "type": "utility", "activation": "" },
+      { "name": "Bonus Attack", "type": "utility", "activation": "bonus" }
+    ] },
+    { "name": "Cleansing Touch", "type": "feat", "img": "icons/magic/light/hand-sparks-smoke-teal.webp", "identifier": "cleansing-touch", "uses": { "max": "1", "spent": 1 }, "activities": [] },
+    { "name": "Relentless Avenger", "type": "feat", "img": "icons/skills/melee/strike-weapon-polearm-ice-blue.webp", "identifier": "relentless-avenger", "activities": [{ "name": "Reduce Speed", "type": "utility", "activation": "action" }] },
+
+    { "name": "Dodge", "type": "feat", "img": "icons/equipment/shield/buckler-wooden-boss-lightning.webp", "identifier": "dodge", "activities": [{ "name": "Dodge", "type": "utility", "activation": "action" }] },
+    { "name": "Dash", "type": "feat", "img": "icons/skills/movement/figure-running-gray.webp", "identifier": "dash", "activities": [{ "name": "Dash", "type": "utility", "activation": "action" }] },
+    { "name": "Disengage", "type": "feat", "img": "icons/skills/movement/feet-winged-boots-blue.webp", "identifier": "disengage", "activities": [{ "name": "Disengage", "type": "utility", "activation": "action" }] },
+    { "name": "Ready", "type": "feat", "img": "icons/magic/time/hourglass-tilted-gray.webp", "identifier": "ready", "activities": [
+      { "name": "Action", "type": "utility", "activation": "action" },
+      { "name": "Spell", "type": "utility", "activation": "action" }
+    ] },
+    { "name": "Ready Action", "type": "feat", "img": "icons/magic/time/hourglass-tilted-gray.webp", "identifier": "ready-action", "activities": [{ "name": "Ready Action", "type": "utility", "activation": "action" }] },
+    { "name": "Magic", "type": "feat", "img": "icons/skills/trades/academics-study-reading-book.webp", "identifier": "magic", "activities": [
+      { "name": "Spell", "type": "utility", "activation": "action" },
+      { "name": "Magic Item", "type": "utility", "activation": "action" },
+      { "name": "Ritual", "type": "utility", "activation": "action" }
+    ] },
+    { "name": "Attack", "type": "feat", "img": "icons/skills/melee/sword-echo-stylized-tan.webp", "identifier": "attack", "activities": [{ "name": "Attack", "type": "utility", "activation": "action" }] },
+
+    { "name": "Shove", "type": "feat", "img": "icons/skills/melee/unarmed-punch-fist-white.webp", "identifier": "shove", "activities": [{ "name": "Shove", "type": "utility", "activation": "action" }] },
+    { "name": "Grapple", "type": "feat", "img": "icons/magic/control/buff-strength-muscle-damage-red.webp", "identifier": "grapple", "activities": [{ "name": "Grapple", "type": "utility", "activation": "action" }] },
+    { "name": "Mount", "type": "feat", "img": "icons/environment/creatures/horse-brown.webp", "identifier": "mount", "activities": [
+      { "name": "Mount", "type": "utility", "activation": "special" },
+      { "name": "Dismount", "type": "utility", "activation": "special" },
+      { "name": "Fall Off", "type": "save", "activation": "special" }
+    ] },
+    { "name": "Help", "type": "feat", "img": "icons/skills/social/diplomacy-handshake-blue.webp", "identifier": "help", "activities": [{ "name": "Help", "type": "utility", "activation": "action" }] },
+    { "name": "Hide", "type": "feat", "img": "icons/containers/barrels/barrel-open-brown-red.webp", "identifier": "hide", "activities": [{ "name": "Hide", "type": "utility", "activation": "action" }] },
+    { "name": "Search", "type": "feat", "img": "icons/tools/navigation/spyglass-telescope-blue.webp", "identifier": "search", "activities": [{ "name": "Search", "type": "utility", "activation": "action" }] },
+    { "name": "Influence", "type": "feat", "img": "icons/skills/social/diplomacy-offering-ritual.webp", "identifier": "influence", "activities": [{ "name": "Influence", "type": "utility", "activation": "action" }] },
+    { "name": "Study", "type": "feat", "img": "icons/skills/trades/academics-investigation-study-blue.webp", "identifier": "study", "activities": [
+      { "name": "Arcana", "type": "check", "activation": "action" },
+      { "name": "History", "type": "check", "activation": "action" },
+      { "name": "Investigation", "type": "check", "activation": "action" },
+      { "name": "Nature", "type": "check", "activation": "action" },
+      { "name": "Religion", "type": "check", "activation": "action" }
+    ] },
+    { "name": "Jump", "type": "feat", "img": "icons/skills/movement/arrow-upward-blue.webp", "identifier": "jump", "activities": [{ "name": "Long Jump", "type": "utility", "activation": "special" }] },
+    { "name": "Knock Out", "type": "feat", "img": "icons/skills/melee/strike-club-red.webp", "identifier": "knock-out", "activities": [{ "name": "Knock Out", "type": "utility", "activation": "special" }] },
+    { "name": "Squeeze", "type": "feat", "img": "icons/magic/control/silhouette-grow-shrink-blue.webp", "identifier": "squeeze", "activities": [{ "name": "Squeeze", "type": "utility", "activation": "special" }] },
+    { "name": "Stabilize", "type": "feat", "img": "icons/magic/life/crosses-trio-red.webp", "identifier": "stabilize", "activities": [{ "name": "Stabilize", "type": "utility", "activation": "action" }] },
+    { "name": "Check Cover", "type": "feat", "img": "icons/environment/settlement/fence-stone-brick.webp", "identifier": "check-cover", "activities": [{ "name": "Check Cover", "type": "utility", "activation": "special" }] },
+    { "name": "Underwater", "type": "feat", "img": "icons/tools/nautical/anchor-blue.webp", "identifier": "underwater", "activities": [{ "name": "Underwater", "type": "utility", "activation": "special" }] },
+    { "name": "Fall", "type": "feat", "img": "icons/magic/control/silhouette-fall-slip-prone.webp", "identifier": "fall", "activities": [{ "name": "Fall", "type": "damage", "activation": "special" }] },
+    { "name": "Suffocation", "type": "feat", "img": "icons/magic/air/wind-tornado-funnel-blue.webp", "identifier": "suffocation", "activities": [{ "name": "Suffocation", "type": "utility", "activation": "special" }] },
+    { "name": "Ready Spell", "type": "feat", "img": "icons/magic/nature/plant-sprout-hand-blue.webp", "identifier": "ready-spell", "activities": [{ "name": "Ready Spell", "type": "utility", "activation": "action" }] },
+
+    { "name": "Hazirawn", "type": "weapon", "img": "icons/weapons/swords/greatsword-guard-split-eyes.webp", "identifier": "hazirawn", "equipped": true, "activities": [
+      { "name": "Attack", "type": "attack", "activation": "action" },
+      { "name": "Wounding", "type": "save", "activation": "action" },
+      { "name": "Detect Evil and Good", "type": "cast", "activation": "action" },
+      { "name": "Detect Magic", "type": "cast", "activation": "action" },
+      { "name": "Detect Thoughts", "type": "cast", "activation": "action" }
+    ] },
+    { "name": "Greatbow", "type": "weapon", "img": "ddb-images/other/item-Weapon.jpg", "identifier": "greatbow", "equipped": true, "activities": [{ "name": "Attack", "type": "attack", "activation": "action" }] },
+    { "name": "Greatsword, +2", "type": "weapon", "img": "icons/weapons/swords/greatsword-crossguard-flanged-purple.webp", "identifier": "greatsword-2", "equipped": false, "activities": [{ "name": "Attack", "type": "attack", "activation": "action" }] },
+    { "name": "Greatsword of Vengeance", "type": "weapon", "img": "icons/weapons/swords/greatsword-crossguard-barbed.webp", "identifier": "greatsword-of-vengeance", "equipped": true, "activities": [{ "name": "Attack", "type": "attack", "activation": "action" }] },
+    { "name": "Unarmed Strike", "type": "weapon", "img": "icons/skills/melee/unarmed-punch-fist.webp", "identifier": "unarmed-strike", "equipped": false, "activities": [
+      { "name": "Punch", "type": "attack", "activation": "action" },
+      { "name": "Grapple", "type": "save", "activation": "action", "img": "icons/magic/control/buff-strength-muscle-damage-red.webp" },
+      { "name": "Shove (Prone)", "type": "save", "activation": "action", "img": "icons/skills/melee/unarmed-punch-fist-white.webp" },
+      { "name": "Shove (Push)", "type": "save", "activation": "action", "img": "icons/skills/melee/unarmed-punch-fist-white.webp" }
+    ] },
+
+    { "name": "Banishment (Legacy)", "type": "spell", "img": "icons/magic/unholy/orb-swirling-teal.webp", "level": 4, "prepared": 2, "activation": "action" },
+    { "name": "Dimension Door (Legacy)", "type": "spell", "img": "icons/magic/movement/portal-vortex-orange.webp", "level": 4, "prepared": 2, "activation": "action" },
+    { "name": "Hunter's Mark (Legacy)", "type": "spell", "img": "icons/weapons/bows/shortbow-recurve-yellow.webp", "level": 1, "prepared": 2, "activation": "bonus", "activities": [
+      { "name": "Cast", "type": "utility", "activation": "action" },
+      { "name": "Bonus Damage", "type": "damage", "activation": "" },
+      { "name": "Move Hunter's Mark", "type": "utility", "activation": "action" }
+    ] },
+    { "name": "Staggering Smite (Legacy)", "type": "spell", "img": "icons/weapons/hammers/hammer-double-glowing-yellow.webp", "level": 4, "prepared": 1, "activation": "bonus" },
+    { "name": "Bane (Legacy)", "type": "spell", "img": "icons/magic/unholy/hands-praying-fire-green.webp", "level": 1, "prepared": 2, "activation": "action" },
+    { "name": "Compelled Duel (Legacy)", "type": "spell", "img": "icons/skills/melee/weapons-crossed-swords-white-blue.webp", "level": 1, "prepared": 1, "activation": "bonus" },
+    { "name": "Crusader's Mantle (Legacy)", "type": "spell", "img": "icons/skills/melee/strike-hammer-destructive-blue.webp", "level": 3, "prepared": 1, "activation": "action" },
+    { "name": "Haste (Legacy)", "type": "spell", "img": "icons/magic/control/buff-flight-wings-runes-red-yellow.webp", "level": 3, "prepared": 2, "activation": "action" },
+    { "name": "Hold Person (Legacy)", "type": "spell", "img": "icons/magic/control/debuff-energy-hold-blue-yellow.webp", "level": 2, "prepared": 2, "activation": "action" },
+    { "name": "Misty Step (Legacy)", "type": "spell", "img": "icons/magic/control/debuff-energy-snare-brown.webp", "level": 2, "prepared": 2, "activation": "bonus" },
+    { "name": "Protection from Energy (Legacy)", "type": "spell", "img": "icons/magic/defensive/shield-barrier-flaming-diamond-blue.webp", "level": 3, "prepared": 2, "activation": "action" },
+    { "name": "Protection from Evil and Good (Legacy)", "type": "spell", "img": "icons/magic/defensive/shield-barrier-flaming-diamond-blue-yellow.webp", "level": 1, "prepared": 1, "activation": "action" },
+    { "name": "Protection from Poison (Legacy)", "type": "spell", "img": "icons/magic/defensive/shield-barrier-flaming-diamond-teal-purple.webp", "level": 2, "prepared": 1, "activation": "action" },
+    { "name": "Searing Smite (Legacy)", "type": "spell", "img": "icons/magic/fire/dagger-rune-enchant-flame-orange.webp", "level": 1, "prepared": 1, "activation": "bonus" },
+
+    { "name": "Potion of Healing (Superior)", "type": "consumable", "img": "icons/consumables/potions/bottle-round-corked-red.webp", "identifier": "potion-of-healing-superior", "quantity": 11, "activities": [{ "name": "Drink", "type": "heal", "activation": "action" }] }
+  ]
+}

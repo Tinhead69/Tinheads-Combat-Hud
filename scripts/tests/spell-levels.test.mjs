@@ -100,6 +100,17 @@ const guidance = spell({ name: "Guidance", level: 0, mode: "atwill" });
   assert(levels.length === 2, `expected 2 levels, got ${levels.length}`);
   assert(levels.map(l => l.level).join(",") === "0,1", "levels are cantrip+1st only");
   assert(equalSegments(levels.length).length === 2, "ring has 2 even sections");
+  assert(levels.find(l => l.level === 0).slots == null, "cantrips show no slot count");
+  assert(levels.find(l => l.level === 1).slots === "2/2", "1st shows remaining spell slots");
+}
+
+{
+  const actor = actorWith([magicMissile], { spell1: { value: 1, max: 4 } });
+  assert(getSpellLevels(actor).levels[0].slots === "1/4", "spent slots show remaining over max");
+  const empty = actorWith([magicMissile], { spell1: { value: 0, max: 4 } });
+  assert(getSpellLevels(empty).levels[0].slots === "0/4", "empty pool still shows zero available");
+  const overridden = actorWith([magicMissile], { spell1: { value: 3, max: 2, override: 4 } });
+  assert(getSpellLevels(overridden).levels[0].slots === "3/4", "slot override replaces max");
 }
 
 // Higher slots unlock lower upcast path — 1st spells count when only spell2 max>0
@@ -122,8 +133,14 @@ const guidance = spell({ name: "Guidance", level: 0, mode: "atwill" });
 {
   const actor = actorWith([eldritch], { pact: { value: 1, max: 1, level: 1 } });
   assert(isSpellAvailableForHud(actor, eldritch), "pact spell with pact slots");
+  assert(getSpellLevels(actor).levels.find(l => l.level === 1).slots === "1/1", "pact slots show on the pact level");
   const none = actorWith([eldritch], { pact: { value: 0, max: 0, level: 0 } });
   assert(!isSpellAvailableForHud(none, eldritch), "pact spell without pact slots excluded");
+  const both = actorWith(
+    [magicMissile, eldritch],
+    { spell1: { value: 3, max: 4 }, pact: { value: 1, max: 2, level: 1 } }
+  );
+  assert(getSpellLevels(both).levels.find(l => l.level === 1).slots === "3/4 · P 1/2", "regular and pact slots both show");
 }
 
 // At-will ignores slots

@@ -1,6 +1,6 @@
 /**
  * Core Action-economy options for the Action sub-radial:
- * Dash, Disengage, Dodge, Ready.
+ * Dash, Disengage, Dodge, Help, Ready.
  *
  * Prefer an actor-owned item/activity when present; otherwise module-backed
  * chat announcement (no invented rules automation).
@@ -11,12 +11,13 @@ import {
   getActivationType,
   getAttackHandle,
   isUnarmedItem,
+  itemArtwork,
   t
 } from "./actor-options.mjs";
 import { enrichWeaponOption } from "./weapon-abilities.mjs";
 import { CHROME, preferDocumentImg } from "./module-icons.mjs";
 
-/** @typedef {"dash"|"disengage"|"dodge"|"ready"} BasicActionId */
+/** @typedef {"dash"|"disengage"|"dodge"|"help"|"ready"} BasicActionId */
 
 /**
  * Stable catalog — PHB-ish Action order.
@@ -46,6 +47,13 @@ export const BASIC_ACTIONS = [
     aliases: ["dodge"]
   },
   {
+    id: "help",
+    nameKey: "BasicActions.Help",
+    name: "Help",
+    img: CHROME.classFeature,
+    aliases: ["help"]
+  },
+  {
     id: "ready",
     nameKey: "BasicActions.Ready",
     name: "Ready",
@@ -56,7 +64,7 @@ export const BASIC_ACTIONS = [
 
 /**
  * Build Action-ring entries for core basics (no weapons / Cast Spell).
- * Dedupes by action id — at most one wedge per Dash/Disengage/Dodge/Ready.
+ * Dedupes by action id — at most one wedge per Dash/Disengage/Dodge/Help/Ready.
  *
  * @param {Actor} actor
  * @returns {Array<object>}
@@ -145,7 +153,7 @@ export function findActorBasicAction(actor, def) {
         item,
         activity,
         name: activity.name || item.name,
-        img: activity.img || item.img,
+        img: itemArtwork(item, activity),
         source: "activity",
         score: scoreMatch({ itemMatches, actMatches, activation, itemName, actName, aliases })
       });
@@ -160,7 +168,7 @@ export function findActorBasicAction(actor, def) {
           item,
           activity: activities[0] ?? null,
           name: item.name,
-          img: item.img,
+          img: itemArtwork(item, null),
           source: "item",
           score: scoreMatch({
             itemMatches: true,
@@ -214,8 +222,10 @@ function safeLocalize(key, fallback) {
 }
 
 /**
- * First Action radial: Attack, Dodge, Dash, Disengage, Ready, then Abilities and Use Item.
- * Weapons and spells live under Attack. Class features live under Abilities.
+ * First Action radial: Attack, Dodge, Dash, Disengage, Help, Ready, Other, Abilities, Use Item.
+ * Weapons and spells live under Attack. Help sits with the other core actions.
+ * Shove, grapple, and mount live under Other.
+ * Class features live under Abilities.
  * @param {Actor} actor
  * @param {Array<object>} [_weapons] kept so existing callers can still pass equipped weapons
  * @returns {Array<object>}
@@ -228,6 +238,7 @@ export function buildActionRingEntries(actor, _weapons) {
     basics.dodge,
     basics.dash,
     basics.disengage,
+    basics.help,
     {
       ...ready,
       kind: "ready",
@@ -236,6 +247,7 @@ export function buildActionRingEntries(actor, _weapons) {
         description: t("ReadyNest.Hint")
       }
     },
+    otherHub(),
     {
       kind: "abilities",
       id: "abilities",
@@ -252,23 +264,29 @@ export function buildActionRingEntries(actor, _weapons) {
 }
 
 /**
- * Attack nest: equipped weapons, Unarmed Strike, Cast Spell.
+ * Attack nest: equipped weapons, Unarmed Strike, and Cast Spell.
+ * Ready → Attack omits Cast Spell; that choice is already on the Ready ring.
  * @param {Actor} actor
  * @param {Array<object>} weapons from getEquippedWeapons
+ * @param {{ includeCast?: boolean }} [options]
  * @returns {Array<object>}
  */
-export function getAttackNestEntries(actor, weapons) {
+export function getAttackNestEntries(actor, weapons, options = {}) {
   const armed = (weapons ?? [])
     .filter(weapon => !isUnarmedItem(weapon.item))
     .map(weapon => enrichWeaponOption({ kind: "weapon", ...weapon }));
-  return [...armed, unarmedStrikeOption(actor), castSpellHub()];
+  const entries = [...armed, unarmedStrikeOption(actor)];
+  if (options.includeCast !== false) entries.push(castSpellHub());
+  return entries;
 }
 
 /**
- * Ready nest: the action being readied.
+ * Ready nest: Cast Spell, Attack, or another action.
+ * Other Action is the declaration itself. It does not open a further ring.
+ * @param {Actor} [actor]
  * @returns {Array<object>}
  */
-export function getReadyNestEntries() {
+export function getReadyNestEntries(actor) {
   return [
     castSpellHub(),
     {
@@ -279,15 +297,19 @@ export function getReadyNestEntries() {
       available: true,
       tooltip: {
         title: t("ReadyNest.Attack"),
-        description: t("AttackNest.Hint")
+        description: t("ReadyNest.AttackHint")
       }
     },
     {
-      kind: "abilities",
+      kind: "basic",
       id: "ready-other",
+      basicId: "ready-other",
       name: t("ReadyNest.Other"),
       img: CHROME.classFeature,
+      actor,
       available: true,
+      requiresTarget: false,
+      source: "module",
       tooltip: {
         title: t("ReadyNest.Other"),
         description: t("ReadyNest.OtherHint")
@@ -320,6 +342,20 @@ function castSpellHub() {
     tooltip: {
       title: t("Sections.CastSpell"),
       description: t("Sections.CastSpellHint")
+    }
+  };
+}
+
+function otherHub() {
+  return {
+    kind: "other",
+    id: "other",
+    name: t("OtherActions.Label"),
+    img: CHROME.classFeature,
+    available: true,
+    tooltip: {
+      title: t("OtherActions.Label"),
+      description: t("OtherActions.Hint")
     }
   };
 }

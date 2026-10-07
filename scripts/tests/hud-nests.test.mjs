@@ -29,7 +29,7 @@ const { enrichWeaponOption, getWeaponMenuOptions, getWeaponAbilityOptions } =
 const { getEndTurnState, endCombatTurn } = await import("../data/combat-turn.mjs");
 const { getAbilityOptions, getAbilityRollOptions, rollAbilityHudOption } =
   await import("../data/ability-checks.mjs");
-const { getActionFeatureOptions, getClassFeatureOptions, getFeatureModeOptions, formatUses, isSuppressedActionFeature } =
+const { getActionFeatureOptions, getClassFeatureOptions, getOtherActionOptions, getFeatureModeOptions, formatUses, isSuppressedActionFeature } =
   await import("../data/action-features.mjs");
 const { buildActionRingEntries, getAttackNestEntries } = await import("../data/basic-actions.mjs");
 const { mainSectionAngles } = await import("../ui/radial-geometry.mjs");
@@ -344,9 +344,83 @@ assert(!splitFeatures.some(f => f.name.includes("Abjure") || f.name.includes("Vo
 const bonusFeatures = getClassFeatureOptions(splitPaladin, "bonus");
 assert(!bonusFeatures.some(f => /channel divinity|vow of enmity/i.test(f.name)), "divinities stay off the bonus ring");
 
+const sorcerer = {
+  id: "S1",
+  items: [
+    {
+      id: "mm",
+      name: "Metamagic",
+      type: "feat",
+      img: "icons/mm.webp",
+      isOwner: true,
+      system: {
+        identifier: "metamagic",
+        uses: { value: 2, max: 2 },
+        activation: { type: "action" },
+        activities: [
+          { id: "use", name: "Metamagic", type: "utility", activation: { type: "action" } }
+        ]
+      }
+    },
+    {
+      id: "heightened",
+      name: "Metamagic: Heightened Spell",
+      type: "feat",
+      img: "icons/heightened.webp",
+      isOwner: true,
+      system: {
+        activities: [
+          { id: "hs", name: "Heightened Spell", type: "utility", activation: { type: "action" } }
+        ]
+      }
+    },
+    {
+      id: "twinned",
+      name: "Metamagic: Twinned Spell",
+      type: "feat",
+      img: "icons/twinned.webp",
+      isOwner: true,
+      system: {
+        type: { subtype: "metamagic" },
+        activities: [
+          { id: "ts", name: "Twinned Spell", type: "utility", activation: { type: "bonus" } }
+        ]
+      }
+    },
+    {
+      id: "adept",
+      name: "Metamagic Adept",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        activation: { type: "action" },
+        activities: [
+          { id: "adept", name: "Metamagic Adept", type: "utility", activation: { type: "action" } }
+        ]
+      }
+    }
+  ],
+  system: { favorites: [], spells: {} },
+  isOwner: true
+};
+const metamagicRing = getClassFeatureOptions(sorcerer, "action");
+assert(metamagicRing.filter(f => f.name === "Metamagic").length === 1, "one Metamagic button");
+assert(metamagicRing.some(f => f.name === "Metamagic Adept"), "Metamagic Adept stays its own feature");
+assert(!metamagicRing.some(f => /heightened|twinned/i.test(f.name)), "metamagic options are not their own wedges");
+const metamagic = metamagicRing.find(f => f.name === "Metamagic");
+assert(metamagic.hasNest === true, "Metamagic opens a nest");
+const metamagicModes = getFeatureModeOptions(metamagic).map(mode => mode.name);
+assert(metamagicModes.includes("Heightened Spell"), "Heightened Spell is in the Metamagic nest");
+assert(metamagicModes.includes("Twinned Spell"), "Twinned Spell is in the Metamagic nest");
+assert(!metamagicModes.includes("Metamagic"), "generic Metamagic activity is not a nest title");
+const metamagicBonus = getClassFeatureOptions(sorcerer, "bonus");
+assert(!metamagicBonus.some(f => /metamagic|twinned/i.test(f.name)), "metamagic options stay off the bonus ring");
+
 const ring = buildActionRingEntries(paladin, []);
 assert(ring.some(e => e.kind === "abilities"), "abilities hub on the Action ring");
-assert(ring.filter(e => e.kind === "basic").length === 3, "Dodge Dash Disengage stay leaves");
+assert(ring.filter(e => e.kind === "basic").length === 4, "Dodge Dash Disengage Help stay leaves");
+assert(ring.some(e => e.basicId === "help"), "Help is on the Action ring");
 assert(getClassFeatureOptions(paladin, "action").some(f => f.name === "Lay on Hands"), "Lay on Hands is an ability");
 const noisy = {
   ...paladin,
@@ -388,6 +462,75 @@ const noisy = {
 assert(isSuppressedActionFeature(noisy.items.find(i => i.name === "Extra Attack")), "Extra Attack is not a button");
 assert(!getClassFeatureOptions(noisy, "action").some(f => f.name === "Extra Attack"), "Extra Attack stays off Abilities");
 assert(!getClassFeatureOptions(noisy, "action").some(f => f.name === "Midi Use"), "Midi Use stays off Abilities");
+const withMagic = {
+  ...noisy,
+  items: [
+    ...noisy.items,
+      {
+      id: "magic",
+      name: "Magic",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        identifier: "magic",
+        activation: { type: "action" },
+        activities: [
+          { id: "cantrip", name: "Fire Bolt", type: "cast", activation: { type: "action" } },
+          { id: "spell", name: "Hex", type: "cast", activation: { type: "action" } }
+        ]
+      }
+    },
+    {
+      id: "magic-weapon",
+      name: "Magic Weapon",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        activation: { type: "action" },
+        activities: [
+          { id: "mw", name: "Magic Weapon", type: "enchant", activation: { type: "action" } }
+        ]
+      }
+    }
+  ]
+};
+assert(isSuppressedActionFeature(withMagic.items.find(i => i.name === "Magic")), "Magic is not an ability button");
+assert(!getClassFeatureOptions(withMagic, "action").some(f => f.name === "Magic"), "Magic stays off Abilities");
+assert(getClassFeatureOptions(withMagic, "action").some(f => f.name === "Magic Weapon"), "Magic Weapon stays on Abilities");
+
+const maneuvers = {
+  id: "M1",
+  items: [
+    featAction("shove", "Shove"),
+    featAction("grapple", "Grapple"),
+    featAction("mount", "Mount"),
+    featAction("help", "Help"),
+    featAction("loh2", "Lay on Hands")
+  ],
+  system: { favorites: [], spells: {} },
+  isOwner: true
+};
+function featAction(id, name) {
+  return {
+    id,
+    name,
+    type: "feat",
+    img: "",
+    isOwner: true,
+    system: {
+      identifier: id,
+      activation: { type: "action" },
+      activities: [{ id, name, type: "utility", activation: { type: "action" } }]
+    }
+  };
+}
+const other = getOtherActionOptions(maneuvers);
+assert(other.map(entry => entry.name).sort().join(",") === "Grapple,Mount,Shove", "Other lists shove, grapple, and mount");
+assert(!other.some(entry => entry.name === "Help"), "Help stays off Other");
+assert(!getClassFeatureOptions(maneuvers, "action").some(entry => ["Shove", "Grapple", "Mount", "Help"].includes(entry.name)), "maneuvers stay off Abilities");
+assert(getClassFeatureOptions(maneuvers, "action").some(entry => entry.name === "Lay on Hands"), "class features stay on Abilities");
 const attacks = getAttackNestEntries(noisy, []);
 assert(attacks.some(e => e.name === "Unarmed Strike"), "sheet Unarmed Strike is on the Attack nest");
 assert(!attacks.some(e => e.name === "Extra Attack"), "Extra Attack is not an attack choice");

@@ -356,6 +356,9 @@ async function postBasicActionChat(option) {
     ?? { alias: actor?.name || game.user?.name };
 
   const who = actor?.name || speaker.alias || "Character";
+  const line = option.basicId === "ready-other"
+    ? `<strong>${escapeHtml(who)}</strong> readies another action.`
+    : `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action.`;
   const content = `
     <div class="dnd5e chat-card tinheads-combat-hud basic-action">
       <header class="card-header flexrow">
@@ -363,7 +366,7 @@ async function postBasicActionChat(option) {
         <h3>${escapeHtml(name)}</h3>
       </header>
       <div class="card-content">
-        <p><strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action.</p>
+        <p>${line}</p>
       </div>
     </div>
   `;

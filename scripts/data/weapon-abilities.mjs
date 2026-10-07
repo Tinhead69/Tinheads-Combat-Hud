@@ -8,6 +8,7 @@ import {
   canAttemptUse,
   getActivities,
   getDefaultIcon,
+  activityArtwork,
   optionRequiresTarget,
   t
 } from "./actor-options.mjs";
@@ -197,7 +198,7 @@ export function getWeaponAbilityOptions(weaponOption) {
       kind: "weapon-ability",
       name: activity.name || t("WeaponNest.AbilityFallback"),
       img: preferDocumentImg(
-        activity.img || weaponOption.img,
+        activityArtwork(weaponOption.item, activity) || weaponOption.img,
         getDefaultIcon("feat")
       ),
       item: weaponOption.item,

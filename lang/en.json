@@ -12,7 +12,7 @@
       "Reaction": "Reaction",
       "CastSpell": "Cast Spell",
       "UseItem": "Use Item",
-      "ActionHint": "Attack, Dodge, Dash, Disengage, or Ready.",
+      "ActionHint": "Attack, Dodge, Dash, Disengage, Help, Ready, or Other.",
       "ChecksHint": "Ability checks and saving throws.",
       "BonusHint": "Bonus Action options from your sheet.",
       "ReactionHint": "Reaction options from your sheet.",
@@ -23,6 +23,7 @@
       "Dash": "Dash",
       "Disengage": "Disengage",
       "Dodge": "Dodge",
+      "Help": "Help",
       "Ready": "Ready",
       "Hint": "Core combat action — announces in chat if no matching sheet item.",
       "FromSheet": "Uses the matching item or activity from the character sheet."
@@ -55,12 +56,17 @@
     "ReadyNest": {
       "Hint": "Choose the action you are readying.",
       "Attack": "Attack",
+      "AttackHint": "Ready a weapon attack or an unarmed strike.",
       "Other": "Other Action",
-      "OtherHint": "Ready a class feature or another action from your sheet."
+      "OtherHint": "Ready some other action. It resolves when the trigger happens."
+    },
+    "OtherActions": {
+      "Label": "Other",
+      "Hint": "Shove, grapple, mount, and similar actions."
     },
     "Abilities": {
       "Label": "Abilities",
-      "Hint": "Class features and other actions from your character sheet."
+      "Hint": "Class features from your character sheet."
     },
     "WeaponNest": {
       "Attack": "Attack",
@@ -81,7 +87,9 @@
       "7": "7th",
       "8": "8th",
       "9": "9th",
-      "PickHint": "Spells available at {label}."
+      "PickHint": "Spells available at {label}.",
+      "SlotsHint": "{value} of {max} slots left.",
+      "PactSlotsHint": "{value} of {max} pact slots left."
     },
     "Tooltip": {
       "Description": "Description",
@@ -101,7 +109,8 @@
       "NoUsableItems": "No usable items",
       "NoItemUses": "None left.",
       "NoWeaponAbilities": "No special abilities",
-      "NoFeatureModes": "No feature options"
+      "NoFeatureModes": "No feature options",
+      "NoOtherActions": "No other actions"
     },
     "Notify": {
       "SelectTarget": "Select a target first.",

@@ -26,12 +26,12 @@ export function contentOuterRadius(state, rings) {
   if (state.section !== "action") return rings.mainOuter;
 
   let depth = 1;
-  if (state.attackOpen || state.readyOpen || state.abilitiesOpen || state.useItem) depth = 2;
-  if (state.readyOpen && (state.attackOpen || state.abilitiesOpen)) depth = 3;
+  if (state.attackOpen || state.readyOpen || state.otherOpen || state.abilitiesOpen || state.useItem) depth = 2;
+  if (state.readyOpen && state.attackOpen) depth = 3;
   if (state.castSpell) depth += 1;
   if (state.spellLevel != null) depth += 1;
   if (state.weaponNestId) depth += 1;
-  if (state.featureNestId && state.abilitiesOpen) depth += 1;
+  if (state.featureNestId && (state.abilitiesOpen || state.otherOpen)) depth += 1;
   depth = Math.min(depth, 4);
   if (depth <= 1) return rings.actionOuter;
   if (depth === 2) return rings.nest1Outer;

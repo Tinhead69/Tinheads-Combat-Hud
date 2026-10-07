@@ -9,6 +9,7 @@ import {
   getActivationType,
   getAttackHandle,
   getDefaultIcon,
+  itemArtwork,
   optionRequiresTarget,
   t
 } from "./actor-options.mjs";
@@ -39,7 +40,7 @@ export function getUsableInventoryItems(actor) {
       id: `use-item:${item.id}`,
       kind: "inventory",
       name: item.name,
-      img: item.img || getDefaultIcon(item.type),
+      img: itemArtwork(item, activity) || getDefaultIcon(item.type),
       item,
       activity,
       available: attempt.ok,
