@@ -512,7 +512,7 @@
   position: fixed;
   z-index: calc(var(--tch-z) + 1);
   min-width: 180px;
-  max-width: 280px;
+  max-width: 360px;
   padding: 10px 12px;
   border: 1px solid rgba(230, 235, 245, 0.35);
   border-radius: 6px;
@@ -550,7 +550,7 @@
 .tch-tooltip__desc {
   margin: 0 0 8px;
   color: rgba(220, 226, 234, 0.92);
-  max-height: 4.5em;
+  max-height: 12em;
   overflow: hidden;
 }
 

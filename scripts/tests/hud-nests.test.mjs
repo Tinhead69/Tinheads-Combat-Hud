@@ -125,6 +125,8 @@ const hazirawn = enrichWeaponOption({
   activity: null
 });
 assert(hazirawn.hasSpecial === true, "Hazirawn midi activity opens Use Ability");
+assert(hazirawn.tooltip?.description?.includes("cannot regain hit points"), "weapon tooltip includes the item description");
+assert(!hazirawn.tooltip.description.includes("<"), "weapon tooltip description is plain text");
 const hazModes = getWeaponAbilityOptions(hazirawn).map(mode => mode.name);
 assert(hazModes.includes("Detect Magic"), "midi-qol activity is an action");
 assert(!hazModes.includes("Increased Potency"), "passive rider is not an action");
@@ -174,19 +176,24 @@ assert(spentModes.every(mode => mode.usesLabel === "0/10"), "spent pool still sh
 game.combat = null;
 assert(getEndTurnState().enabled === false, "no combat disables end turn");
 
+const activeToken = { id: "tok-active", documentName: "Token", actor: { id: "act-1", isOwner: true } };
 game.combat = {
-  combatant: { isOwner: true, actor: { isOwner: true } },
+  combatant: { isOwner: true, tokenId: "tok-active", actorId: "act-1", actor: activeToken.actor },
   nextTurn: async () => ({ ok: true })
 };
 game.user.isGM = false;
-assert(getEndTurnState().enabled === true, "owner can end turn");
-const advanced = await endCombatTurn();
+assert(getEndTurnState(activeToken).enabled === true, "active token owner can end turn");
+const advanced = await endCombatTurn(activeToken);
 assert(advanced.ok === true, "nextTurn called");
+assert(getEndTurnState({ id: "tok-other", documentName: "Token", actor: { id: "act-2", isOwner: true } }).enabled === false, "another token cannot end turn");
+assert(getEndTurnState().enabled === false, "no token cannot end turn");
 
-game.combat.combatant = { isOwner: false, actor: { isOwner: false }, testUserPermission: () => false };
-assert(getEndTurnState().enabled === false, "non-owner blocked");
+game.combat.combatant = { isOwner: false, tokenId: "tok-active", actorId: "act-1", actor: { id: "act-1", isOwner: false }, testUserPermission: () => false };
+assert(getEndTurnState(activeToken).enabled === false, "non-owner blocked on the active token");
 game.user.isGM = true;
-assert(getEndTurnState().enabled === true, "GM can always end turn");
+assert(getEndTurnState(activeToken).enabled === true, "GM can end the active token's turn");
+assert(getEndTurnState({ id: "tok-other", documentName: "Token", actor: { id: "act-2" } }).enabled === false, "GM cannot end turn from a different token");
+game.user.isGM = false;
 
 // --- Checks ---
 const actor = {
@@ -227,6 +234,7 @@ const paladin = {
       system: {
         activation: { type: "action" },
         uses: { value: 25, max: 25 },
+        description: { value: "<p>Your blessed touch can heal wounds.</p>" },
         activities: [
           { id: "heal", name: "Lay on Hands", type: "heal", activation: { type: "action" }, uses: { value: 25, max: 25 } }
         ]
@@ -269,6 +277,7 @@ assert(features.some(f => f.name === "Channel Divinity"), "Channel Divinity on A
 assert(!features.some(f => f.name === "Dodge"), "Dodge stays on basics only");
 const loh = features.find(f => f.name === "Lay on Hands");
 assert(loh.hasNest === false, "Lay on Hands is a leaf");
+assert(loh.tooltip?.description?.includes("blessed touch"), "feature tooltip includes the item description");
 assert(formatUses(loh.item, loh.activity) === "25/25", "uses pool shown");
 
 const layOnHands = {

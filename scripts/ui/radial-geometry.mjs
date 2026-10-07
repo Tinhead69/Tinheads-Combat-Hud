@@ -154,6 +154,27 @@ export function arcSegmentsForParent(count, parentStart, parentEnd, opts = {}) {
 }
 
 /**
+ * Shift an arc so one wedge's midpoint sits on the parent midpoint.
+ * Neighboring wedges stay in order, clockwise.
+ * @param {Array<{ index: number, start: number, end: number, mid: number }>} segs
+ * @param {number} index
+ * @param {number} parentStart
+ * @param {number} parentEnd
+ */
+export function centerArcOnIndex(segs, index, parentStart, parentEnd) {
+  if (!segs?.length) return segs ?? [];
+  const i = Math.max(0, Math.min(index, segs.length - 1));
+  const delta = normalizeMid(parentStart, parentEnd) - segs[i].mid;
+  if (!delta) return segs;
+  return segs.map(seg => ({
+    ...seg,
+    start: seg.start + delta,
+    end: seg.end + delta,
+    mid: seg.mid + delta
+  }));
+}
+
+/**
  * Main wedges (compact 4-way split): Action, Checks, Bonus Action, Reaction.
  * Action stays on top (crosses 0° / north).
  */

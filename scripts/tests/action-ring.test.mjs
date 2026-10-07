@@ -11,10 +11,10 @@ globalThis.foundry = { utils: { duplicate: (v) => JSON.parse(JSON.stringify(v)) 
 globalThis.CONFIG = { DND5E: { defaultArtwork: { Item: {} } } };
 globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 
-const { buildActionRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions, getAttackNestEntries, getReadyNestEntries } =
+const { buildActionRingEntries, buildEconomyRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions, getAttackNestEntries, getReadyNestEntries } =
   await import("../data/basic-actions.mjs");
 const { getUsableInventoryItems } = await import("../data/use-items.mjs");
-const { getEquippedWeapons, getActivationOptions, itemArtwork, activityArtwork } = await import("../data/actor-options.mjs");
+const { getEquippedWeapons, getActivationOptions, getSpellLevels, itemArtwork, activityArtwork } = await import("../data/actor-options.mjs");
 const { getClassFeatureOptions } = await import("../data/action-features.mjs");
 
 let passed = 0;
@@ -110,16 +110,16 @@ assert(entries.some(e => e.kind === "useItem"), "has Use Item hub");
 assert(entries.some(e => e.kind === "attack"), "has Attack hub");
 assert(entries.some(e => e.kind === "abilities"), "has Abilities hub");
 assert(entries.some(e => e.kind === "ready"), "Ready is a nest");
-assert(!entries.some(e => e.kind === "cast"), "Cast Spell is not on the first Action ring");
+assert(entries.some(e => e.kind === "cast" && e.economy === "action"), "Cast Spell is on the Action ring");
 assert(entries.filter(e => e.kind === "basic").length === 4, "Dodge, Dash, Disengage, and Help");
 assert(entries.some(e => e.basicId === "help" && e.kind === "basic"), "Help is on the Action ring");
 const kinds = entries.map(e => e.kind);
-assert(kinds.join(",") === "attack,basic,basic,basic,basic,ready,other,abilities,useItem", "Attack, Dodge, Dash, Disengage, Help, Ready, Other, Abilities, Use Item");
+assert(kinds.join(",") === "basic,basic,basic,basic,attack,cast,ready,other,abilities,useItem", "Dodge, Dash, Disengage, Help, Attack, Cast Spell, Ready, Other, Abilities, Use Item");
+const attackAt = entries.findIndex(e => e.kind === "attack");
+assert(entries[attackAt + 1]?.kind === "cast", "Cast Spell sits beside Attack");
 const attackNest = getAttackNestEntries(actor, []);
-assert(attackNest.some(e => e.kind === "cast"), "Cast Spell is under Attack");
+assert(!attackNest.some(e => e.kind === "cast"), "Attack nest is weapons and unarmed strike");
 assert(attackNest.some(e => e.name === "Unarmed Strike"), "Unarmed Strike is under Attack");
-const readyAttack = getAttackNestEntries(actor, [], { includeCast: false });
-assert(!readyAttack.some(e => e.kind === "cast"), "Ready → Attack does not repeat Cast Spell");
 const readyNest = getReadyNestEntries();
 assert(readyNest.map(e => e.kind).join(",") === "cast,attack,basic", "Ready opens Cast Spell, Attack, and a plain Other Action");
 assert(readyNest.find(e => e.id === "ready-other")?.kind === "basic", "Other Action does not open another ring");
@@ -162,10 +162,26 @@ const bonusActor = {
     }),
     item({
       name: "Hex",
-      type: "spell",
+      type: "consumable",
       activities: [{ id: "hex", name: "Hex Damage", type: "damage", activation: { type: "bonus" } }]
+    }),
+    item({
+      name: "Misty Step",
+      type: "spell",
+      activation: { type: "bonus" },
+      system: { level: 2, method: "spell", prepared: 1 },
+      activities: [{ id: "cast", name: "Cast", type: "cast", activation: { type: "action" } }]
+    }),
+    item({
+      name: "Bless",
+      type: "spell",
+      activation: { type: "action" },
+      system: { level: 1, method: "spell", prepared: 1 }
     })
-  ]
+  ],
+  system: { spells: { spell1: { value: 2, max: 2 }, spell2: { value: 1, max: 2 } } },
+  isOwner: true,
+  testUserPermission: () => true
 };
 const bonus = getActivationOptions(bonusActor, "bonus");
 assert(bonus.find(o => o.item.name === "Potion of Healing")?.name === "Potion of Healing", "Midi Heal wedge uses the potion name");
@@ -195,5 +211,18 @@ assert(itemArtwork(fireball, fireball.system.activities[0]) === "icons/magic/fir
 assert(activityArtwork(layOnHands, layOnHands.system.activities[0]) === "icons/magic/lay-on-hands.webp", "feature mode ignores a Midi activity icon");
 assert(getClassFeatureOptions(midiIconActor, "action").find(f => f.name === "Lay on Hands")?.img === "icons/magic/lay-on-hands.webp", "ability wedge uses the feature image");
 assert(bonus.find(o => o.item.name === "Hex")?.name === "Hex Damage", "real activity names stay on the wedge");
+assert(!bonus.some(o => o.item?.type === "spell"), "bonus spells are not activity wedges");
+const bonusRing = buildEconomyRingEntries(bonusActor, "bonus");
+assert(bonusRing[0]?.kind === "cast" && bonusRing[0].economy === "bonus", "bonus ring starts with Cast Spell");
+assert(!bonusRing.some(e => e.kind === "spell" || e.name === "Misty Step"), "bonus spells stay inside Cast Spell");
+assert(!bonusRing.some(e => e.name === "Bless"), "action spells stay off the bonus ring");
+assert(!bonusRing.some(e => e.name === "Cast"), "a bonus spell's Cast activity is not its own wedge");
+const actionSpells = getSpellLevels(bonusActor, "action").levels.flatMap(level => level.spells.map(spell => spell.name));
+const bonusSpells = getSpellLevels(bonusActor, "bonus").levels.flatMap(level => level.spells.map(spell => spell.name));
+assert(actionSpells.includes("Bless") && !actionSpells.includes("Misty Step"), "action Cast Spell lists only action spells");
+assert(bonusSpells.includes("Misty Step") && !bonusSpells.includes("Bless"), "bonus Cast Spell lists only bonus spells");
+const reactionRing = buildEconomyRingEntries({ items: [], system: { spells: {} }, isOwner: true, testUserPermission: () => true }, "reaction");
+assert(reactionRing[0]?.id === "attack-of-opportunity", "reaction ring always starts with Attack of Opportunity");
+assert(reactionRing.filter(entry => entry.kind === "opportunity").length === 1, "Attack of Opportunity is not repeated");
 
 console.log(`\n${passed} assertions passed`);

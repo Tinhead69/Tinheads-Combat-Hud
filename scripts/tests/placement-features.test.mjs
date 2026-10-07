@@ -68,6 +68,10 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
   assert(bonus === RINGS.flatOuter, "bonus options use the thicker flat ring");
   const bonusNest = contentOuterRadius({ section: "bonus", featureNestId: "font" }, RINGS);
   assert(bonusNest === RINGS.flatNestOuter, "bonus feature nest sits outside the flat ring");
+  const bonusCast = contentOuterRadius({ section: "bonus", castSpell: true }, RINGS);
+  assert(bonusCast === RINGS.flatNestOuter, "bonus Cast Spell opens the level nest");
+  const bonusSpells = contentOuterRadius({ section: "bonus", castSpell: true, spellLevel: 1 }, RINGS);
+  assert(bonusSpells === RINGS.flatSpellOuter, "bonus spell names sit outside the level nest");
 }
 
 assert(matchesActivation("action", "action"), "action matches action");

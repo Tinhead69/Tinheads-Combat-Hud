@@ -13,6 +13,7 @@ import {
   activityArtwork,
   itemArtwork,
   optionRequiresTarget,
+  sheetItemTooltip,
   t
 } from "./actor-options.mjs";
 import { isAttackActivity } from "./weapon-abilities.mjs";
@@ -246,10 +247,7 @@ export function getFeatureModeOptions(featureOption) {
       requiresTarget: optionRequiresTarget(activity, activity?.item ?? featureOption.item),
       parentFeatureId: featureOption.id,
       usesLabel: formatUses(featureOption.item, activity),
-      tooltip: {
-        title: activity.name || featureOption.name,
-        description: usesLine(featureOption.item, activity)
-      }
+      tooltip: describedTooltip(featureOption.item, activity, activity.name || featureOption.name)
     };
   });
 
@@ -272,10 +270,7 @@ export function getFeatureModeOptions(featureOption) {
       requiresTarget: optionRequiresTarget(activity, item),
       parentFeatureId: featureOption.id,
       usesLabel: formatUses(item, activity),
-      tooltip: {
-        title: name,
-        description: usesLine(item, activity)
-      }
+      tooltip: describedTooltip(item, activity, name)
     };
   });
 
@@ -407,13 +402,7 @@ function makeLeaf({ item, activity, hasNest, nestActivities, childItems = [], av
     reason: available.reason,
     requiresTarget: optionRequiresTarget(activity, item),
     usesLabel: poolLabel,
-    tooltip: {
-      title: item.name,
-      description: [
-        usesLine(item, activity ?? nestActivities[0]),
-        hasNest ? t("Features.OpenModesHint") : t("Features.ClassFeatureHint")
-      ].filter(Boolean).join(" ")
-    }
+    tooltip: describedTooltip(item, activity ?? nestActivities?.[0], item.name, { hasNest })
   };
 }
 
@@ -550,10 +539,7 @@ function familyModes(featureOption) {
       requiresTarget: optionRequiresTarget(activity, item),
       parentFeatureId: featureOption.id,
       usesLabel: formatUses(item, activity),
-      tooltip: {
-        title: name,
-        description: usesLine(item, activity)
-      }
+      tooltip: describedTooltip(item, activity, name)
     };
   });
 
@@ -577,14 +563,31 @@ function familyModes(featureOption) {
       requiresTarget: optionRequiresTarget(activity, item),
       parentFeatureId: featureOption.id,
       usesLabel: formatUses(item, activity),
-      tooltip: {
-        title: name,
-        description: usesLine(item, activity)
-      }
+      tooltip: describedTooltip(item, activity, name)
     }];
   });
 
   return [...fromActivities, ...fromItems];
+}
+
+/**
+ * Hover card: sheet description, with uses and a nest hint when those apply.
+ * @param {Item} item
+ * @param {object|null|undefined} activity
+ * @param {string} title
+ * @param {{ hasNest?: boolean }} [opts]
+ */
+function describedTooltip(item, activity, title, opts = {}) {
+  const uses = formatUses(item, activity);
+  const notes = [];
+  if (uses) notes.push(t("Features.UsesRemaining", { uses }));
+  if (opts.hasNest) notes.push(t("Features.OpenModesHint"));
+  return sheetItemTooltip(item, {
+    title: title || item?.name || "",
+    activity,
+    note: notes.join(" "),
+    fallback: opts.hasNest ? t("Features.OpenModesHint") : t("Features.ClassFeatureHint")
+  });
 }
 
 /**
@@ -887,8 +890,3 @@ function coerceNum(raw) {
   return Number.isFinite(n) ? n : null;
 }
 
-function usesLine(item, activity) {
-  const label = formatUses(item, activity);
-  if (label) return t("Features.UsesRemaining", { uses: label });
-  return t("Features.ClassFeatureHint");
-}

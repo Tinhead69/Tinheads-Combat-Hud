@@ -7,6 +7,7 @@ import {
   ARC_DEFAULTS,
   arcSegments,
   arcSegmentsForParent,
+  centerArcOnIndex,
   mainSectionById,
   normalizeMid
 } from "../ui/radial-geometry.mjs";
@@ -57,6 +58,16 @@ function assert(cond, msg) {
   assert(span > 240, "crowded action nest spreads into readable wedges");
   assert(sweep > 18, "each crowded wedge stays wide enough to read");
   assert(span < 360, "crowded nest still leaves a gap");
+}
+
+{
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(10, action.start, action.end, { maxSpanDeg: 280 });
+  const centered = centerArcOnIndex(segs, 4, action.start, action.end);
+  const north = normalizeMid(action.start, action.end);
+  assert(Math.abs(centered[4].mid - north) < 0.01, "Attack wedge sits on the Action midpoint");
+  assert(centered[5].mid > centered[4].mid, "the next wedge is clockwise of Attack");
+  assert(centered[5].start >= centered[4].end - 0.01, "Cast Spell stays beside Attack");
 }
 
 console.log(`\n${passed} assertions passed`);

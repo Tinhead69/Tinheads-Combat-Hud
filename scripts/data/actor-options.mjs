@@ -231,19 +231,44 @@ export function activityArtwork(item, activity) {
   return "";
 }
 
+const SPELL_ECONOMIES = new Set(["action", "bonus", "reaction"]);
+
+/**
+ * Which action economy a spell uses.
+ * The item's own activation wins, so a bonus spell stays on Bonus Action
+ * even when a cast activity is tagged as an action.
+ * @param {Item} item
+ * @returns {"action"|"bonus"|"reaction"}
+ */
+export function spellEconomy(item) {
+  const itemType = String(item?.system?.activation?.type ?? "");
+  if (SPELL_ECONOMIES.has(itemType)) return itemType;
+  const cast = getCastActivity(item);
+  const activityType = String(
+    cast?.activation?.type
+    ?? cast?.system?.activation?.type
+    ?? ""
+  );
+  if (SPELL_ECONOMIES.has(activityType)) return activityType;
+  return "action";
+}
+
 /**
  * Castable spells grouped by **available** spell levels only.
  * Section count for the spell-level ring = `levels.length` (never a fixed 0–9 ring).
  * A level appears only when the actor has ≥1 HUD-usable spell at that level.
+ * `economy` keeps action, bonus, and reaction spells on their own rings.
  *
  * @param {Actor} actor
+ * @param {"action"|"bonus"|"reaction"} [economy]
  * @returns {{ levels: Array<{ level: number, label: string, slots: string|null, slotHint: string, spells: object[] }>, empty: boolean }}
  */
-export function getSpellLevels(actor) {
+export function getSpellLevels(actor, economy = "action") {
   const byLevel = new Map();
 
   for (const item of actor.items ?? []) {
     if (item.type !== "spell") continue;
+    if (spellEconomy(item) !== economy) continue;
     if (!isSpellAvailableForHud(actor, item)) continue;
 
     const level = Number(item.system?.level ?? 0);
@@ -576,7 +601,8 @@ export function getActivationOptions(actor, activation) {
 
   for (const item of actor.items ?? []) {
     // Class feats are grouped/nested via getClassFeatureOptions (activation-aware).
-    if (item.type === "feat") continue;
+    // Spells are listed by economy (Cast Spell / bonus spell wedges), not as activities.
+    if (item.type === "feat" || item.type === "spell") continue;
 
     const activities = getActivities(item);
     if (activities.length) {
@@ -594,7 +620,12 @@ export function getActivationOptions(actor, activation) {
           activity,
           available: available.ok,
           reason: available.reason,
-          requiresTarget: optionRequiresTarget(activity, item)
+          requiresTarget: optionRequiresTarget(activity, item),
+          tooltip: sheetItemTooltip(item, {
+            title: activityOptionName(item, activity),
+            activity,
+            reason: available.ok ? "" : available.reason
+          })
         });
       }
     } else if ((item.system?.activation?.type ?? "") === activation) {
@@ -610,7 +641,11 @@ export function getActivationOptions(actor, activation) {
         activity: null,
         available: available.ok,
         reason: available.reason,
-        requiresTarget: optionRequiresTarget(null, item)
+        requiresTarget: optionRequiresTarget(null, item),
+        tooltip: sheetItemTooltip(item, {
+          title: item.name,
+          reason: available.ok ? "" : available.reason
+        })
       });
     }
   }
@@ -681,32 +716,71 @@ export function optionRequiresTarget(activity, item) {
  * @param {object|null} activity
  */
 export function buildSpellTooltipData(item, activity) {
-  const description = extractDescription(item);
-  const targets = formatTargets(activity, item);
-  const range = formatRange(activity, item);
-  const duration = formatDuration(activity, item);
-  const damage = formatDamage(activity, item);
-
-  return {
-    title: item.name,
-    description,
-    targets,
-    range,
-    duration,
-    damage
-  };
+  return sheetItemTooltip(item, {
+    activity,
+    targets: formatTargets(activity, item),
+    range: formatRange(activity, item),
+    duration: formatDuration(activity, item),
+    damage: formatDamage(activity, item)
+  });
 }
 
-function extractDescription(item) {
-  const raw = item.system?.description?.value
-    ?? item.system?.description
-    ?? "";
-  if (!raw) return t("Tooltip.NoDescription");
-  const text = typeof raw === "string"
-    ? raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-    : String(raw);
-  if (!text) return t("Tooltip.NoDescription");
-  return text.length > 220 ? `${text.slice(0, 217)}…` : text;
+const DESCRIPTION_LIMIT = 420;
+
+/**
+ * Plain-text description for a sheet item, preferring a real activity description.
+ * @param {Item|null|undefined} item
+ * @param {object|null|undefined} [activity]
+ * @returns {string}
+ */
+export function itemDescriptionText(item, activity = null) {
+  const fromActivity = plainText(
+    activity?.description?.value
+    ?? (typeof activity?.description === "string" ? activity.description : "")
+    ?? activity?.system?.description?.value
+    ?? ""
+  );
+  const fromItem = plainText(item?.system?.description?.value ?? item?.system?.description ?? "");
+  const text = fromActivity || fromItem;
+  if (!text) return "";
+  return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT - 1)}…` : text;
+}
+
+/**
+ * Hover card for a sheet item: its description, plus an optional note (uses, quantity).
+ * @param {Item|null|undefined} item
+ * @param {{ title?: string, activity?: object|null, note?: string, reason?: string, fallback?: string, targets?: string|null, range?: string|null, duration?: string|null, damage?: string|null }} [extras]
+ */
+export function sheetItemTooltip(item, extras = {}) {
+  const description = itemDescriptionText(item, extras.activity ?? null);
+  const parts = [extras.note, description, extras.reason].map(part => String(part ?? "").trim()).filter(Boolean);
+  if (!parts.length) parts.push(extras.fallback || t("Tooltip.NoDescription"));
+  const tip = {
+    title: extras.title || item?.name || "",
+    description: parts.join(" ")
+  };
+  if (extras.targets != null && extras.targets !== "") tip.targets = extras.targets;
+  if (extras.range != null && extras.range !== "") tip.range = extras.range;
+  if (extras.duration != null && extras.duration !== "") tip.duration = extras.duration;
+  if (extras.damage != null && extras.damage !== "") tip.damage = extras.damage;
+  return tip;
+}
+
+function plainText(raw) {
+  if (raw == null || raw === "") return "";
+  const text = typeof raw === "string" ? raw : String(raw?.value ?? raw);
+  return text
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function formatTargets(activity, item) {

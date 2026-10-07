@@ -21,7 +21,10 @@ export function contentOuterRadius(state, rings) {
     return state.abilityId ? rings.nest1Outer : rings.actionOuter;
   }
   if (state.section === "bonus" || state.section === "reaction") {
-    return state.featureNestId ? rings.flatNestOuter : rings.flatOuter;
+    if (state.castSpell && state.spellLevel != null) return rings.flatSpellOuter;
+    if (state.opportunityOpen && state.weaponNestId) return rings.flatSpellOuter;
+    if (state.featureNestId || state.castSpell || state.opportunityOpen) return rings.flatNestOuter;
+    return rings.flatOuter;
   }
   if (state.section !== "action") return rings.mainOuter;
 

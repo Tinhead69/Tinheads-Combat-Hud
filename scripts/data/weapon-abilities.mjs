@@ -10,6 +10,7 @@ import {
   getDefaultIcon,
   activityArtwork,
   optionRequiresTarget,
+  sheetItemTooltip,
   t
 } from "./actor-options.mjs";
 import { CHROME, preferDocumentImg } from "./module-icons.mjs";
@@ -119,7 +120,12 @@ export function enrichWeaponOption(weaponOption) {
     specialActivities: groups.specials,
     available: available.ok,
     reason: available.reason,
-    requiresTarget: optionRequiresTarget(attack, item)
+    requiresTarget: optionRequiresTarget(attack, item),
+    tooltip: sheetItemTooltip(item, {
+      title: weaponOption.name || item?.name,
+      activity: attack,
+      reason: available.ok ? "" : available.reason
+    })
   };
 }
 
@@ -145,10 +151,10 @@ export function getWeaponMenuOptions(weaponOption) {
       reason: attackAvail.reason,
       requiresTarget: optionRequiresTarget(attack, weaponOption.item),
       parentWeaponId: weaponOption.id,
-      tooltip: {
-        title: t("WeaponNest.Attack"),
-        description: t("WeaponNest.AttackHint")
-      }
+      tooltip: sheetItemTooltip(weaponOption.item, {
+        title: weaponOption.name || t("WeaponNest.Attack"),
+        activity: attack
+      })
     },
     {
       id: `${weaponOption.id}:use-ability`,
@@ -208,12 +214,12 @@ export function getWeaponAbilityOptions(weaponOption) {
       requiresTarget: optionRequiresTarget(activity, weaponOption.item),
       parentWeaponId: weaponOption.id,
       usesLabel,
-      tooltip: {
+      tooltip: sheetItemTooltip(weaponOption.item, {
         title: activity.name || weaponOption.name,
-        description: depleted
-          ? t("Empty.NoItemUses")
-          : t("WeaponNest.AbilityHint")
-      }
+        activity,
+        note: depleted ? t("Empty.NoItemUses") : "",
+        fallback: t("WeaponNest.AbilityHint")
+      })
     };
   });
 }

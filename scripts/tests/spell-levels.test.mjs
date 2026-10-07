@@ -47,7 +47,9 @@ function spell(partial) {
       method,
       prepared,
       description: { value: "" },
-      ...(partial.system || {})
+      ...(partial.activities ? { activities: partial.activities } : {}),
+      ...(partial.system || {}),
+      ...(partial.activation ? { activation: { type: partial.activation } } : {})
     },
     ...partial
   };
@@ -154,6 +156,24 @@ const guidance = spell({ name: "Guidance", level: 0, mode: "atwill" });
 {
   const actor = actorWith([guidance], {});
   assert(isSpellAvailableForHud(actor, guidance), "at-will cantrip/spell counts without slots");
+}
+
+// Action, bonus, and reaction spells stay on their own rings.
+{
+  const bless = spell({ name: "Bless", level: 1, prepared: 1 });
+  const hunters = spell({
+    name: "Hunter's Mark",
+    level: 1,
+    prepared: 1,
+    activation: "bonus",
+    activities: [{ type: "cast", activation: { type: "action" } }]
+  });
+  const shield = spell({ name: "Shield", level: 1, prepared: 1, activation: "reaction" });
+  const actor = actorWith([bless, hunters, shield], { spell1: { value: 3, max: 4 } });
+  const names = (economy) => getSpellLevels(actor, economy).levels.flatMap(level => level.spells.map(spell => spell.name));
+  assert(names("action").join(",") === "Bless", "only action spells are on the action cast ring");
+  assert(names("bonus").join(",") === "Hunter's Mark", "item activation keeps Hunter's Mark on bonus");
+  assert(names("reaction").join(",") === "Shield", "reaction spells stay on the reaction ring");
 }
 
 console.log(`\n${passed} assertions passed`);

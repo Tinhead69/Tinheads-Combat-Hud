@@ -78,7 +78,7 @@ function hydrateItem(raw, index, actor) {
         value: raw.identifier === "unarmed-strike" ? "unarmed" : "",
         subtype: raw.subtype || ""
       },
-      description: { value: "" }
+      description: { value: raw.description || "" }
     }
   };
   return item;

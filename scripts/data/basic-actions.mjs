@@ -8,12 +8,16 @@
 
 import {
   getActivities,
+  getActivationOptions,
   getActivationType,
   getAttackHandle,
+  getSpellLevels,
   isUnarmedItem,
   itemArtwork,
+  itemDescriptionText,
   t
 } from "./actor-options.mjs";
+import { getClassFeatureOptions } from "./action-features.mjs";
 import { enrichWeaponOption } from "./weapon-abilities.mjs";
 import { CHROME, preferDocumentImg } from "./module-icons.mjs";
 
@@ -95,9 +99,8 @@ function resolveBasicAction(actor, def) {
       source: match.source,
       tooltip: {
         title: label,
-        description: match.source === "item"
-          ? t("BasicActions.FromSheet")
-          : t("BasicActions.Hint")
+        description: itemDescriptionText(match.item, match.activity)
+          || (match.source === "item" ? t("BasicActions.FromSheet") : t("BasicActions.Hint"))
       }
     };
   }
@@ -222,9 +225,10 @@ function safeLocalize(key, fallback) {
 }
 
 /**
- * First Action radial: Attack, Dodge, Dash, Disengage, Help, Ready, Other, Abilities, Use Item.
- * Weapons and spells live under Attack. Help sits with the other core actions.
- * Shove, grapple, and mount live under Other.
+ * First Action radial.
+ * Attack sits in the middle of the list so the HUD can park it on north,
+ * with Cast Spell the next wedge clockwise. Only action-economy spells live there.
+ * Help sits with the other core actions. Shove, grapple, and mount live under Other.
  * Class features live under Abilities.
  * @param {Actor} actor
  * @param {Array<object>} [_weapons] kept so existing callers can still pass equipped weapons
@@ -234,11 +238,12 @@ export function buildActionRingEntries(actor, _weapons) {
   const basics = Object.fromEntries(getBasicActionOptions(actor).map(entry => [entry.basicId, entry]));
   const ready = basics.ready;
   return [
-    attackHub(),
     basics.dodge,
     basics.dash,
     basics.disengage,
     basics.help,
+    attackHub(),
+    castSpellHub("action"),
     {
       ...ready,
       kind: "ready",
@@ -263,21 +268,63 @@ export function buildActionRingEntries(actor, _weapons) {
   ];
 }
 
+const OPPORTUNITY_NAMES = new Set([
+  "attack of opportunity",
+  "opportunity attack",
+  "opportunity attacks"
+]);
+
 /**
- * Attack nest: equipped weapons, Unarmed Strike, and Cast Spell.
- * Ready → Attack omits Cast Spell; that choice is already on the Ready ring.
+ * Bonus Action or Reaction ring.
+ * Spells of that economy stay inside Cast Spell. They are not their own wedges.
+ * Bonus always offers Cast Spell. Reaction always offers Attack of Opportunity,
+ * and Cast Spell only when reaction spells exist.
  * @param {Actor} actor
- * @param {Array<object>} weapons from getEquippedWeapons
- * @param {{ includeCast?: boolean }} [options]
+ * @param {"bonus"|"reaction"} activation
  * @returns {Array<object>}
  */
-export function getAttackNestEntries(actor, weapons, options = {}) {
+export function buildEconomyRingEntries(actor, activation) {
+  const spells = getSpellLevels(actor, activation);
+  const features = getClassFeatureOptions(actor, activation)
+    .filter(entry => !isOpportunityName(entry.name));
+  const others = getActivationOptions(actor, activation)
+    .filter(entry => !isOpportunityName(entry.name));
+  const entries = [];
+  if (activation === "reaction") entries.push(opportunityHub());
+  if (activation === "bonus" || !spells.empty) entries.push(castSpellHub(activation));
+  return [...entries, ...features, ...others];
+}
+
+function isOpportunityName(name) {
+  return OPPORTUNITY_NAMES.has(String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim());
+}
+
+function opportunityHub() {
+  return {
+    kind: "opportunity",
+    id: "attack-of-opportunity",
+    name: t("Opportunity.Label"),
+    img: CHROME.attack,
+    available: true,
+    tooltip: {
+      title: t("Opportunity.Label"),
+      description: t("Opportunity.Hint")
+    }
+  };
+}
+
+/**
+ * Attack nest: equipped weapons and Unarmed Strike.
+ * Cast Spell is its own Action-ring wedge, and Ready already has one too.
+ * @param {Actor} actor
+ * @param {Array<object>} weapons from getEquippedWeapons
+ * @returns {Array<object>}
+ */
+export function getAttackNestEntries(actor, weapons) {
   const armed = (weapons ?? [])
     .filter(weapon => !isUnarmedItem(weapon.item))
     .map(weapon => enrichWeaponOption({ kind: "weapon", ...weapon }));
-  const entries = [...armed, unarmedStrikeOption(actor)];
-  if (options.includeCast !== false) entries.push(castSpellHub());
-  return entries;
+  return [...armed, unarmedStrikeOption(actor)];
 }
 
 /**
@@ -332,10 +379,11 @@ function attackHub() {
   };
 }
 
-function castSpellHub() {
+function castSpellHub(economy = "action") {
   return {
     kind: "cast",
-    id: "cast-spell",
+    id: economy === "action" ? "cast-spell" : `cast-spell-${economy}`,
+    economy,
     name: t("Sections.CastSpell"),
     img: CHROME.castSpell,
     available: true,

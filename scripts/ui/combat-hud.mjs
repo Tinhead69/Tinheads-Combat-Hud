@@ -5,13 +5,13 @@
 import {
   actorFromToken,
   canUseActor,
-  getActivationOptions,
   getEquippedWeapons,
   getSpellLevels,
   t
 } from "../data/actor-options.mjs";
 import {
   buildActionRingEntries,
+  buildEconomyRingEntries,
   getAttackNestEntries,
   getReadyNestEntries
 } from "../data/basic-actions.mjs";
@@ -30,6 +30,7 @@ import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
   arcSegmentsForParent,
+  centerArcOnIndex,
   mainSectionAngles,
   mainSectionById,
   sectionAnchor,
@@ -37,6 +38,7 @@ import {
   wedgeAnchor
 } from "./radial-geometry.mjs";
 import { appendHubArt, appendWedgeArt } from "./wedge-art.mjs";
+import { wedgeCaptionLines } from "./wedge-text.mjs";
 import {
   DRAG_THRESHOLD_PX,
   clampHudCenter,
@@ -70,7 +72,8 @@ const CY = SIZE / 2;
  *  nest2Inner: number, nest2Outer: number,
  *  nest3Inner: number, nest3Outer: number,
  *  flatInner: number, flatOuter: number,
- *  flatNestInner: number, flatNestOuter: number
+ *  flatNestInner: number, flatNestOuter: number,
+ *  flatSpellInner: number, flatSpellOuter: number
  * }>} */
 export const RINGS = Object.freeze({
   hub: 34,
@@ -87,7 +90,9 @@ export const RINGS = Object.freeze({
   flatInner: 116,
   flatOuter: 236,
   flatNestInner: 244,
-  flatNestOuter: 308
+  flatNestOuter: 308,
+  flatSpellInner: 316,
+  flatSpellOuter: 372
 });
 
 /** @type {CombatHud|null} */
@@ -111,6 +116,8 @@ export class CombatHud {
     this.state = {
       section: null,       // action | checks | bonus | reaction
       castSpell: false,
+      opportunityOpen: false,
+      spellEconomy: "action",
       useItem: false,
       weaponNestId: null,  // special weapon: its attack plus abilities
       useAbility: false,   // weapon ability modes nest open
@@ -123,6 +130,7 @@ export class CombatHud {
     this._layout = null;
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onActorUpdate = this._onActorUpdate.bind(this);
+    this._onCombatUpdate = this._onCombatUpdate.bind(this);
   }
 
   /**
@@ -177,6 +185,9 @@ export class CombatHud {
     this.svg.setAttribute("height", String(SIZE));
     this.svg.setAttribute("viewBox", `0 0 ${SIZE} ${SIZE}`);
     this.svg.addEventListener("pointerleave", () => this._scheduleCollapse(null));
+    this.svg.addEventListener("pointermove", (ev) => {
+      if (!this.tooltipEl?.hidden) this._positionTooltip(ev);
+    });
     this.stage.appendChild(this.svg);
 
     this.tooltipEl = document.createElement("div");
@@ -189,6 +200,8 @@ export class CombatHud {
     window.addEventListener("resize", this._onResize);
     Hooks.on("updateActor", this._onActorUpdate);
     Hooks.on("updateItem", this._onActorUpdate);
+    Hooks.on("updateCombat", this._onCombatUpdate);
+    Hooks.on("deleteCombat", this._onCombatUpdate);
 
     const saved = loadHudPosition();
     this.position = saved ? { ...saved } : defaultHudCenter();
@@ -207,6 +220,8 @@ export class CombatHud {
     window.removeEventListener("resize", this._onResize);
     Hooks.off("updateActor", this._onActorUpdate);
     Hooks.off("updateItem", this._onActorUpdate);
+    Hooks.off("updateCombat", this._onCombatUpdate);
+    Hooks.off("deleteCombat", this._onCombatUpdate);
     this.hideTooltip();
     this.root?.remove();
     this.root = null;
@@ -234,8 +249,14 @@ export class CombatHud {
     }
   }
 
+  _onCombatUpdate() {
+    if (!this.root) return;
+    this._draw();
+  }
+
   _draw() {
     if (!this.svg) return;
+    this._redrawing = true;
     this.svg.replaceChildren();
     _clipSeq = 0;
 
@@ -268,13 +289,26 @@ export class CombatHud {
     } else if (this.state.section === "bonus") {
       this._drawEconomyRing("bonus");
       if (this.state.featureNestId) this._drawFeatureModeRing();
+      if (this.state.castSpell) {
+        this._drawSpellLevelRing();
+        if (this.state.spellLevel != null) this._drawSpellRing(this.state.spellLevel);
+      }
     } else if (this.state.section === "reaction") {
       this._drawEconomyRing("reaction");
       if (this.state.featureNestId) this._drawFeatureModeRing();
+      if (this.state.opportunityOpen) {
+        this._drawOpportunityNest();
+        if (this.state.weaponNestId) this._drawSpecialWeaponRing();
+      }
+      if (this.state.castSpell) {
+        this._drawSpellLevelRing();
+        if (this.state.spellLevel != null) this._drawSpellRing(this.state.spellLevel);
+      }
     }
 
     // Nests change the occupied radius — keep arcs on-screen.
     this._clampToViewport();
+    this._redrawing = false;
   }
 
   _applyStagePosition() {
@@ -358,13 +392,13 @@ export class CombatHud {
   }
 
   async _onEndTurnClick() {
-    const endTurn = getEndTurnState();
+    const endTurn = getEndTurnState(this._endTurnSubject());
     if (!endTurn.enabled) {
       ui.notifications.warn(endTurn.reason || t("EndTurn.Unavailable"));
       return;
     }
     try {
-      await endCombatTurn();
+      await endCombatTurn(this._endTurnSubject());
       this.close();
     } catch (err) {
       console.error("Tinhead's Combat Hud | end turn failed", err);
@@ -400,10 +434,12 @@ export class CombatHud {
 
   _resetActionNests() {
     this.state.attackOpen = false;
+    this.state.opportunityOpen = false;
     this.state.readyOpen = false;
     this.state.otherOpen = false;
     this.state.abilitiesOpen = false;
     this.state.castSpell = false;
+    this.state.spellEconomy = "action";
     this.state.useItem = false;
     this.state.weaponNestId = null;
     this.state.useAbility = false;
@@ -415,7 +451,7 @@ export class CombatHud {
     const state = this.state;
     return [
       state.attackOpen, state.readyOpen, state.otherOpen, state.abilitiesOpen, state.useItem,
-      state.castSpell, state.weaponNestId, state.featureNestId, state.spellLevel
+      state.castSpell, state.spellEconomy, state.weaponNestId, state.featureNestId, state.spellLevel
     ].join("|");
   }
 
@@ -434,7 +470,8 @@ export class CombatHud {
       this.state.otherOpen = kind === "other";
       this.state.abilitiesOpen = kind === "abilities";
       this.state.useItem = kind === "useItem";
-      this.state.castSpell = false;
+      this.state.castSpell = kind === "cast";
+      if (kind === "cast") this.state.spellEconomy = entry.economy || "action";
       this.state.weaponNestId = null;
       this.state.featureNestId = null;
       this.state.spellLevel = null;
@@ -443,6 +480,7 @@ export class CombatHud {
       this.state.attackOpen = kind === "attack";
       this.state.abilitiesOpen = false;
       this.state.castSpell = kind === "cast";
+      if (kind === "cast") this.state.spellEconomy = entry.economy || "action";
       this.state.weaponNestId = null;
       this.state.featureNestId = null;
       this.state.spellLevel = null;
@@ -508,8 +546,12 @@ export class CombatHud {
     this.svg.appendChild(c);
   }
 
+  _endTurnSubject() {
+    return this.tokenDoc ?? this.actor ?? null;
+  }
+
   _drawHub() {
-    const endTurn = getEndTurnState();
+    const endTurn = getEndTurnState(this._endTurnSubject());
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.classList.add("tch-hub", "tch-hub--has-art");
     if (!endTurn.enabled) g.classList.add("tch-hub--disabled");
@@ -662,7 +704,8 @@ export class CombatHud {
       parent: actionMain,
       source: "action",
       groupName: "action",
-      store: "action"
+      store: "action",
+      centerOnId: "attack"
     });
   }
 
@@ -678,7 +721,7 @@ export class CombatHud {
 
   _drawAttackNest(depth) {
     const weapons = getEquippedWeapons(this.actor);
-    const entries = getAttackNestEntries(this.actor, weapons, { includeCast: depth < 3 });
+    const entries = getAttackNestEntries(this.actor, weapons);
     const parent = depth >= 3
       ? (this._layout?.readyAttackSeg ?? this._parentSeg("attack"))
       : this._parentSeg("attack");
@@ -721,6 +764,18 @@ export class CombatHud {
     });
   }
 
+  _drawOpportunityNest() {
+    const entries = getAttackNestEntries(this.actor, getEquippedWeapons(this.actor));
+    this._drawChoiceRing(entries, {
+      depth: 2,
+      parent: this._layout?.opportunitySeg ?? mainSectionById("reaction"),
+      source: "attack",
+      groupName: "opportunity-attack",
+      store: "attack",
+      band: { inner: RINGS.flatNestInner, outer: RINGS.flatNestOuter }
+    });
+  }
+
   _drawSpecialWeaponRing() {
     const entries = this._layout?.attackEntries ?? [];
     const segs = this._layout?.attackSegs ?? [];
@@ -728,12 +783,14 @@ export class CombatHud {
     const weapon = entries[idx];
     if (!weapon) return;
     const parent = segs[idx] ?? this._parentSeg("attack");
+    const onReaction = this.state.section === "reaction";
     const options = getSpecialWeaponOptions(weapon);
     this._drawChoiceRing(options, {
       depth: (this._layout?.attackDepth ?? 2) + 1,
       parent,
       source: "weapon",
-      groupName: "weapon-special"
+      groupName: "weapon-special",
+      band: onReaction ? { inner: RINGS.flatSpellInner, outer: RINGS.flatSpellOuter } : undefined
     });
   }
 
@@ -745,11 +802,13 @@ export class CombatHud {
    *   source: string,
    *   groupName: string,
    *   store?: string,
-   *   empty?: string
+   *   empty?: string,
+   *   centerOnId?: string,
+   *   band?: { inner: number, outer: number }
    * }} cfg
    */
   _drawChoiceRing(entries, cfg) {
-    const band = this._band(cfg.depth);
+    const band = cfg.band ?? this._band(cfg.depth);
     const group = this._ringGroup(cfg.groupName, cfg.source === "action" ? "action" : this.state.section);
     const parent = cfg.parent ?? mainSectionById("action");
     if (!entries.length) {
@@ -759,12 +818,16 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(
+    let segs = arcSegmentsForParent(
       entries.length,
       parent.start,
       parent.end,
       { maxSpanDeg: cfg.depth >= 3 ? 240 : 280 }
     );
+    if (cfg.centerOnId) {
+      const centerIndex = entries.findIndex(entry => entry.kind === cfg.centerOnId || entry.id === cfg.centerOnId);
+      if (centerIndex >= 0) segs = centerArcOnIndex(segs, centerIndex, parent.start, parent.end);
+    }
 
     if (cfg.store === "action") {
       this._layout = {
@@ -814,12 +877,12 @@ export class CombatHud {
         active: this._entryActive(entry)
       });
 
-      g.addEventListener("pointerenter", () => {
+      g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
         const changed = cfg.source === "weapon" ? false : this._applyHub(entry, cfg.source);
-        if (entry.tooltip) this.showTooltip(entry.tooltip, g);
-        else this.showTooltip({ title: entry.name, description: entry.reason || "" }, g);
+        const tip = entry.tooltip || { title: entry.name, description: entry.reason || "" };
         if (changed) this._draw();
+        this.showTooltip(tip, g, ev);
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
@@ -946,11 +1009,11 @@ export class CombatHud {
         active: this.state.abilityId === opt.abilityId
       });
 
-      g.addEventListener("pointerenter", () => {
+      g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
         this.state.abilityId = opt.abilityId;
         this._draw();
-        this.showTooltip(opt.tooltip, g);
+        this.showTooltip(opt.tooltip, g, ev);
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
@@ -1074,10 +1137,11 @@ export class CombatHud {
 
   _drawSpellLevelRing() {
     // Partial arc anchored on Cast Spell — section count = available levels only.
-    const { levels, empty } = getSpellLevels(this.actor);
+    const economy = this.state.spellEconomy || "action";
+    const { levels, empty } = getSpellLevels(this.actor, economy);
     const group = this._ringGroup("levels");
     const parent = this._layout?.castSeg ?? this._parentSeg("cast");
-    const band = this._band((this._layout?.castDepth ?? 2) + 1);
+    const band = this._castLevelBand();
     if (this._layout) this._layout.levelDepth = (this._layout.castDepth ?? 2) + 1;
 
     if (empty) {
@@ -1111,7 +1175,7 @@ export class CombatHud {
         active: this.state.spellLevel === levelInfo.level
       });
 
-      g.addEventListener("pointerenter", () => {
+      g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
         this.state.spellLevel = levelInfo.level;
         this._draw();
@@ -1121,7 +1185,7 @@ export class CombatHud {
         this.showTooltip({
           title: levelInfo.slots ? `${levelInfo.label} · ${levelInfo.slots}` : levelInfo.label,
           description
-        }, g);
+        }, g, ev);
       });
       g.addEventListener("pointerleave", (ev) => {
         if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("cast");
@@ -1133,8 +1197,23 @@ export class CombatHud {
     this.svg.appendChild(group);
   }
 
+  _castLevelBand() {
+    if (this.state.section === "bonus" || this.state.section === "reaction") {
+      return { inner: RINGS.flatNestInner, outer: RINGS.flatNestOuter };
+    }
+    return this._band((this._layout?.castDepth ?? 2) + 1);
+  }
+
+  _castSpellBand() {
+    if (this.state.section === "bonus" || this.state.section === "reaction") {
+      return { inner: RINGS.flatSpellInner, outer: RINGS.flatSpellOuter };
+    }
+    return this._band((this._layout?.levelDepth ?? 3) + 1);
+  }
+
   _drawSpellRing(level) {
-    const { levels } = getSpellLevels(this.actor);
+    const economy = this.state.spellEconomy || "action";
+    const { levels } = getSpellLevels(this.actor, economy);
     const levelInfo = levels.find(l => l.level === level);
     const spells = levelInfo?.spells ?? [];
     const group = this._ringGroup("spells");
@@ -1146,7 +1225,7 @@ export class CombatHud {
     const li = layoutLevels.findIndex(l => l.level === level);
     if (li >= 0 && layoutSegs[li]) parent = layoutSegs[li];
 
-    const spellBand = this._band((this._layout?.levelDepth ?? 3) + 1);
+    const spellBand = this._castSpellBand();
 
     if (!spells.length) {
       this._emptyLabel(group, t("Empty.NoSpellsAtLevel"), (spellBand.inner + spellBand.outer) / 2);
@@ -1193,14 +1272,12 @@ export class CombatHud {
   }
 
   /**
-   * Bonus Action / Reaction ring: class features (activation-matched) + other items.
+   * Bonus Action / Reaction ring: Cast Spell, spells of that economy, class features, other items.
    * Multi-mode features nest the same way as on Action.
    * @param {"bonus"|"reaction"} activation
    */
   _drawEconomyRing(activation) {
-    const features = getClassFeatureOptions(this.actor, activation);
-    const others = getActivationOptions(this.actor, activation);
-    const entries = [...features, ...others];
+    const entries = buildEconomyRingEntries(this.actor, activation);
     const group = this._ringGroup(activation);
     const main = mainSectionById(activation === "bonus" ? "bonus" : "reaction");
 
@@ -1228,6 +1305,13 @@ export class CombatHud {
     entries.forEach((opt, i) => {
       const seg = segs[i];
       const isFeatureNest = opt.kind === "feature" && opt.hasNest;
+      const isCast = opt.kind === "cast";
+      const isOpportunity = opt.kind === "opportunity";
+      if (isOpportunity) this._layout.opportunitySeg = seg;
+      if (isCast) {
+        this._layout.castSeg = seg;
+        this._layout.castDepth = 1;
+      }
       const caption = opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name;
       const g = this._leafSegment({
         start: seg.start,
@@ -1237,19 +1321,51 @@ export class CombatHud {
         caption,
         img: opt.img,
         unavailable: opt.available === false,
-        active: isFeatureNest && opt.id === this.state.featureNestId
+        active: (isFeatureNest && opt.id === this.state.featureNestId)
+          || (isCast && this.state.castSpell)
+          || (isOpportunity && this.state.opportunityOpen)
       });
 
-      g.addEventListener("pointerenter", () => {
+      g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
-        if (isFeatureNest) {
-          this.state.featureNestId = opt.id;
-          this._draw();
-        } else if (this.state.featureNestId) {
+        if (isCast) {
+          const economy = opt.economy || activation;
+          const changed = !this.state.castSpell
+            || this.state.spellEconomy !== economy
+            || this.state.featureNestId
+            || this.state.opportunityOpen;
           this.state.featureNestId = null;
+          this.state.opportunityOpen = false;
+          this.state.weaponNestId = null;
+          this.state.castSpell = true;
+          this.state.spellEconomy = economy;
+          if (changed) this.state.spellLevel = null;
+          if (changed) this._draw();
+        } else if (isOpportunity) {
+          const changed = !this.state.opportunityOpen || this.state.castSpell || this.state.featureNestId;
+          this.state.featureNestId = null;
+          this.state.castSpell = false;
+          this.state.spellLevel = null;
+          this.state.opportunityOpen = true;
+          if (changed) this.state.weaponNestId = null;
+          if (changed) this._draw();
+        } else if (isFeatureNest) {
+          const changed = this.state.featureNestId !== opt.id || this.state.castSpell || this.state.opportunityOpen;
+          this.state.castSpell = false;
+          this.state.spellLevel = null;
+          this.state.opportunityOpen = false;
+          this.state.weaponNestId = null;
+          this.state.featureNestId = opt.id;
+          if (changed) this._draw();
+        } else if (this.state.featureNestId || this.state.castSpell || this.state.opportunityOpen) {
+          this.state.featureNestId = null;
+          this.state.castSpell = false;
+          this.state.spellLevel = null;
+          this.state.opportunityOpen = false;
+          this.state.weaponNestId = null;
           this._draw();
         }
-        this.showTooltip(opt.tooltip || { title: opt.name, description: opt.reason || "" }, g);
+        this.showTooltip(opt.tooltip || { title: opt.name, description: opt.reason || "" }, g, ev);
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
@@ -1257,7 +1373,7 @@ export class CombatHud {
       });
       g.addEventListener("pointerdown", async (ev) => {
         ev.stopPropagation();
-        if (isFeatureNest) return;
+        if (isFeatureNest || isCast || isOpportunity) return;
         await this._onLeafClick(opt);
       });
 
@@ -1328,10 +1444,19 @@ export class CombatHud {
       const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
       const asLabel = !cfg.label;
       cap.classList.add(asLabel ? "tch-segment__label" : "tch-segment__caption");
+      const lines = wedgeCaptionLines(cfg.caption);
+      const lineH = 14;
+      const origin = anchor.y + (cfg.label ? 10 : 0);
+      const startY = origin - ((lines.length - 1) * lineH) / 2;
       cap.setAttribute("x", String(anchor.x));
-      cap.setAttribute("y", String(anchor.y + (cfg.label ? 8 : 0)));
-      const short = cfg.caption.length > 14 ? `${cfg.caption.slice(0, 12)}…` : cfg.caption;
-      cap.textContent = short;
+      cap.setAttribute("y", String(startY));
+      lines.forEach((line, index) => {
+        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        tspan.setAttribute("x", String(anchor.x));
+        tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
+        tspan.textContent = line;
+        cap.appendChild(tspan);
+      });
       g.appendChild(cap);
     }
 
@@ -1416,6 +1541,7 @@ export class CombatHud {
   }
 
   hideTooltip() {
+    if (this._redrawing) return;
     if (!this.tooltipEl) return;
     this.tooltipEl.hidden = true;
     this.tooltipEl.innerHTML = "";
@@ -1465,6 +1591,11 @@ export class CombatHud {
         this.state.abilityId = null;
       } else if (keep === "bonus" || keep === "reaction") {
         this.state.featureNestId = null;
+        this.state.castSpell = false;
+        this.state.spellLevel = null;
+        this.state.spellEconomy = "action";
+        this.state.opportunityOpen = false;
+        this.state.weaponNestId = null;
       } else if (keep === "cast") {
         this.state.spellLevel = null;
       } else if (keep === "useItem") {

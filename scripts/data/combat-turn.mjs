@@ -7,13 +7,14 @@ import { canResolveLocally, socketlibModuleActive } from "./permissions.mjs";
 
 /**
  * Permission rule:
- * - Requires an active encounter with a current combatant
- * - GM / OWNER of current combatant: local nextTurn
- * - OBSERVER on current combatant actor: may request via socketlib (proxy)
+ * - Requires an active encounter whose current combatant is this HUD token
+ * - GM / OWNER of that combatant: local nextTurn
+ * - An owner who cannot update Combat proxies the request to the GM
  *
+ * @param {TokenDocument|Actor|null} [subject] Token the HUD is open for, or its actor
  * @returns {{ enabled: boolean, reason: string|null, combatant: object|null, proxy: boolean }}
  */
-export function getEndTurnState() {
+export function getEndTurnState(subject = null) {
   const combat = game.combat;
   if (!combat) {
     return { enabled: false, reason: t("EndTurn.NoCombat"), combatant: null, proxy: false };
@@ -24,19 +25,39 @@ export function getEndTurnState() {
     return { enabled: false, reason: t("EndTurn.NoCombatant"), combatant: null, proxy: false };
   }
 
-  if (game.user?.isGM) {
-    return { enabled: true, reason: null, combatant, proxy: false };
+  if (!isActiveCombatant(subject, combatant)) {
+    return { enabled: false, reason: t("EndTurn.NotYourTurn"), combatant, proxy: false };
   }
 
-  if (ownsCombatant(combatant)) {
-    return { enabled: true, reason: null, combatant, proxy: false };
-  }
-
-  if (canProxyEndTurn(combatant)) {
-    return { enabled: true, reason: null, combatant, proxy: true };
+  if (game.user?.isGM || ownsCombatant(combatant)) {
+    const proxy = !game.user?.isGM && !canResolveLocally(combatant.actor);
+    return { enabled: true, reason: null, combatant, proxy };
   }
 
   return { enabled: false, reason: t("EndTurn.NotYourTurn"), combatant, proxy: false };
+}
+
+/**
+ * The HUD subject is the token (or actor) currently selected in the combat tracker.
+ * @param {TokenDocument|Actor|null} subject
+ * @param {object} combatant
+ */
+export function isActiveCombatant(subject, combatant) {
+  if (!subject || !combatant) return false;
+  const doc = subject.document ?? subject;
+  const currentTokenId = combatant.tokenId ?? combatant.token?.id ?? null;
+  const currentActorId = combatant.actorId ?? combatant.actor?.id ?? null;
+
+  const isToken = doc.documentName === "Token" || doc.actor || doc.actorId;
+  if (isToken) {
+    const tokenId = doc.id ?? null;
+    if (tokenId && currentTokenId) return tokenId === currentTokenId;
+    const actorId = doc.actor?.id ?? doc.actorId ?? null;
+    return !!actorId && !!currentActorId && !currentTokenId && actorId === currentActorId;
+  }
+
+  const actorId = doc.id ?? null;
+  return !!actorId && actorId === currentActorId;
 }
 
 function ownsCombatant(combatant) {
@@ -54,24 +75,13 @@ function ownsCombatant(combatant) {
   return canResolveLocally(actor);
 }
 
-function canProxyEndTurn(combatant) {
-  const actor = combatant?.actor;
-  if (!actor || !game.user) return false;
-  try {
-    if (actor.testUserPermission?.(game.user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER)) return true;
-    if (actor.testUserPermission?.(game.user, "OBSERVER")) return true;
-  } catch (_) {
-    /* ignore */
-  }
-  return false;
-}
-
 /**
  * Advance combat via Foundry 13 Combat#nextTurn(), or proxy to GM.
+ * @param {TokenDocument|Actor|null} [subject]
  * @returns {Promise<object>}
  */
-export async function endCombatTurn() {
-  const state = getEndTurnState();
+export async function endCombatTurn(subject = null) {
+  const state = getEndTurnState(subject);
   if (!state.enabled) {
     const err = new Error(state.reason || t("EndTurn.Unavailable"));
     err.tchEndTurn = true;

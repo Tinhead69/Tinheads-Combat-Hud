@@ -36,7 +36,7 @@
   },
   "items": [
     { "name": "Divine Sense", "type": "feat", "img": "icons/creatures/eyes/human-single-blue.webp", "identifier": "divine-sense", "uses": { "max": "1 + @abilities.cha.mod", "spent": 0 }, "activities": [{ "name": "Divine Sense", "type": "utility", "activation": "action" }] },
-    { "name": "Lay On Hands", "type": "feat", "img": "icons/magic/light/orbs-hand-gray.webp", "identifier": "lay-on-hands", "uses": { "max": "@classes.paladin.levels * 5", "spent": 35 }, "activities": [
+    { "name": "Lay On Hands", "type": "feat", "img": "icons/magic/light/orbs-hand-gray.webp", "identifier": "lay-on-hands", "description": "Your blessed touch can heal wounds, cure disease, or neutralize poison.", "uses": { "max": "@classes.paladin.levels * 5", "spent": 35 }, "activities": [
       { "name": "Lay on Hands: Heal", "type": "heal", "activation": "action", "img": "icons/magic/light/orbs-hand-gray.webp" },
       { "name": "Lay on Hands: Cure Disease", "type": "utility", "activation": "action", "img": "icons/magic/light/orbs-hand-gray.webp" },
       { "name": "Lay on Hands: Neutralize Poison", "type": "utility", "activation": "action", "img": "icons/magic/light/orbs-hand-gray.webp" }
@@ -97,7 +97,7 @@
     { "name": "Suffocation", "type": "feat", "img": "icons/magic/air/wind-tornado-funnel-blue.webp", "identifier": "suffocation", "activities": [{ "name": "Suffocation", "type": "utility", "activation": "special" }] },
     { "name": "Ready Spell", "type": "feat", "img": "icons/magic/nature/plant-sprout-hand-blue.webp", "identifier": "ready-spell", "activities": [{ "name": "Ready Spell", "type": "utility", "activation": "action" }] },
 
-    { "name": "Hazirawn", "type": "weapon", "img": "icons/weapons/swords/greatsword-guard-split-eyes.webp", "identifier": "hazirawn", "equipped": true, "activities": [
+    { "name": "Hazirawn", "type": "weapon", "img": "icons/weapons/swords/greatsword-guard-split-eyes.webp", "identifier": "hazirawn", "equipped": true, "description": "A sentient greatsword. A wounding strike stops the target from regaining hit points.", "activities": [
       { "name": "Attack", "type": "attack", "activation": "action" },
       { "name": "Wounding", "type": "save", "activation": "action" },
       { "name": "Detect Evil and Good", "type": "cast", "activation": "action" },
@@ -116,13 +116,13 @@
 
     { "name": "Banishment (Legacy)", "type": "spell", "img": "icons/magic/unholy/orb-swirling-teal.webp", "level": 4, "prepared": 2, "activation": "action" },
     { "name": "Dimension Door (Legacy)", "type": "spell", "img": "icons/magic/movement/portal-vortex-orange.webp", "level": 4, "prepared": 2, "activation": "action" },
-    { "name": "Hunter's Mark (Legacy)", "type": "spell", "img": "icons/weapons/bows/shortbow-recurve-yellow.webp", "level": 1, "prepared": 2, "activation": "bonus", "activities": [
+    { "name": "Hunter's Mark (Legacy)", "type": "spell", "img": "icons/weapons/bows/shortbow-recurve-yellow.webp", "level": 1, "prepared": 2, "activation": "bonus", "description": "Mark a creature. You deal extra damage to it, and you have advantage on checks to find it.", "activities": [
       { "name": "Cast", "type": "utility", "activation": "action" },
       { "name": "Bonus Damage", "type": "damage", "activation": "" },
       { "name": "Move Hunter's Mark", "type": "utility", "activation": "action" }
     ] },
     { "name": "Staggering Smite (Legacy)", "type": "spell", "img": "icons/weapons/hammers/hammer-double-glowing-yellow.webp", "level": 4, "prepared": 1, "activation": "bonus" },
-    { "name": "Bane (Legacy)", "type": "spell", "img": "icons/magic/unholy/hands-praying-fire-green.webp", "level": 1, "prepared": 2, "activation": "action" },
+    { "name": "Bane (Legacy)", "type": "spell", "img": "icons/magic/unholy/hands-praying-fire-green.webp", "level": 1, "prepared": 2, "activation": "action", "description": "Up to three creatures you can see subtract a die from their attack rolls and saving throws." },
     { "name": "Compelled Duel (Legacy)", "type": "spell", "img": "icons/skills/melee/weapons-crossed-swords-white-blue.webp", "level": 1, "prepared": 1, "activation": "bonus" },
     { "name": "Crusader's Mantle (Legacy)", "type": "spell", "img": "icons/skills/melee/strike-hammer-destructive-blue.webp", "level": 3, "prepared": 1, "activation": "action" },
     { "name": "Haste (Legacy)", "type": "spell", "img": "icons/magic/control/buff-flight-wings-runes-red-yellow.webp", "level": 3, "prepared": 2, "activation": "action" },
@@ -133,6 +133,6 @@
     { "name": "Protection from Poison (Legacy)", "type": "spell", "img": "icons/magic/defensive/shield-barrier-flaming-diamond-teal-purple.webp", "level": 2, "prepared": 1, "activation": "action" },
     { "name": "Searing Smite (Legacy)", "type": "spell", "img": "icons/magic/fire/dagger-rune-enchant-flame-orange.webp", "level": 1, "prepared": 1, "activation": "bonus" },
 
-    { "name": "Potion of Healing (Superior)", "type": "consumable", "img": "icons/consumables/potions/bottle-round-corked-red.webp", "identifier": "potion-of-healing-superior", "quantity": 11, "activities": [{ "name": "Drink", "type": "heal", "activation": "action" }] }
+    { "name": "Potion of Healing (Superior)", "type": "consumable", "img": "icons/consumables/potions/bottle-round-corked-red.webp", "identifier": "potion-of-healing-superior", "quantity": 11, "description": "Drink this potion to regain hit points.", "activities": [{ "name": "Drink", "type": "heal", "activation": "action" }] }
   ]
 }

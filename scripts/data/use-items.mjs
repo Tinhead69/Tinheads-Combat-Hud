@@ -11,6 +11,7 @@ import {
   getDefaultIcon,
   itemArtwork,
   optionRequiresTarget,
+  sheetItemTooltip,
   t
 } from "./actor-options.mjs";
 
@@ -46,11 +47,11 @@ export function getUsableInventoryItems(actor) {
       available: attempt.ok,
       reason: attempt.reason,
       requiresTarget: optionRequiresTarget(activity, item),
-      tooltip: {
-        title: item.name,
-        description: summarizeItem(item),
-        targets: qty >= 0 ? `×${qty}` : null
-      }
+      tooltip: sheetItemTooltip(item, {
+        activity,
+        targets: Number.isFinite(qty) && qty >= 0 ? `×${qty}` : null,
+        reason: attempt.ok ? "" : attempt.reason
+      })
     });
   }
 
@@ -93,10 +94,3 @@ function pickUseActivity(item, activities) {
     ?? getAttackHandle(item).activity;
 }
 
-function summarizeItem(item) {
-  const raw = item.system?.description?.value ?? "";
-  if (!raw) return t("Tooltip.NoDescription");
-  const text = String(raw).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  if (!text) return t("Tooltip.NoDescription");
-  return text.length > 160 ? `${text.slice(0, 157)}…` : text;
-}

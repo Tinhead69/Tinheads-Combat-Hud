@@ -12,10 +12,10 @@
       "Reaction": "Reaction",
       "CastSpell": "Cast Spell",
       "UseItem": "Use Item",
-      "ActionHint": "Attack, Dodge, Dash, Disengage, Help, Ready, or Other.",
+      "ActionHint": "Attack, Cast Spell, Dodge, Dash, Disengage, Help, Ready, or Other.",
       "ChecksHint": "Ability checks and saving throws.",
-      "BonusHint": "Bonus Action options from your sheet.",
-      "ReactionHint": "Reaction options from your sheet.",
+      "BonusHint": "Bonus actions and spells you cast as a bonus action.",
+      "ReactionHint": "Attack of Opportunity, plus reactions from your sheet.",
       "CastSpellHint": "Choose a spell level, then a spell to cast.",
       "UseItemHint": "Potions, scrolls, and other consumables."
     },
@@ -49,9 +49,13 @@
     },
     "AttackNest": {
       "Label": "Attack",
-      "Hint": "Equipped weapons, unarmed strike, or a spell.",
+      "Hint": "Equipped weapons and unarmed strike.",
       "Unarmed": "Unarmed Strike",
       "UnarmedHint": "Strike without a weapon."
+    },
+    "Opportunity": {
+      "Label": "Attack of Opportunity",
+      "Hint": "Make a melee attack as a reaction when a creature leaves your reach."
     },
     "ReadyNest": {
       "Hint": "Choose the action you are readying.",
@@ -125,7 +129,7 @@
     "EndTurn": {
       "Label": "End Turn",
       "Sub": "next",
-      "Hint": "Advance the combat tracker to the next combatant.",
+      "Hint": "End this token's turn. Only the active combatant can advance the tracker.",
       "NoCombat": "No active combat.",
       "NoCombatant": "No current combatant.",
       "NotYourTurn": "Not your turn to end.",

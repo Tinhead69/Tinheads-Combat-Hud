@@ -112,8 +112,10 @@ async function onRemoteEndTurn(payload) {
   }
   const combatant = combat.combatant;
   const actor = combatant?.actor ?? null;
-  // End Turn proxy: requester must be OBSERVER+ on the current combatant actor (or GM).
-  assertRequesterMayProxy(requester, actor);
+  // End Turn proxy: requester must own the current combatant (or be GM).
+  if (!requester?.isGM && !userOwnsActor(actor, requester)) {
+    return { ok: false, error: t("EndTurn.NotYourTurn") };
+  }
 
   try {
     const { executeEndTurnPayload } = await import("../data/combat-turn.mjs");
@@ -141,6 +143,15 @@ export function assertRequesterMayProxy(requester, actor) {
     throw new Error(t("Proxy.Unauthorized"));
   }
   return true;
+}
+
+function userOwnsActor(actor, user) {
+  if (!actor || !user) return false;
+  if (user.isGM) return true;
+  if (actor.isOwner && user.id === game.user?.id) return true;
+  if (actor.testUserPermission?.(user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER)) return true;
+  if (actor.testUserPermission?.(user, "OWNER")) return true;
+  return false;
 }
 
 export function userHasObserver(actor, user) {
