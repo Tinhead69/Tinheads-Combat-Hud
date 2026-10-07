@@ -502,7 +502,7 @@
           else if (entry.kind === "other") state.otherOpen = true;
           else if (entry.kind === "abilities") state.abilitiesOpen = true;
           else if (entry.kind === "useItem") state.useItem = true;
-          else showTooltip(entry.tooltip || { title: entry.name }, null);
+          hideTooltip();
           draw();
         });
         svg.appendChild(g);
@@ -576,7 +576,7 @@
           state.abilitiesOpen = false;
           state.weaponNest = null;
           state.spellLevel = state.castSpell ? state.spellLevel : null;
-          if (!nest) showTooltip(entry.tooltip || { title: entry.name }, null);
+          hideTooltip();
           draw();
         });
         svg.appendChild(g);
@@ -775,7 +775,7 @@
             state.spellEconomy = opt.economy || state.section;
             state.spellLevel = null;
             draw();
-            showTooltip(opt.tooltip || { title: opt.name }, ev);
+            hideTooltip();
             return;
           }
           if (isUseItem) {
@@ -785,7 +785,7 @@
             state.spellLevel = null;
             state.useItem = true;
             draw();
-            showTooltip(opt.tooltip || { title: opt.name }, ev);
+            hideTooltip();
             return;
           }
           if (isOpportunity) {
@@ -795,7 +795,7 @@
             state.useItem = false;
             state.opportunityOpen = true;
             draw();
-            showTooltip(opt.tooltip || { title: opt.name }, ev);
+            hideTooltip();
             return;
           }
           if (state.castSpell || state.opportunityOpen || state.useItem) {

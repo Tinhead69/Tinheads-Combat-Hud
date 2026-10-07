@@ -317,8 +317,8 @@ function opportunityHub() {
 }
 
 /**
- * Attack nest: equipped weapons and Unarmed Strike.
- * Cast Spell is its own Action-ring wedge, and Ready already has one too.
+ * Attack nest: equipped weapons, natural attacks, and an NPC's other weapons.
+ * Unarmed Strike is always offered. Cast Spell is its own Action-ring wedge.
  * @param {Actor} actor
  * @param {Array<object>} weapons from getEquippedWeapons
  * @returns {Array<object>}

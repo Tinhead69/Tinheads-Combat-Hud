@@ -513,6 +513,29 @@ export class CombatHud {
       || (entry?.kind === "feature" && entry.hasNest);
   }
 
+  /**
+   * Tooltips belong on sheet items (weapons, spells, features, consumables).
+   * Action wedges, hubs, and the four main sections stay quiet.
+   * @param {object} entry
+   * @returns {object|null}
+   */
+  _itemTooltip(entry) {
+    const kind = entry?.kind;
+    if (!entry || ["basic", "attack", "cast", "ready", "other", "abilities", "useItem", "opportunity"].includes(kind)) {
+      return null;
+    }
+    const itemKind = kind === "weapon"
+      || kind === "spell"
+      || kind === "inventory"
+      || kind === "feature"
+      || kind === "feature-mode"
+      || kind === "weapon-attack"
+      || kind === "weapon-ability"
+      || !!entry.item;
+    if (!itemKind) return null;
+    return entry.tooltip || { title: entry.name, description: entry.reason || "" };
+  }
+
   _entryActive(entry) {
     if (entry.kind === "attack") {
       return this.state.attackOpen && (this.state.readyOpen ? entry.id === "ready-attack" : entry.id === "attack");
@@ -688,7 +711,6 @@ export class CombatHud {
         if (section.id !== "action") this._resetActionNests();
         if (section.id !== "checks") this._resetChecksNests();
         this._draw();
-        this.showTooltip({ title: section.label, description: section.hint }, g);
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
@@ -883,9 +905,10 @@ export class CombatHud {
       g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
         const changed = cfg.source === "weapon" ? false : this._applyHub(entry, cfg.source);
-        const tip = entry.tooltip || { title: entry.name, description: entry.reason || "" };
         if (changed) this._draw();
-        this.showTooltip(tip, g, ev);
+        const tip = this._itemTooltip(entry);
+        if (tip) this.showTooltip(tip, g, ev);
+        else this.hideTooltip();
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
@@ -1394,7 +1417,9 @@ export class CombatHud {
           this.state.useItem = false;
           this._draw();
         }
-        this.showTooltip(opt.tooltip || { title: opt.name, description: opt.reason || "" }, g, ev);
+        const tip = this._itemTooltip(opt);
+        if (tip) this.showTooltip(tip, g, ev);
+        else this.hideTooltip();
       });
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();

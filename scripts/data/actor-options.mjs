@@ -35,6 +35,18 @@ export function isWeaponItem(item) {
 }
 
 /**
+ * Body attacks such as Beard, Bite, and Claw. These are weapons even when
+ * the sheet does not mark them equipped.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isNaturalWeapon(item) {
+  const value = String(item?.system?.type?.value ?? item?.system?.weaponType ?? "").toLowerCase();
+  const base = String(item?.system?.type?.baseItem ?? "").toLowerCase();
+  return value === "natural" || base === "natural";
+}
+
+/**
  * Unarmed Strike is offered on the Attack nest even when it is not equipped.
  * @param {Item} item
  * @returns {boolean}
@@ -57,6 +69,20 @@ export function isUnarmedItem(item) {
  */
 export function isEquippedItem(item) {
   return item?.system?.equipped === true;
+}
+
+/**
+ * Weapons offered on Attack.
+ * Player characters: equipped weapons, plus natural weapons.
+ * NPCs: every weapon, so unequipped natural attacks such as Beard still appear.
+ * @param {Item} item
+ * @param {Actor} [actor]
+ * @returns {boolean}
+ */
+export function isListedAttackWeapon(item, actor) {
+  if (!isWeaponItem(item)) return false;
+  if (isEquippedItem(item) || isNaturalWeapon(item)) return true;
+  return actor?.type === "npc";
 }
 
 /**
@@ -110,8 +136,9 @@ export function getActivationType(activity, item) {
 }
 
 /**
- * Equipped weapons for the Action ring.
- * Uses the dnd5e equipped checkbox, not character-sheet favorites.
+ * Weapons for the Attack nest.
+ * Characters: equipped weapons and natural attacks.
+ * NPCs: every weapon, so an unequipped Beard still appears.
  * @param {Actor} actor
  * @returns {Array<{ id: string, name: string, img: string, item: Item, activity: object|null, available: boolean, reason?: string }>}
  */
@@ -124,7 +151,7 @@ export function getEquippedWeapons(actor) {
   const seen = new Set();
 
   for (const item of items) {
-    if (!isWeaponItem(item) || !isEquippedItem(item)) continue;
+    if (!isListedAttackWeapon(item, actor)) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
 

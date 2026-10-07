@@ -147,6 +147,27 @@ assert(equipped.map(w => w.name).join(",") === "Longsword,Shortbow", "equipped w
 assert(equipped.every(w => w.name !== "Dagger"), "unequipped favorite stays off the ring");
 assert(equipped.every(w => w.name !== "Shield"), "equipped non-weapons stay off the ring");
 
+const devil = {
+  type: "npc",
+  items: [
+    { id: "g", type: "weapon", name: "Glaive", sort: 1, img: "", system: { equipped: true, type: { value: "martialM" } } },
+    { id: "b", type: "weapon", name: "Beard", sort: 2, img: "", system: { equipped: false, type: { value: "natural" } } },
+    { id: "loot", type: "weapon", name: "Dagger", sort: 3, img: "", system: { equipped: false, type: { value: "simpleM" } } }
+  ]
+};
+const devilWeapons = getEquippedWeapons(devil);
+assert(devilWeapons.map(w => w.name).join(",") === "Glaive,Beard,Dagger", "npc attacks include unequipped weapons such as Beard");
+const devilNest = getAttackNestEntries(devil, devilWeapons);
+assert(devilNest.map(w => w.name).join(",") === "Glaive,Beard,Dagger,Unarmed Strike", "Beard is on the Attack nest");
+const heroNatural = getEquippedWeapons({
+  type: "character",
+  items: [
+    { id: "claw", type: "weapon", name: "Claw", sort: 1, img: "", system: { equipped: false, type: { value: "natural" } } },
+    { id: "bag", type: "weapon", name: "Dagger", sort: 2, img: "", system: { equipped: false, type: { value: "simpleM" } } }
+  ]
+});
+assert(heroNatural.map(w => w.name).join(",") === "Claw", "a character's natural attack is listed; a stowed weapon is not");
+
 const bonusActor = {
   items: [
     item({
