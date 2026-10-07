@@ -38,6 +38,7 @@ import {
   wedgeAnchor
 } from "./radial-geometry.mjs";
 import { appendHubArt, appendWedgeArt } from "./wedge-art.mjs";
+import { applyIconPalette } from "./icon-color.mjs";
 import { wedgeCaptionLines } from "./wedge-text.mjs";
 import {
   DRAG_THRESHOLD_PX,
@@ -57,7 +58,7 @@ function nextClipId(prefix = "tch-clip") {
 
 /**
  * Compact SVG viewBox + ring radii (px).
- * Main Action/BA/R is intentionally smaller so nested partial arcs stay on-screen.
+ * Every wedge has the same radial height. Rings are separated by a fixed gap.
  * Keep preview/radial-preview.html RINGS in sync with these values.
  */
 export const SIZE = 760;
@@ -65,6 +66,10 @@ const CX = SIZE / 2;
 const CY = SIZE / 2;
 /** How long the open ring stays up after the pointer slips off it. */
 const COLLAPSE_DELAY_MS = 500;
+/** Radial thickness of every wedge, main sections included. */
+const WEDGE_DEPTH = 62;
+/** Clear gap between neighboring rings. */
+const RING_GAP = 6;
 
 /** @type {Readonly<{
  *  hub: number,
@@ -77,24 +82,34 @@ const COLLAPSE_DELAY_MS = 500;
  *  flatNestInner: number, flatNestOuter: number,
  *  flatSpellInner: number, flatSpellOuter: number
  * }>} */
+const mainInner = 42;
+const mainOuter = mainInner + WEDGE_DEPTH;
+const actionInner = mainOuter + RING_GAP;
+const actionOuter = actionInner + WEDGE_DEPTH;
+const nest1Inner = actionOuter + RING_GAP;
+const nest1Outer = nest1Inner + WEDGE_DEPTH;
+const nest2Inner = nest1Outer + RING_GAP;
+const nest2Outer = nest2Inner + WEDGE_DEPTH;
+const nest3Inner = nest2Outer + RING_GAP;
+const nest3Outer = nest3Inner + WEDGE_DEPTH;
 export const RINGS = Object.freeze({
   hub: 34,
-  mainInner: 42,
-  mainOuter: 108,
-  actionInner: 116,
-  actionOuter: 178,
-  nest1Inner: 186,
-  nest1Outer: 238,
-  nest2Inner: 246,
-  nest2Outer: 292,
-  nest3Inner: 300,
-  nest3Outer: 352,
-  flatInner: 116,
-  flatOuter: 236,
-  flatNestInner: 244,
-  flatNestOuter: 308,
-  flatSpellInner: 316,
-  flatSpellOuter: 372
+  mainInner,
+  mainOuter,
+  actionInner,
+  actionOuter,
+  nest1Inner,
+  nest1Outer,
+  nest2Inner,
+  nest2Outer,
+  nest3Inner,
+  nest3Outer,
+  flatInner: actionInner,
+  flatOuter: actionOuter,
+  flatNestInner: nest1Inner,
+  flatNestOuter: nest1Outer,
+  flatSpellInner: nest2Inner,
+  flatSpellOuter: nest2Outer
 });
 
 /** @type {CombatHud|null} */
@@ -560,6 +575,22 @@ export class CombatHud {
     this.state.abilityId = null;
   }
 
+  /**
+   * Distance from the radial center to the pointer, in SVG units.
+   * @param {PointerEvent} ev
+   * @returns {number}
+   */
+  _pointerRadius(ev) {
+    if (!this.svg || ev?.clientX == null) return Infinity;
+    const pt = this.svg.createSVGPoint();
+    pt.x = ev.clientX;
+    pt.y = ev.clientY;
+    const ctm = this.svg.getScreenCTM();
+    if (!ctm) return Infinity;
+    const p = pt.matrixTransform(ctm.inverse());
+    return Math.hypot(p.x - CX, p.y - CY);
+  }
+
   _circle(r, stroke) {
     const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     c.setAttribute("cx", String(CX));
@@ -705,11 +736,21 @@ export class CombatHud {
       text.textContent = section.label;
       g.appendChild(text);
 
-      g.addEventListener("pointerenter", () => {
+      g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
+        // Already on this section. Rebuilding the ring must not pick an ability
+        // that happens to sit under the pointer still on the Checks wedge.
+        if (this.state.section === section.id) {
+          if (section.id === "checks" && this._pointerRadius(ev) < RINGS.actionInner && this.state.abilityId) {
+            this.state.abilityId = null;
+            this._draw();
+          }
+          return;
+        }
         this.state.section = section.id;
         if (section.id !== "action") this._resetActionNests();
-        if (section.id !== "checks") this._resetChecksNests();
+        if (section.id === "checks") this.state.abilityId = null;
+        else this._resetChecksNests();
         this._draw();
       });
       g.addEventListener("pointerleave", (ev) => {
@@ -898,6 +939,7 @@ export class CombatHud {
         label: onAction ? entry.name : "",
         caption: onAction ? "" : caption,
         img: entry.img,
+        itemArt: usesSheetIcon(entry.kind),
         unavailable: entry.available === false,
         active: this._entryActive(entry)
       });
@@ -1036,7 +1078,14 @@ export class CombatHud {
       });
 
       g.addEventListener("pointerenter", (ev) => {
+        // The Checks wedge and Constitution share a direction. Ignore the hover
+        // until the pointer has actually left Checks and entered this wedge.
+        if (this._pointerRadius(ev) < RINGS.actionInner) return;
         this._clearCollapse();
+        if (this.state.abilityId === opt.abilityId) {
+          this.showTooltip(opt.tooltip, g, ev);
+          return;
+        }
         this.state.abilityId = opt.abilityId;
         this._draw();
         this.showTooltip(opt.tooltip, g, ev);
@@ -1126,6 +1175,7 @@ export class CombatHud {
         outer,
         caption: opt.name,
         img: opt.img,
+        itemArt: true,
         unavailable: !opt.available
       });
 
@@ -1279,6 +1329,7 @@ export class CombatHud {
         outer: spellBand.outer,
         caption: spell.name,
         img: spell.img,
+        itemArt: true,
         unavailable: !spell.available
       });
 
@@ -1445,6 +1496,8 @@ export class CombatHud {
     g.classList.add("tch-segment");
     if (cfg.unavailable) g.classList.add("tch-segment--unavailable");
     if (cfg.active) g.classList.add("tch-segment--active");
+    if (cfg.itemArt) g.classList.add("tch-segment--item-art");
+    if (cfg.itemArt && cfg.img) applyIconPalette(g, cfg.img);
 
     const d = sectionWedgePath(CX, CY, cfg.inner, cfg.outer, cfg.start, cfg.end);
     const midR = (cfg.inner + cfg.outer) / 2;
@@ -1670,6 +1723,13 @@ export class CombatHud {
       this._draw();
     }, COLLAPSE_DELAY_MS);
   }
+}
+
+function usesSheetIcon(kind) {
+  return kind === "weapon"
+    || kind === "weapon-attack"
+    || kind === "weapon-ability"
+    || kind === "inventory";
 }
 
 function escapeHtml(str) {

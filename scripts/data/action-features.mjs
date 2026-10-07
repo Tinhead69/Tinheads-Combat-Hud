@@ -11,6 +11,7 @@ import {
   getActivities,
   getActivationType,
   activityArtwork,
+  activityOptionName,
   itemArtwork,
   optionRequiresTarget,
   sheetItemTooltip,
@@ -235,10 +236,11 @@ export function getFeatureModeOptions(featureOption) {
 
   const fromActivities = (featureOption.nestActivities ?? []).map((activity, index) => {
     const available = canAttemptUse(activity, featureOption.item);
+    const name = activityOptionName(featureOption.item, activity) || featureOption.name;
     return {
       id: `${featureOption.id}:mode:${activity.id ?? activity._id ?? index}`,
       kind: "feature-mode",
-      name: activity.name || featureOption.name,
+      name,
       img: preferDocumentImg(activityArtwork(featureOption.item, activity), featureOption.img),
       item: activity?.item ?? activity?.parent ?? featureOption.item,
       activity,
@@ -247,7 +249,7 @@ export function getFeatureModeOptions(featureOption) {
       requiresTarget: optionRequiresTarget(activity, activity?.item ?? featureOption.item),
       parentFeatureId: featureOption.id,
       usesLabel: formatUses(featureOption.item, activity),
-      tooltip: describedTooltip(featureOption.item, activity, activity.name || featureOption.name)
+      tooltip: describedTooltip(featureOption.item, activity, name)
     };
   });
 
@@ -571,7 +573,8 @@ function familyModes(featureOption) {
 }
 
 /**
- * Hover card: sheet description, with uses and a nest hint when those apply.
+ * Hover card: the ability or item description from the sheet.
+ * A nest hint is only used when that description is empty.
  * @param {Item} item
  * @param {object|null|undefined} activity
  * @param {string} title
@@ -579,13 +582,10 @@ function familyModes(featureOption) {
  */
 function describedTooltip(item, activity, title, opts = {}) {
   const uses = formatUses(item, activity);
-  const notes = [];
-  if (uses) notes.push(t("Features.UsesRemaining", { uses }));
-  if (opts.hasNest) notes.push(t("Features.OpenModesHint"));
   return sheetItemTooltip(item, {
     title: title || item?.name || "",
     activity,
-    note: notes.join(" "),
+    note: uses ? t("Features.UsesRemaining", { uses }) : "",
     fallback: opts.hasNest ? t("Features.OpenModesHint") : t("Features.ClassFeatureHint")
   });
 }

@@ -133,6 +133,56 @@ assert(!hazModes.includes("Increased Potency"), "passive rider is not an action"
 assert(!hazModes.includes("Wounding"), "automation-only midi rider is not a button");
 assert(!hazModes.includes("Attack"), "attack stays off the ability list");
 
+const midiStaff = enrichWeaponOption({
+  id: "midi-staff",
+  name: "Staff of Frost",
+  img: "",
+  type: "weapon",
+  isOwner: true,
+  system: {
+    description: { value: "<p>A frost staff.</p>" },
+    activities: [
+      { id: "atk", name: "Attack", type: "attack", activation: { type: "action" } },
+      {
+        id: "cone",
+        name: "Midi - Cone of Cold",
+        type: "save",
+        activation: { type: "action" },
+        description: { value: "<p>Midi activity blurb.</p>" }
+      }
+    ]
+  },
+  activity: null
+});
+const midiAbility = getWeaponAbilityOptions(midiStaff)[0];
+assert(midiAbility?.name === "Staff of Frost", "Midi -* ability title uses the item name");
+assert(midiAbility?.tooltip?.title === "Staff of Frost", "Midi -* tooltip title uses the item name");
+assert(midiAbility?.tooltip?.description?.includes("frost staff"), "Midi -* tooltip uses the item description");
+assert(!midiAbility?.tooltip?.description?.toLowerCase().includes("midi"), "Midi activity blurb stays off the tooltip");
+assert(midiAbility?.activity?.name === "Midi - Cone of Cold", "midi activity still resolves");
+
+const midiFeatureModes = getFeatureModeOptions({
+  id: "feature:lay",
+  name: "Lay on Hands",
+  img: "",
+  item: {
+    id: "lay",
+    name: "Lay on Hands",
+    type: "feat",
+    isOwner: true,
+    system: { description: { value: "<p>Heal with a touch.</p>" } }
+  },
+  nestActivities: [
+    { id: "m1", name: "Midi - Heal", type: "heal", description: { value: "<p>Midi heal blurb.</p>" } },
+    { id: "m2", name: "Cure Wounds", type: "heal" }
+  ]
+});
+const midiHeal = midiFeatureModes.find(mode => mode.activity.name === "Midi - Heal");
+assert(midiHeal?.name === "Lay on Hands", "Midi -* feature mode uses the item name");
+assert(midiFeatureModes.find(mode => mode.activity.name === "Cure Wounds")?.name === "Cure Wounds", "real feature mode names stay");
+assert(midiHeal?.tooltip?.description?.includes("Heal with a touch"), "Midi -* feature tooltip uses the item description");
+assert(!midiHeal?.tooltip?.description?.toLowerCase().includes("midi"), "Midi feature blurb stays off the tooltip");
+
 const spentStaff = enrichWeaponOption({
   id: "staff",
   name: "Staff of Frost",
@@ -248,6 +298,7 @@ const paladin = {
       isOwner: true,
       system: {
         uses: { value: 1, max: 1 },
+        description: { value: "<p>Channel divinity to turn undead or preserve life.</p>" },
         activities: [
           { id: "tu", name: "Turn Undead", type: "save", activation: { type: "action" } },
           { id: "pl", name: "Preserve Life", type: "heal", activation: { type: "action" } }
@@ -292,6 +343,8 @@ const layActivity = {
 assert(formatUses(layOnHands, layActivity) === "20/30", "lay on hands shows remaining pool, not the activity's 0");
 const cd = features.find(f => f.name === "Channel Divinity");
 assert(cd.hasNest === true, "Channel Divinity nests modes");
+assert(cd.tooltip?.description?.includes("turn undead or preserve life"), "nested feature tooltip uses the sheet description");
+assert(!cd.tooltip?.description?.includes("Hover for options"), "sheet description is not prefixed with the nest hint");
 assert(getFeatureModeOptions(cd).length === 2, "two divinity modes");
 
 const splitPaladin = {

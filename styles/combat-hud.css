@@ -127,7 +127,7 @@
 }
 
 .tch-segment {
-  pointer-events: auto;
+  pointer-events: visiblePainted;
   cursor: pointer;
   transition: fill 120ms ease, opacity 120ms ease;
 }
@@ -275,6 +275,10 @@
   pointer-events: none;
 }
 
+.tch-segment--item-art .tch-segment__art {
+  opacity: 1;
+}
+
 .tch-segment--unavailable .tch-segment__art {
   opacity: 0.32;
   filter: grayscale(0.55);
@@ -382,6 +386,74 @@
 .tch-segment.tch-economy--checks.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-checks-nest-art-hot);
   stroke: rgba(210, 226, 242, 0.65);
+}
+
+/* Weapon (and other sheet-item) portraits: the picture is the wedge, not the economy tint. */
+.tch-economy--action .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--bonus .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--reaction .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--checks .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: rgba(8, 10, 14, 0.08);
+  stroke: rgba(255, 248, 236, 0.55);
+}
+
+.tch-economy--action .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--bonus .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--reaction .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--checks .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--action .tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--bonus .tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--reaction .tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--checks .tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: rgba(8, 10, 14, 0.02);
+  stroke: rgba(255, 248, 236, 0.85);
+}
+
+/* Weapons and sheet items: fill and outline come from the item icon. */
+.tch-economy--action .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--bonus .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--reaction .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--checks .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-icon-fill);
+  stroke: var(--tch-icon-stroke);
+  stroke-width: 2.5px;
+}
+
+.tch-economy--action .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--bonus .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--reaction .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--checks .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-economy--action .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--bonus .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--reaction .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-economy--checks .tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
+.tch-segment.tch-economy--action.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
+.tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill {
+  fill: var(--tch-icon-fill-hot);
+  stroke: var(--tch-icon-stroke-hot);
+  stroke-width: 3px;
 }
 
 .tch-segment__label {

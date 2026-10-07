@@ -589,7 +589,7 @@ export function getCastActivity(item) {
 }
 
 /**
- * Midi-QOL labels its generic activities "Midi Heal", "Midi Use", "Midi Save", and similar.
+ * Midi-QOL labels its generic activities "Midi Heal", "Midi - Heal", "Midi Use", and similar.
  * Those are not the player-facing action. A potion should read as the potion.
  * @param {string} name
  * @returns {boolean}
@@ -761,12 +761,13 @@ const DESCRIPTION_LIMIT = 420;
  * @returns {string}
  */
 export function itemDescriptionText(item, activity = null) {
-  const fromActivity = plainText(
+  const useActivity = activity && !isGenericMidiActivityName(activity.name);
+  const fromActivity = useActivity ? plainText(
     activity?.description?.value
     ?? (typeof activity?.description === "string" ? activity.description : "")
     ?? activity?.system?.description?.value
     ?? ""
-  );
+  ) : "";
   const fromItem = plainText(item?.system?.description?.value ?? item?.system?.description ?? "");
   const text = fromActivity || fromItem;
   if (!text) return "";
@@ -782,8 +783,10 @@ export function sheetItemTooltip(item, extras = {}) {
   const description = itemDescriptionText(item, extras.activity ?? null);
   const parts = [extras.note, description, extras.reason].map(part => String(part ?? "").trim()).filter(Boolean);
   if (!parts.length) parts.push(extras.fallback || t("Tooltip.NoDescription"));
+  let title = extras.title || item?.name || "";
+  if (isGenericMidiActivityName(title)) title = String(item?.name ?? "").trim() || title;
   const tip = {
-    title: extras.title || item?.name || "",
+    title,
     description: parts.join(" ")
   };
   if (extras.targets != null && extras.targets !== "") tip.targets = extras.targets;

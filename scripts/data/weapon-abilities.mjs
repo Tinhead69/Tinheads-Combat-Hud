@@ -9,6 +9,7 @@ import {
   getActivities,
   getDefaultIcon,
   activityArtwork,
+  activityOptionName,
   optionRequiresTarget,
   sheetItemTooltip,
   t
@@ -199,10 +200,11 @@ export function getWeaponAbilityOptions(weaponOption) {
     const available = depleted
       ? { ok: false, reason: t("Empty.NoItemUses") }
       : canAttemptUse(activity, weaponOption.item);
+    const name = activityOptionName(weaponOption.item, activity) || t("WeaponNest.AbilityFallback");
     return {
       id: `${weaponOption.id}:ability:${activity.id ?? activity._id ?? index}`,
       kind: "weapon-ability",
-      name: activity.name || t("WeaponNest.AbilityFallback"),
+      name,
       img: preferDocumentImg(
         activityArtwork(weaponOption.item, activity) || weaponOption.img,
         getDefaultIcon("feat")
@@ -215,7 +217,7 @@ export function getWeaponAbilityOptions(weaponOption) {
       parentWeaponId: weaponOption.id,
       usesLabel,
       tooltip: sheetItemTooltip(weaponOption.item, {
-        title: activity.name || weaponOption.name,
+        title: name,
         activity,
         note: depleted ? t("Empty.NoItemUses") : "",
         fallback: t("WeaponNest.AbilityHint")
