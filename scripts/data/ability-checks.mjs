@@ -9,6 +9,28 @@ import { CHROME } from "./module-icons.mjs";
 /** Stable ability order (PHB). */
 export const ABILITY_IDS = Object.freeze(["str", "dex", "con", "int", "wis", "cha"]);
 
+/** PHB skill order. Configured skills replace this list when the system provides one. */
+const SKILL_ORDER = Object.freeze([
+  ["acr", "Acrobatics", "dex"],
+  ["ani", "Animal Handling", "wis"],
+  ["arc", "Arcana", "int"],
+  ["ath", "Athletics", "str"],
+  ["dec", "Deception", "cha"],
+  ["his", "History", "int"],
+  ["ins", "Insight", "wis"],
+  ["itm", "Intimidation", "cha"],
+  ["inv", "Investigation", "int"],
+  ["med", "Medicine", "wis"],
+  ["nat", "Nature", "int"],
+  ["prc", "Perception", "wis"],
+  ["prf", "Performance", "cha"],
+  ["per", "Persuasion", "cha"],
+  ["rel", "Religion", "int"],
+  ["slt", "Sleight of Hand", "dex"],
+  ["ste", "Stealth", "dex"],
+  ["sur", "Survival", "wis"]
+]);
+
 const FALLBACK_LABELS = Object.freeze({
   str: "Strength",
   dex: "Dexterity",
@@ -85,9 +107,100 @@ export function getAbilityRollOptions(abilityOption) {
 }
 
 /**
+ * First ring under Checks: Saves, Skills, and Death Saves.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getChecksMenuOptions(actor) {
+  return [
+    {
+      id: "checks:saves",
+      kind: "checks-branch",
+      branch: "saves",
+      name: t("Checks.Saves"),
+      img: CHROME.save,
+      available: true,
+      tooltip: {
+        title: t("Checks.Saves"),
+        description: t("Checks.SavesHint")
+      }
+    },
+    {
+      id: "checks:skills",
+      kind: "checks-branch",
+      branch: "skills",
+      name: t("Checks.Skills"),
+      img: CHROME.check,
+      available: true,
+      tooltip: {
+        title: t("Checks.Skills"),
+        description: t("Checks.SkillsHint")
+      }
+    },
+    deathSaveOption(actor)
+  ];
+}
+
+/**
+ * Saving throws, one wedge per ability.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getSavingThrowOptions(actor) {
+  return ABILITY_IDS.map(abilityId => {
+    const abl = actor?.system?.abilities?.[abilityId] ?? {};
+    const save = Number.isFinite(Number(abl.save)) ? Number(abl.save) : null;
+    const name = abilityLabel(abilityId);
+    return {
+      id: `save:${abilityId}`,
+      kind: "ability-save",
+      abilityId,
+      name,
+      img: CHROME.abilities[abilityId] || CHROME.save,
+      available: true,
+      tooltip: {
+        title: `${name} — ${t("Checks.Save")}`,
+        description: modLine(save, "Checks.SaveMod")
+      }
+    };
+  });
+}
+
+/**
+ * Every skill on the actor, plus the system's skill list.
+ * `proficiency` is "proficient", "expertise", or null.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getSkillOptions(actor) {
+  const known = actor?.system?.skills ?? {};
+  return skillCatalog(actor).map(row => {
+    const data = known[row.id] ?? {};
+    const abilityId = data.ability || row.ability || "dex";
+    const mod = skillCheckMod(data);
+    const name = skillLabel(row.id, row.label);
+    const proficiency = skillProficiency(data);
+    return {
+      id: `skill:${row.id}`,
+      kind: "skill-check",
+      skillId: row.id,
+      abilityId,
+      name,
+      img: CHROME.abilities[abilityId] || CHROME.check,
+      proficiency,
+      available: true,
+      tooltip: {
+        title: name,
+        description: skillHint(mod, proficiency)
+      }
+    };
+  });
+}
+
+/**
  * Call dnd5e roll helpers with 3.x/4.x compatibility.
  * @param {Actor} actor
- * @param {object} option ability-check | ability-save
+ * @param {object} option ability-check | ability-save | skill-check | death-save
  */
 export async function rollAbilityHudOption(actor, option) {
   if (!actor) throw new Error("Missing actor or ability for roll");
@@ -95,6 +208,10 @@ export async function rollAbilityHudOption(actor, option) {
   if (option?.kind === "skill-check") {
     if (!option.skillId) throw new Error("Missing skill for roll");
     return rollSkillCheck(actor, option.skillId);
+  }
+
+  if (option?.kind === "death-save") {
+    return rollDeathSave(actor);
   }
 
   if (!option?.abilityId) {
@@ -123,6 +240,17 @@ export async function rollAbilityHudOption(actor, option) {
   }
 
   throw new Error(`Unknown ability roll kind: ${option.kind}`);
+}
+
+async function rollDeathSave(actor) {
+  if (typeof actor.rollDeathSave !== "function") {
+    throw new Error("Actor.rollDeathSave unavailable");
+  }
+  try {
+    return await actor.rollDeathSave({});
+  } catch (_) {
+    return actor.rollDeathSave();
+  }
 }
 
 /**
@@ -171,4 +299,80 @@ function modLine(value, key) {
   const n = Number(value);
   const signed = n >= 0 ? `+${n}` : String(n);
   return t(key, { mod: signed });
+}
+
+function deathSaveOption(actor) {
+  const death = actor?.system?.attributes?.death ?? {};
+  const success = Number.isFinite(Number(death.success)) ? Number(death.success) : 0;
+  const failure = Number.isFinite(Number(death.failure)) ? Number(death.failure) : 0;
+  return {
+    id: "checks:death-save",
+    kind: "death-save",
+    name: t("Checks.DeathSave"),
+    img: CHROME.save,
+    available: true,
+    tooltip: {
+      title: t("Checks.DeathSave"),
+      description: t("Checks.DeathSaveProgress", { success, failure })
+    }
+  };
+}
+
+function skillCatalog(actor) {
+  const configured = CONFIG?.DND5E?.skills;
+  const rows = [];
+  const seen = new Set();
+  if (configured && typeof configured === "object" && Object.keys(configured).length) {
+    for (const [id, cfg] of Object.entries(configured)) {
+      seen.add(id);
+      rows.push({ id, label: cfg?.label, ability: cfg?.ability });
+    }
+  } else {
+    for (const [id, label, ability] of SKILL_ORDER) {
+      seen.add(id);
+      rows.push({ id, label, ability });
+    }
+  }
+  for (const id of Object.keys(actor?.system?.skills ?? {}).filter(key => !seen.has(key)).sort()) {
+    const data = actor.system.skills[id] ?? {};
+    rows.push({ id, label: data.label, ability: data.ability });
+  }
+  return rows;
+}
+
+function skillLabel(skillId, label) {
+  if (typeof label === "string" && label) {
+    return game.i18n?.localize?.(label) || label;
+  }
+  const fallback = SKILL_ORDER.find(row => row[0] === skillId);
+  return fallback?.[1] || skillId;
+}
+
+function skillCheckMod(skill) {
+  for (const key of ["total", "mod"]) {
+    const n = Number(skill?.[key]);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * dnd5e stores the proficiency multiplier on skill.value (0, 0.5, 1, 2).
+ * Half proficiency stays unmarked. 1 is proficient. 2 or more is expertise.
+ * @param {object} skill
+ * @returns {"proficient"|"expertise"|null}
+ */
+function skillProficiency(skill) {
+  const raw = skill?.value ?? skill?.proficient ?? 0;
+  const rank = Number(raw);
+  if (!Number.isFinite(rank) || rank < 1) return null;
+  return rank >= 2 ? "expertise" : "proficient";
+}
+
+function skillHint(mod, proficiency) {
+  const parts = [];
+  if (mod != null) parts.push(modLine(mod, "Checks.Mod"));
+  if (proficiency === "expertise") parts.push(t("Checks.Expertise"));
+  else if (proficiency === "proficient") parts.push(t("Checks.Proficient"));
+  return parts.join(" · ") || t("Checks.SkillHint");
 }

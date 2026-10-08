@@ -16,15 +16,16 @@ import {
   getReadyNestEntries
 } from "../data/basic-actions.mjs";
 import { getEndTurnState, endCombatTurn } from "../data/combat-turn.mjs";
-import { getUsableInventoryItems } from "../data/use-items.mjs";
+import { getUsableInventoryItems, layoutUseItemEntries } from "../data/use-items.mjs";
 import {
   getClassFeatureOptions,
   getFeatureModeOptions,
   getOtherActionOptions
 } from "../data/action-features.mjs";
 import {
-  getAbilityOptions,
-  getAbilityRollOptions
+  getChecksMenuOptions,
+  getSavingThrowOptions,
+  getSkillOptions
 } from "../data/ability-checks.mjs";
 import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
@@ -136,10 +137,11 @@ export class CombatHud {
       opportunityOpen: false,
       spellEconomy: "action",
       useItem: false,
+      useItemGroup: null,  // potion | scroll nest inside Use Item
       weaponNestId: null,  // special weapon: its attack plus abilities
       useAbility: false,   // weapon ability modes nest open
       featureNestId: null, // multi-mode class feature (Channel Divinity, …)
-      abilityId: null,     // checks nest: str|dex|…
+      checksBranch: null,  // saves | skills nest under Checks
       spellLevel: null,    // number | null
       collapseTimer: null
     };
@@ -291,7 +293,10 @@ export class CombatHud {
       else if (this.state.attackOpen) this._drawAttackNest(2);
       else if (this.state.otherOpen) this._drawOtherNest(2);
       else if (this.state.abilitiesOpen) this._drawAbilitiesNest(2);
-      else if (this.state.useItem) this._drawUseItemRing();
+      else if (this.state.useItem) {
+        this._drawUseItemRing();
+        if (this.state.useItemGroup) this._drawUseItemGroupRing();
+      }
 
       if (this.state.readyOpen && this.state.attackOpen) this._drawAttackNest(3);
       if (this.state.weaponNestId) this._drawSpecialWeaponRing();
@@ -301,12 +306,16 @@ export class CombatHud {
         if (this.state.spellLevel != null) this._drawSpellRing(this.state.spellLevel);
       }
     } else if (this.state.section === "checks") {
-      this._drawAbilityRing();
-      if (this.state.abilityId) this._drawAbilityRollRing();
+      this._drawChecksMenu();
+      if (this.state.checksBranch === "saves") this._drawSavingThrowRing();
+      else if (this.state.checksBranch === "skills") this._drawSkillRing();
     } else if (this.state.section === "bonus") {
       this._drawEconomyRing("bonus");
       if (this.state.featureNestId) this._drawFeatureModeRing();
-      if (this.state.useItem) this._drawUseItemRing();
+      if (this.state.useItem) {
+        this._drawUseItemRing();
+        if (this.state.useItemGroup) this._drawUseItemGroupRing();
+      }
       if (this.state.castSpell) {
         this._drawSpellLevelRing();
         if (this.state.spellLevel != null) this._drawSpellRing(this.state.spellLevel);
@@ -459,6 +468,7 @@ export class CombatHud {
     this.state.castSpell = false;
     this.state.spellEconomy = "action";
     this.state.useItem = false;
+    this.state.useItemGroup = null;
     this.state.weaponNestId = null;
     this.state.useAbility = false;
     this.state.featureNestId = null;
@@ -468,7 +478,7 @@ export class CombatHud {
   _nestKey() {
     const state = this.state;
     return [
-      state.attackOpen, state.readyOpen, state.otherOpen, state.abilitiesOpen, state.useItem,
+      state.attackOpen, state.readyOpen, state.otherOpen, state.abilitiesOpen, state.useItem, state.useItemGroup,
       state.castSpell, state.spellEconomy, state.weaponNestId, state.featureNestId, state.spellLevel
     ].join("|");
   }
@@ -572,7 +582,7 @@ export class CombatHud {
   }
 
   _resetChecksNests() {
-    this.state.abilityId = null;
+    this.state.checksBranch = null;
   }
 
   /**
@@ -741,15 +751,15 @@ export class CombatHud {
         // Already on this section. Rebuilding the ring must not pick an ability
         // that happens to sit under the pointer still on the Checks wedge.
         if (this.state.section === section.id) {
-          if (section.id === "checks" && this._pointerRadius(ev) < RINGS.actionInner && this.state.abilityId) {
-            this.state.abilityId = null;
+          if (section.id === "checks" && this._pointerRadius(ev) < RINGS.actionInner && this.state.checksBranch) {
+            this.state.checksBranch = null;
             this._draw();
           }
           return;
         }
         this.state.section = section.id;
         if (section.id !== "action") this._resetActionNests();
-        if (section.id === "checks") this.state.abilityId = null;
+        if (section.id === "checks") this.state.checksBranch = null;
         else this._resetChecksNests();
         this._draw();
       });
@@ -1044,55 +1054,58 @@ export class CombatHud {
     this.svg.appendChild(group);
   }
 
-  _drawAbilityRing() {
-    const abilities = getAbilityOptions(this.actor);
-    const group = this._ringGroup("abilities");
+  _drawChecksMenu() {
+    const entries = getChecksMenuOptions(this.actor);
+    const group = this._ringGroup("checks-menu");
     const main = mainSectionById("checks");
-    const segs = arcSegmentsForParent(
-      abilities.length,
-      main.start,
-      main.end,
-      { maxSpanDeg: 200 }
-    );
+    const segs = arcSegmentsForParent(entries.length, main.start, main.end, { maxSpanDeg: 200 });
+    this._layout = {
+      ...(this._layout || {}),
+      checksMenu: entries,
+      checksMenuSegs: segs
+    };
 
-    if (this._layout) {
-      this._layout.abilitySegs = segs;
-      this._layout.abilityEntries = abilities;
-    } else {
-      this._layout = { abilitySegs: segs, abilityEntries: abilities };
-    }
-
-    abilities.forEach((opt, i) => {
+    entries.forEach((opt, i) => {
       const seg = segs[i];
-      const modCaption = opt.mod == null
-        ? opt.name
-        : `${opt.name} ${opt.mod >= 0 ? `+${opt.mod}` : opt.mod}`;
+      const isBranch = opt.kind === "checks-branch";
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
         inner: RINGS.actionInner,
         outer: RINGS.actionOuter,
-        caption: modCaption,
+        caption: opt.name,
         img: opt.img,
-        active: this.state.abilityId === opt.abilityId
+        active: isBranch && this.state.checksBranch === opt.branch
       });
 
       g.addEventListener("pointerenter", (ev) => {
-        // The Checks wedge and Constitution share a direction. Ignore the hover
-        // until the pointer has actually left Checks and entered this wedge.
         if (this._pointerRadius(ev) < RINGS.actionInner) return;
         this._clearCollapse();
-        if (this.state.abilityId === opt.abilityId) {
+        if (isBranch) {
+          if (this.state.checksBranch === opt.branch) {
+            this.showTooltip(opt.tooltip, g, ev);
+            return;
+          }
+          this.state.checksBranch = opt.branch;
+          this._draw();
           this.showTooltip(opt.tooltip, g, ev);
           return;
         }
-        this.state.abilityId = opt.abilityId;
-        this._draw();
+        if (this.state.checksBranch) {
+          this.state.checksBranch = null;
+          this._draw();
+        }
         this.showTooltip(opt.tooltip, g, ev);
       });
+      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
         if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("checks");
+      });
+      g.addEventListener("pointerdown", async (ev) => {
+        ev.stopPropagation();
+        if (isBranch) return;
+        await this._onLeafClick(opt);
       });
 
       group.appendChild(g);
@@ -1101,34 +1114,39 @@ export class CombatHud {
     this.svg.appendChild(group);
   }
 
-  _drawAbilityRollRing() {
-    const abilities = this._layout?.abilityEntries ?? getAbilityOptions(this.actor);
-    const ability = abilities.find(a => a.abilityId === this.state.abilityId);
-    if (!ability) return;
-    const rolls = getAbilityRollOptions(ability);
-    const group = this._ringGroup("ability-rolls");
+  _drawSavingThrowRing() {
+    this._drawChecksLeafRing(getSavingThrowOptions(this.actor), "saves");
+  }
 
-    let parent = mainSectionById("checks");
-    const segsLayout = this._layout?.abilitySegs ?? [];
-    const idx = abilities.findIndex(a => a.abilityId === this.state.abilityId);
-    if (idx >= 0 && segsLayout[idx]) parent = segsLayout[idx];
+  _drawSkillRing() {
+    this._drawChecksLeafRing(getSkillOptions(this.actor), "skills");
+  }
 
-    const segs = arcSegmentsForParent(rolls.length, parent.start, parent.end, { maxSpanDeg: 120 });
-    rolls.forEach((opt, i) => {
+  _drawChecksLeafRing(options, branch) {
+    const entries = this._layout?.checksMenu ?? getChecksMenuOptions(this.actor);
+    const segsLayout = this._layout?.checksMenuSegs ?? [];
+    const idx = entries.findIndex(entry => entry.kind === "checks-branch" && entry.branch === branch);
+    const parent = idx >= 0 && segsLayout[idx] ? segsLayout[idx] : mainSectionById("checks");
+    const group = this._ringGroup(branch);
+    const segs = arcSegmentsForParent(options.length, parent.start, parent.end, { maxSpanDeg: 200 });
+
+    options.forEach((opt, i) => {
       const seg = segs[i];
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
         inner: RINGS.nest1Inner,
         outer: RINGS.nest1Outer,
-        label: opt.name,
-        img: opt.img
+        caption: opt.name,
+        img: opt.img,
+        proficiency: opt.proficiency
       });
 
       g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
         this.showTooltip(opt.tooltip, g, ev);
       });
+      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
       g.addEventListener("pointerleave", (ev) => {
         this.hideTooltip();
         if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("ability");
@@ -1146,7 +1164,9 @@ export class CombatHud {
 
   _drawUseItemRing() {
     const onBonus = this.state.section === "bonus";
-    const items = getUsableInventoryItems(this.actor, onBonus ? "bonus" : "action");
+    const items = layoutUseItemEntries(
+      getUsableInventoryItems(this.actor, onBonus ? "bonus" : "action")
+    );
     const group = this._ringGroup("use-items");
     const parent = onBonus
       ? (this._layout?.useItemSeg ?? mainSectionById("bonus"))
@@ -1166,8 +1186,77 @@ export class CombatHud {
       parent.end,
       { maxSpanDeg: 170 }
     );
+    if (this._layout) {
+      this._layout.useItemEntries = items;
+      this._layout.useItemSegs = segs;
+    }
     items.forEach((opt, i) => {
       const seg = segs[i];
+      const isGroup = opt.kind === "use-item-group";
+      const g = this._leafSegment({
+        start: seg.start,
+        end: seg.end,
+        inner,
+        outer,
+        caption: opt.name,
+        img: opt.img,
+        itemArt: !isGroup,
+        unavailable: !opt.available,
+        active: isGroup && opt.groupId === this.state.useItemGroup
+      });
+
+      g.addEventListener("pointerenter", (ev) => {
+        this._clearCollapse();
+        if (isGroup) {
+          if (this.state.useItemGroup !== opt.groupId) {
+            this.state.useItemGroup = opt.groupId;
+            this._draw();
+          }
+        } else if (this.state.useItemGroup) {
+          this.state.useItemGroup = null;
+          this._draw();
+        }
+        this.showTooltip(opt.tooltip, g, ev);
+      });
+      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
+      g.addEventListener("pointerleave", (ev) => {
+        this.hideTooltip();
+        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("useItem");
+      });
+      g.addEventListener("pointerdown", async (ev) => {
+        ev.stopPropagation();
+        if (isGroup) return;
+        await this._onLeafClick(opt);
+      });
+
+      group.appendChild(g);
+    });
+
+    this.svg.appendChild(group);
+  }
+
+  _drawUseItemGroupRing() {
+    const entries = this._layout?.useItemEntries ?? [];
+    const segs = this._layout?.useItemSegs ?? [];
+    const index = entries.findIndex(entry =>
+      entry.kind === "use-item-group" && entry.groupId === this.state.useItemGroup
+    );
+    const hub = index >= 0 ? entries[index] : null;
+    const children = hub?.children ?? [];
+    if (!hub || !children.length) {
+      this.state.useItemGroup = null;
+      return;
+    }
+
+    const onBonus = this.state.section === "bonus";
+    const parent = segs[index] ?? (onBonus ? mainSectionById("bonus") : this._parentSeg("useItem"));
+    const inner = onBonus ? RINGS.flatSpellInner : RINGS.nest2Inner;
+    const outer = onBonus ? RINGS.flatSpellOuter : RINGS.nest2Outer;
+    const group = this._ringGroup("use-item-group");
+    const childSegs = arcSegmentsForParent(children.length, parent.start, parent.end, { maxSpanDeg: 170 });
+
+    children.forEach((opt, i) => {
+      const seg = childSegs[i];
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
@@ -1496,6 +1585,8 @@ export class CombatHud {
     g.classList.add("tch-segment");
     if (cfg.unavailable) g.classList.add("tch-segment--unavailable");
     if (cfg.active) g.classList.add("tch-segment--active");
+    if (cfg.proficiency === "proficient") g.classList.add("tch-segment--proficient");
+    if (cfg.proficiency === "expertise") g.classList.add("tch-segment--expertise");
     if (cfg.itemArt) g.classList.add("tch-segment--item-art");
     if (cfg.itemArt && cfg.img) applyIconPalette(g, cfg.img);
 
@@ -1695,7 +1786,7 @@ export class CombatHud {
       } else if (keep === "abilities" || keep === "other") {
         this.state.featureNestId = null;
       } else if (keep === "checks") {
-        this.state.abilityId = null;
+        this.state.checksBranch = null;
       } else if (keep === "bonus" || keep === "reaction") {
         this.state.featureNestId = null;
         this.state.castSpell = false;
@@ -1704,9 +1795,11 @@ export class CombatHud {
         this.state.opportunityOpen = false;
         this.state.weaponNestId = null;
         this.state.useItem = false;
+        this.state.useItemGroup = null;
       } else if (keep === "cast") {
         this.state.spellLevel = null;
       } else if (keep === "useItem") {
+        this.state.useItemGroup = null;
         this.state.castSpell = false;
         this.state.spellLevel = null;
         this.state.weaponNestId = null;

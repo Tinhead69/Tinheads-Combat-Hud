@@ -13,8 +13,8 @@ globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 
 const { buildActionRingEntries, buildEconomyRingEntries, findActorBasicAction, BASIC_ACTIONS, getBasicActionOptions, getAttackNestEntries, getReadyNestEntries } =
   await import("../data/basic-actions.mjs");
-const { getUsableInventoryItems } = await import("../data/use-items.mjs");
-const { getEquippedWeapons, getActivationOptions, getSpellLevels, itemArtwork, activityArtwork } = await import("../data/actor-options.mjs");
+const { getUsableInventoryItems, layoutUseItemEntries } = await import("../data/use-items.mjs");
+const { getEquippedWeapons, getActivationOptions, getSpellLevels, itemArtwork, activityArtwork, itemDescriptionText } = await import("../data/actor-options.mjs");
 const { getClassFeatureOptions } = await import("../data/action-features.mjs");
 
 let passed = 0;
@@ -244,6 +244,42 @@ const bonusItems = getUsableInventoryItems(bonusActor, "bonus");
 assert(bonusItems.map(entry => entry.name).join(",") === "Hex,Potion of Greater Healing,Potion of Healing", "bonus Use Item lists bonus consumables");
 assert(bonusItems.find(entry => entry.name === "Potion of Healing")?.activity.name === "Midi Heal", "bonus potion still resolves its drink activity");
 assert(!getUsableInventoryItems(bonusActor).some(entry => entry.name === "Potion of Healing"), "bonus potions stay off Action Use Item");
+
+function consumable(name, typeValue, subtype) {
+  return {
+    id: `use-item:${name}`,
+    kind: "inventory",
+    name,
+    available: true,
+    item: {
+      name,
+      type: "consumable",
+      system: { type: { value: typeValue, subtype } }
+    }
+  };
+}
+const crowded = [
+  ...Array.from({ length: 8 }, (_, i) => consumable(`Oil ${i + 1}`, "trinket")),
+  consumable("Potion of Healing", "potion"),
+  consumable("Potion of Climbing", "potion"),
+  consumable("Spell Scroll: Fireball", "scroll", "spell"),
+  consumable("Spell Scroll: Mage Armor", "scroll", "spell"),
+  consumable("Scroll of Protection", "scroll", "protection")
+];
+assert(layoutUseItemEntries(crowded.slice(0, 10)).every(entry => entry.kind === "inventory"), "ten items stay on one ring");
+const laidOut = layoutUseItemEntries(crowded);
+const potionHub = laidOut.find(entry => entry.groupId === "potion");
+const scrollHub = laidOut.find(entry => entry.groupId === "scroll");
+assert(potionHub?.name === "TINHEADS_COMBAT_HUD.Sections.Potions", "potions share one wedge");
+assert(potionHub.children.map(child => child.name).join(",") === "Potion of Climbing,Potion of Healing", "every potion is under that wedge");
+assert(scrollHub?.children.map(child => child.name).join(",") === "Spell Scroll: Fireball,Spell Scroll: Mage Armor", "spell scrolls share one wedge");
+assert(laidOut.some(entry => entry.name === "Scroll of Protection"), "a protection scroll stays on the Use Item ring");
+assert(!laidOut.some(entry => entry.kind === "inventory" && entry.name.startsWith("Potion")), "potions leave the outer Use Item ring");
+const eleven = crowded.slice(0, 9).concat([
+  consumable("Potion of Healing", "potion"),
+  consumable("Potion of Climbing", "potion")
+]);
+assert(eleven.length === 11 && layoutUseItemEntries(eleven).some(entry => entry.groupId === "potion"), "eleven items nest the potions");
 const actionSpells = getSpellLevels(bonusActor, "action").levels.flatMap(level => level.spells.map(spell => spell.name));
 const bonusSpells = getSpellLevels(bonusActor, "bonus").levels.flatMap(level => level.spells.map(spell => spell.name));
 assert(actionSpells.includes("Bless") && !actionSpells.includes("Misty Step"), "action Cast Spell lists only action spells");
@@ -251,5 +287,24 @@ assert(bonusSpells.includes("Misty Step") && !bonusSpells.includes("Bless"), "bo
 const reactionRing = buildEconomyRingEntries({ items: [], system: { spells: {} }, isOwner: true, testUserPermission: () => true }, "reaction");
 assert(reactionRing[0]?.id === "attack-of-opportunity", "reaction ring always starts with Attack of Opportunity");
 assert(reactionRing.filter(entry => entry.kind === "opportunity").length === 1, "Attack of Opportunity is not repeated");
+
+const heroism = itemDescriptionText({
+  name: "Heroism (Legacy)",
+  system: {
+    description: {
+      value: "<p>immune to being &amp;Reference[frightened]{frightened} and gains [[/r 1d4]] temporary hit points from @UUID[Compendium.dnd5e.spells.Item.heroism]{Heroism}.</p>"
+    }
+  }
+});
+assert(heroism.includes("immune to being frightened"), "reference enricher becomes the visible word");
+assert(heroism.includes("1d4 temporary hit points"), "inline roll becomes the formula");
+assert(heroism.includes("from Heroism"), "document link becomes its label");
+assert(!heroism.includes("&") && !heroism.includes("@UUID") && !heroism.includes("[["), "enricher code stays out of the tooltip");
+const devils = itemDescriptionText({
+  name: "Summon Devil",
+  system: { description: { value: "summons 2d4 &Reference[Bearded Devil]{bearded devil;bearded devils} or 1 &Reference[Barbed Devil]{barbed devil;barbed devils}" } }
+});
+assert(devils.includes("2d4 bearded devils"), "a count other than one uses the plural label");
+assert(devils.includes("1 barbed devil") && !devils.includes("barbed devils"), "a count of one uses the singular label");
 
 console.log(`\n${passed} assertions passed`);

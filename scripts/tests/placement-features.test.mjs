@@ -60,10 +60,12 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
     section: "action", readyOpen: true, attackOpen: true
   }, RINGS);
   assert(readyAttack === RINGS.nest2Outer, "Ready then Attack uses nest2");
+  const checksMenu = contentOuterRadius({ section: "checks" }, RINGS);
+  assert(checksMenu === RINGS.actionOuter, "Saves, Skills, and Death Saves sit on the checks ring");
   const checks = contentOuterRadius({
-    section: "checks", abilityId: "str"
+    section: "checks", checksBranch: "skills"
   }, RINGS);
-  assert(checks === RINGS.nest1Outer, "check|save nest uses nest1");
+  assert(checks === RINGS.nest1Outer, "skill nest uses nest1");
   const bonus = contentOuterRadius({ section: "bonus" }, RINGS);
   assert(bonus === RINGS.flatOuter, "bonus options use the same wedge height as Action");
   const bonusNest = contentOuterRadius({ section: "bonus", featureNestId: "font" }, RINGS);
@@ -74,6 +76,8 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
   assert(bonusSpells === RINGS.flatSpellOuter, "bonus spell names sit outside the level nest");
   const bonusItems = contentOuterRadius({ section: "bonus", useItem: true }, RINGS);
   assert(bonusItems === RINGS.flatNestOuter, "bonus Use Item opens the item nest");
+  const bonusPotions = contentOuterRadius({ section: "bonus", useItem: true, useItemGroup: "potion" }, RINGS);
+  assert(bonusPotions === RINGS.flatSpellOuter, "bonus potion nest sits outside Use Item");
 }
 
 assert(matchesActivation("action", "action"), "action matches action");

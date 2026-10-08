@@ -18,11 +18,12 @@ export function contentOuterRadius(state, rings) {
   if (!state?.section) return rings.mainOuter;
 
   if (state.section === "checks") {
-    return state.abilityId ? rings.nest1Outer : rings.actionOuter;
+    return state.checksBranch ? rings.nest1Outer : rings.actionOuter;
   }
   if (state.section === "bonus" || state.section === "reaction") {
     if (state.castSpell && state.spellLevel != null) return rings.flatSpellOuter;
     if (state.opportunityOpen && state.weaponNestId) return rings.flatSpellOuter;
+    if (state.useItem && state.useItemGroup) return rings.flatSpellOuter;
     if (state.featureNestId || state.castSpell || state.opportunityOpen || state.useItem) return rings.flatNestOuter;
     return rings.flatOuter;
   }
@@ -30,6 +31,7 @@ export function contentOuterRadius(state, rings) {
 
   let depth = 1;
   if (state.attackOpen || state.readyOpen || state.otherOpen || state.abilitiesOpen || state.useItem) depth = 2;
+  if (state.useItem && state.useItemGroup) depth = 3;
   if (state.readyOpen && state.attackOpen) depth = 3;
   if (state.castSpell) depth += 1;
   if (state.spellLevel != null) depth += 1;

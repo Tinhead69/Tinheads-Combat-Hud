@@ -27,7 +27,7 @@ globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 const { enrichWeaponOption, getWeaponMenuOptions, getWeaponAbilityOptions } =
   await import("../data/weapon-abilities.mjs");
 const { getEndTurnState, endCombatTurn } = await import("../data/combat-turn.mjs");
-const { getAbilityOptions, getAbilityRollOptions, rollAbilityHudOption } =
+const { getAbilityOptions, getAbilityRollOptions, getChecksMenuOptions, getSavingThrowOptions, getSkillOptions, rollAbilityHudOption } =
   await import("../data/ability-checks.mjs");
 const { getActionFeatureOptions, getClassFeatureOptions, getOtherActionOptions, getFeatureModeOptions, formatUses, isSuppressedActionFeature } =
   await import("../data/action-features.mjs");
@@ -270,6 +270,31 @@ const checkRoll = await rollAbilityHudOption(actor, rolls[0]);
 assert(checkRoll.type === "check" && checkRoll.ability === "str", "rollAbilityCheck used");
 const saveRoll = await rollAbilityHudOption(actor, rolls[1]);
 assert(saveRoll.type === "save" && saveRoll.ability === "str", "rollSavingThrow used");
+const menu = getChecksMenuOptions({
+  system: { attributes: { death: { success: 2, failure: 1 } } }
+});
+assert(menu.map(entry => entry.branch || entry.kind).join(",") === "saves,skills,death-save", "Checks opens Saves, Skills, and Death Saves");
+const saves = getSavingThrowOptions(actor);
+assert(saves.length === 6 && saves.every(entry => entry.kind === "ability-save"), "saves ring is the six saving throws");
+const skilled = {
+  system: {
+    skills: {
+      ath: { value: 2, ability: "str", total: 9 },
+      prc: { value: 1, ability: "wis", total: 5 },
+      ste: { value: 0.5, ability: "dex", total: 3 },
+      arc: { value: 0, ability: "int", total: 1 },
+      lockpicking: { value: 1, ability: "dex", label: "Lockpicking" }
+    }
+  }
+};
+const skills = getSkillOptions(skilled);
+assert(skills[0].skillId === "acr" && skills.some(entry => entry.skillId === "sur"), "skills follow the standard list");
+assert(skills.find(entry => entry.skillId === "ath").proficiency === "expertise", "expertise is marked");
+assert(skills.find(entry => entry.skillId === "prc").proficiency === "proficient", "proficiency is marked");
+assert(skills.find(entry => entry.skillId === "ste").proficiency == null, "half proficiency stays unmarked");
+assert(skills.some(entry => entry.skillId === "lockpicking"), "custom skills are included");
+const deathRoll = await rollAbilityHudOption({ rollDeathSave: async () => ({ type: "death" }) }, { kind: "death-save" });
+assert(deathRoll.type === "death", "death save uses rollDeathSave");
 
 // --- Class features ---
 const paladin = {

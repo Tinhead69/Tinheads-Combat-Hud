@@ -16,9 +16,13 @@ import {
   sheetItemTooltip,
   t
 } from "./actor-options.mjs";
+import { CHROME } from "./module-icons.mjs";
 
 /** Item types that belong under Use Item. */
 const USE_ITEM_TYPES = new Set(["consumable"]);
+
+/** Use Item stays a flat list until it has more wedges than this. */
+export const USE_ITEM_GROUP_LIMIT = 10;
 
 /**
  * @param {Actor} actor
@@ -59,6 +63,92 @@ export function getUsableInventoryItems(actor, economy = "action") {
   }
 
   return options.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * When a Use Item ring has more than 10 consumables, gather every potion into
+ * one wedge and every spell scroll into another. Smaller rings stay flat.
+ * A category is only nested when it has at least two items, so a lone potion
+ * does not become a ring of one.
+ * @param {Array<object>} items from getUsableInventoryItems
+ * @returns {Array<object>}
+ */
+export function layoutUseItemEntries(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length <= USE_ITEM_GROUP_LIMIT) return list.slice();
+
+  const grouped = { potion: [], scroll: [] };
+  const rest = [];
+  for (const entry of list) {
+    const groupId = useItemGroupId(entry?.item);
+    if (groupId) grouped[groupId].push(entry);
+    else rest.push(entry);
+  }
+
+  const hubs = [];
+  for (const groupId of ["potion", "scroll"]) {
+    const children = grouped[groupId];
+    if (children.length < 2) {
+      rest.push(...children);
+      continue;
+    }
+    children.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    hubs.push(useItemGroupHub(groupId, children));
+  }
+
+  return [...hubs, ...rest].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+/**
+ * @param {Item|null|undefined} item
+ * @returns {"potion"|"scroll"|null}
+ */
+export function useItemGroupId(item) {
+  if (!item) return null;
+  const typeValue = String(item.system?.type?.value ?? item.system?.consumableType ?? "").toLowerCase();
+  const subtype = String(item.system?.type?.subtype ?? "").toLowerCase();
+  const name = String(item.name ?? "");
+  if (typeValue === "potion" || /^potion\b/i.test(name)) return "potion";
+  if (isSpellScroll(item, typeValue, subtype, name)) return "scroll";
+  return null;
+}
+
+/**
+ * @param {Item} item
+ * @param {string} typeValue
+ * @param {string} subtype
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isSpellScroll(item, typeValue, subtype, name) {
+  if (subtype === "protection") return false;
+  if (subtype === "spell" || /spell scroll/i.test(name)) return true;
+  if (typeValue !== "scroll") return false;
+  if (subtype && subtype !== "spell") return false;
+  return !!(item.system?.spell || item.system?.linkedSpellUuid);
+}
+
+/**
+ * @param {"potion"|"scroll"} groupId
+ * @param {object[]} children
+ */
+function useItemGroupHub(groupId, children) {
+  const potion = groupId === "potion";
+  const name = potion ? t("Sections.Potions") : t("Sections.SpellScrolls");
+  return {
+    id: `use-item-group:${groupId}`,
+    kind: "use-item-group",
+    groupId,
+    name,
+    img: CHROME.useItem,
+    children,
+    available: children.some(child => child.available !== false),
+    requiresTarget: false,
+    tooltip: {
+      title: name,
+      description: potion ? t("Sections.PotionsHint") : t("Sections.SpellScrollsHint")
+    }
+  };
 }
 
 /**

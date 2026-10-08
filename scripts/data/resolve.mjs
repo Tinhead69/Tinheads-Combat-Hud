@@ -37,7 +37,10 @@ export async function resolveHudOption(option, ctx = {}) {
     ?? option.item?.actor
     ?? null;
 
-  const requiresTarget = option.kind === "ability-check" || option.kind === "ability-save"
+  const requiresTarget = option.kind === "ability-check"
+    || option.kind === "ability-save"
+    || option.kind === "skill-check"
+    || option.kind === "death-save"
     ? false
     : (option.requiresTarget ?? optionRequiresTarget(option.activity, option.item));
 
@@ -76,7 +79,7 @@ export async function resolveHudOption(option, ctx = {}) {
   }
 
   try {
-    if (option.kind === "ability-check" || option.kind === "ability-save" || option.kind === "skill-check") {
+    if (option.kind === "ability-check" || option.kind === "ability-save" || option.kind === "skill-check" || option.kind === "death-save") {
       await rollAbilityHudOption(actor, option);
       return { closed: true, ok: true };
     }
@@ -123,7 +126,7 @@ export async function executeResolvePayload(payload, ctx = {}) {
       : null);
   if (!actor) throw new Error(t("Notify.NoActor"));
 
-  if (payload.kind === "ability-check" || payload.kind === "ability-save" || payload.kind === "skill-check") {
+  if (payload.kind === "ability-check" || payload.kind === "ability-save" || payload.kind === "skill-check" || payload.kind === "death-save") {
     await rollAbilityHudOption(actor, {
       kind: payload.kind,
       abilityId: payload.abilityId,
