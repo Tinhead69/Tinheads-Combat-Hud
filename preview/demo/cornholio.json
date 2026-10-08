@@ -20,7 +20,15 @@
     },
     "attributes": {
       "hp": { "value": 0, "temp": 0 },
-      "movement": { "walk": 30 }
+      "movement": { "walk": 30 },
+      "death": { "success": 1, "failure": 1 }
+    },
+    "skills": {
+      "ath": { "value": 2, "ability": "str", "total": 11 },
+      "prc": { "value": 1, "ability": "wis", "total": 7 },
+      "per": { "value": 1, "ability": "cha", "total": 6 },
+      "ins": { "value": 1, "ability": "wis", "total": 7 },
+      "ste": { "value": 0, "ability": "dex", "total": 4 }
     },
     "spells": {
       "spell1": { "value": 3, "override": 4 },

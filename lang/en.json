@@ -13,12 +13,16 @@
       "CastSpell": "Cast Spell",
       "UseItem": "Use Item",
       "ActionHint": "Attack, Cast Spell, Dodge, Dash, Disengage, Help, Ready, or Other.",
-      "ChecksHint": "Ability checks and saving throws.",
+      "ChecksHint": "Saving throws, skill checks, and death saves.",
       "BonusHint": "Bonus actions, bonus-action spells, and items you use as a bonus action.",
       "ReactionHint": "Attack of Opportunity, plus reactions from your sheet.",
       "CastSpellHint": "Choose a spell level, then a spell to cast.",
       "UseItemHint": "Potions, scrolls, and other consumables.",
-      "UseItemBonusHint": "Potions and other consumables you use as a bonus action."
+      "UseItemBonusHint": "Potions and other consumables you use as a bonus action.",
+      "Potions": "Potions",
+      "PotionsHint": "Every potion you can use from this ring.",
+      "SpellScrolls": "Spell Scrolls",
+      "SpellScrollsHint": "Every spell scroll you can use from this ring."
     },
     "BasicActions": {
       "Dash": "Dash",
@@ -44,6 +48,15 @@
     "Checks": {
       "Check": "Check",
       "Save": "Save",
+      "Saves": "Saves",
+      "SavesHint": "Roll a saving throw.",
+      "Skills": "Skills",
+      "SkillsHint": "Roll a skill check. A silver outline is proficiency. Gold is expertise.",
+      "DeathSave": "Death Saves",
+      "DeathSaveProgress": "Successes {success}/3 · Failures {failure}/3",
+      "Proficient": "Proficient",
+      "Expertise": "Expertise",
+      "SkillHint": "Roll this skill.",
       "AbilityHint": "Roll using the dnd5e ability helpers.",
       "Mod": "Check mod {mod}",
       "SaveMod": "Save mod {mod}"
