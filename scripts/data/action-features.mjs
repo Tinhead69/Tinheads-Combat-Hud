@@ -463,31 +463,30 @@ function isRestOnlyItem(item) {
  */
 function buildFamilyLeaf(family, shells, parent, childItems, activation) {
   if (!parent && !childItems.length) return null;
-  if (familyButtonRing(parent, shells) !== activation) return null;
 
+  const matchingChildren = childItems.filter(item => featureMatchesActivation(item, activation));
   const activities = [];
   for (const shell of shells) {
     for (const activity of combatActivities(shell)) {
+      if (!matchesActivation(getActivationType(activity, shell), activation)) continue;
       if (activity && !activity.item && !activity.parent) activity.item = shell;
       activities.push(activity);
     }
   }
 
-  const modes = familyModeActivities(activities, childItems.length > 0, family);
-  const hasNest = childItems.length > 0 || modes.length > 1;
-  const host = parent ?? syntheticFamilyParent(family, childItems);
+  const modes = familyModeActivities(activities, matchingChildren.length > 0, family);
+  if (!modes.length && !matchingChildren.length) return null;
+
+  const hasNest = matchingChildren.length > 0 || modes.length > 1;
+  const host = parent ?? syntheticFamilyParent(family, matchingChildren);
   const primary = modes[0] ?? firstCombatActivity(host);
-  const anyModes = modes.length > 0 || childItems.length > 0;
-  if (!anyModes && !shells.some(shell => featureMatchesActivation(shell, activation))) {
-    return null;
-  }
 
   const leaf = makeLeaf({
     item: host,
     activity: hasNest ? null : primary,
     hasNest,
     nestActivities: hasNest ? modes : (primary ? [primary] : []),
-    childItems,
+    childItems: matchingChildren,
     available: canAttemptUse(hasNest ? null : primary, primary?.item ?? host),
     activation,
     usesLabel: formatUses(host, null)
@@ -497,24 +496,6 @@ function buildFamilyLeaf(family, shells, parent, childItems, activation) {
     featureFamily: family,
     channelDivinity: family.id === "channel-divinity"
   };
-}
-
-/**
- * The uses-pool button stays on the ring that matches the Channel Divinity shell.
- * Individual divinities may be actions or bonus actions; they still list under that button.
- * @param {Item|null} parent
- * @param {Item[]} shells
- * @returns {"action"|"bonus"|"reaction"}
- */
-function familyButtonRing(parent, shells) {
-  const host = parent ?? shells[0] ?? null;
-  if (!host) return "action";
-  const action = featureMatchesActivation(host, "action");
-  const bonus = featureMatchesActivation(host, "bonus");
-  const reaction = featureMatchesActivation(host, "reaction");
-  if (bonus && !action) return "bonus";
-  if (reaction && !action && !bonus) return "reaction";
-  return "action";
 }
 
 /**

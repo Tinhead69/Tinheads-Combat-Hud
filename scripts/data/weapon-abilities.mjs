@@ -28,6 +28,18 @@ export function isAttackActivity(activity) {
 }
 
 /**
+ * Bonus and reaction activities belong on those rings, not Use Ability.
+ * @param {object} activity
+ * @returns {boolean}
+ */
+function isOtherEconomyActivity(activity) {
+  const activation = String(
+    activity?.activation?.type ?? activity?.system?.activation?.type ?? ""
+  ).toLowerCase().trim();
+  return activation === "bonus" || activation === "reaction";
+}
+
+/**
  * Midi-QOL activity config. Present on activities that Midi will run.
  * @param {object} activity
  * @returns {object|null}
@@ -91,7 +103,9 @@ export function getWeaponActivityGroups(item) {
   for (const activity of activities) {
     if (isAttackActivity(activity)) attacks.push(activity);
     else if (midiActivityFlags(activity)?.automationOnly === true) continue;
-    else if (!isPassiveActivity(activity)) specials.push(activity);
+    else if (isPassiveActivity(activity)) continue;
+    else if (isOtherEconomyActivity(activity)) continue;
+    else specials.push(activity);
   }
 
   return {

@@ -133,6 +133,30 @@ assert(!hazModes.includes("Increased Potency"), "passive rider is not an action"
 assert(!hazModes.includes("Wounding"), "automation-only midi rider is not a button");
 assert(!hazModes.includes("Attack"), "attack stays off the ability list");
 
+const mixedBlade = enrichWeaponOption({
+  id: "mixed-blade",
+  name: "Mixed Blade",
+  img: "",
+  item: {
+    id: "mixed-blade",
+    name: "Mixed Blade",
+    type: "weapon",
+    img: "",
+    isOwner: true,
+    system: {
+      activities: [
+        { id: "atk", name: "Attack", type: "attack", activation: { type: "action" } },
+        { id: "cleave", name: "Cleave", type: "damage", activation: { type: "action" } },
+        { id: "riposte", name: "Riposte", type: "damage", activation: { type: "bonus" } }
+      ]
+    }
+  },
+  activity: null
+});
+const mixedModes = getWeaponAbilityOptions(mixedBlade).map(mode => mode.name);
+assert(mixedModes.join(",") === "Cleave", "Use Ability lists action activities");
+assert(!mixedModes.includes("Riposte"), "bonus weapon activities stay off Use Ability");
+
 const midiStaff = enrichWeaponOption({
   id: "midi-staff",
   name: "Staff of Frost",
@@ -425,11 +449,14 @@ const splitModes = getFeatureModeOptions(splitCd).map(mode => mode.name);
 assert(splitModes.includes("Turn Undead"), "parent modes stay in the nest");
 assert(splitModes.includes("Abjure Enemies"), "named option is nested");
 assert(splitModes.includes("Sacred Weapon"), "feature title wins over a generic activity name");
-assert(splitModes.includes("Vow of Enmity"), "bonus divinity is listed with its own title");
+assert(!splitModes.includes("Vow of Enmity"), "bonus divinity stays off the action nest");
 assert(!splitModes.some(name => name === "Channel Divinity"), "generic activity is not a divinity title");
 assert(!splitFeatures.some(f => f.name.includes("Abjure") || f.name.includes("Vow")), "options are not their own wedges");
 const bonusFeatures = getClassFeatureOptions(splitPaladin, "bonus");
-assert(!bonusFeatures.some(f => /channel divinity|vow of enmity/i.test(f.name)), "divinities stay off the bonus ring");
+const bonusCd = bonusFeatures.find(f => f.name === "Channel Divinity");
+assert(bonusCd?.hasNest === true, "bonus divinities open from the bonus ring");
+const bonusModes = getFeatureModeOptions(bonusCd).map(mode => mode.name);
+assert(bonusModes.join(",") === "Vow of Enmity", "only the bonus divinity is on that nest");
 
 const sorcerer = {
   id: "S1",
@@ -499,10 +526,11 @@ const metamagic = metamagicRing.find(f => f.name === "Metamagic");
 assert(metamagic.hasNest === true, "Metamagic opens a nest");
 const metamagicModes = getFeatureModeOptions(metamagic).map(mode => mode.name);
 assert(metamagicModes.includes("Heightened Spell"), "Heightened Spell is in the Metamagic nest");
-assert(metamagicModes.includes("Twinned Spell"), "Twinned Spell is in the Metamagic nest");
+assert(!metamagicModes.includes("Twinned Spell"), "bonus metamagic stays off the action nest");
 assert(!metamagicModes.includes("Metamagic"), "generic Metamagic activity is not a nest title");
 const metamagicBonus = getClassFeatureOptions(sorcerer, "bonus");
-assert(!metamagicBonus.some(f => /metamagic|twinned/i.test(f.name)), "metamagic options stay off the bonus ring");
+const bonusMeta = metamagicBonus.find(f => f.name === "Metamagic");
+assert(getFeatureModeOptions(bonusMeta).map(mode => mode.name).join(",") === "Twinned Spell", "Twinned Spell is on the bonus ring");
 
 const ring = buildActionRingEntries(paladin, []);
 assert(ring.some(e => e.kind === "abilities"), "abilities hub on the Action ring");
