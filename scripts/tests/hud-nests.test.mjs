@@ -614,6 +614,26 @@ const withMagic = {
 assert(isSuppressedActionFeature(withMagic.items.find(i => i.name === "Magic")), "Magic is not an ability button");
 assert(!getClassFeatureOptions(withMagic, "action").some(f => f.name === "Magic"), "Magic stays off Abilities");
 assert(getClassFeatureOptions(withMagic, "action").some(f => f.name === "Magic Weapon"), "Magic Weapon stays on Abilities");
+const withReadySpell = {
+  ...withMagic,
+  items: [
+    ...withMagic.items,
+    {
+      id: "ready-spell",
+      name: "Ready Spell",
+      type: "feat",
+      img: "",
+      isOwner: true,
+      system: {
+        identifier: "ready-spell",
+        activation: { type: "action" },
+        activities: [{ id: "rs", name: "Ready Spell", type: "utility", activation: { type: "action" } }]
+      }
+    }
+  ]
+};
+assert(isSuppressedActionFeature(withReadySpell.items.find(i => i.name === "Ready Spell")), "Ready Spell is not an ability button");
+assert(!getClassFeatureOptions(withReadySpell, "action").some(f => f.name === "Ready Spell"), "Ready Spell stays off Abilities");
 
 const maneuvers = {
   id: "M1",

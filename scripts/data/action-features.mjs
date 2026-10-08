@@ -35,6 +35,7 @@ const BASIC_NAMES = new Set([
  * Sheet feats that are not buttons.
  * Extra Attack only changes the Attack action. "Attack" and "Unarmed Strike"
  * are the Attack nest itself. "Magic" is Cast Spell, already under Action.
+ * "Ready Spell" is the Ready action, already under Action.
  * "Midi Use" is a Midi-QOL activity name, not a player action — those items
  * still live on the actor, they just are not wedges.
  */
@@ -73,7 +74,9 @@ const SUPPRESSED_FEATURES = new Set([
   "midiqol",
   "attack",
   "unarmed strike",
-  "magic"
+  "magic",
+  "ready spell",
+  "readyspell"
 ]);
 
 /**
