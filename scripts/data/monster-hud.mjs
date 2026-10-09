@@ -86,7 +86,8 @@ function parseChallengeRating(raw) {
  * An empty activation on a weapon counts as an action.
  * When the creature has legendary actions, those share an Attack nest with its
  * action attacks. Lair actions stay on the action ring.
- * The reaction ring always offers Attack of Opportunity.
+ * The reaction ring lists every reaction on the sheet, including saves,
+ * and always offers Attack of Opportunity.
  * @param {Actor} actor
  * @param {"action"|"bonus"|"reaction"} activation
  * @returns {Array<object>}
@@ -95,6 +96,7 @@ export function getMonsterAttackOptions(actor, activation) {
   const wanted = String(activation || "").toLowerCase();
   const seen = new Set();
   const options = collectAttacks(actor, wanted, seen);
+  if (wanted === "reaction") options.push(...collectSheetReactions(actor, seen));
   options.sort((a, b) => a.name.localeCompare(b.name));
   if (wanted === "action") return actionRingOptions(actor, options, seen);
   if (wanted === "reaction") ensureOpportunityAttack(options);
@@ -156,6 +158,43 @@ function collectAttacks(actor, wanted, seen) {
       if (seen.has(key)) continue;
       seen.add(key);
       options.push(monsterAttackOption(item, activity));
+    }
+  }
+  return options;
+}
+
+/**
+ * Reaction saves and other non-attack reactions from the sheet.
+ * Spells stay on Cast Spell. Attack reactions are collected separately.
+ * @param {Actor} actor
+ * @param {Set<string>} seen
+ * @returns {Array<object>}
+ */
+function collectSheetReactions(actor, seen) {
+  const options = [];
+  for (const item of actor?.items ?? []) {
+    if (item?.type === "spell") continue;
+    const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
+    const reactions = activities.filter(activity => {
+      if (isAttackActivity(activity)) return false;
+      return attackActivation(activity, item) === "reaction";
+    });
+
+    if (!reactions.length) {
+      if (activities.length || item?.type === "weapon") continue;
+      if (attackActivation(null, item) !== "reaction") continue;
+      const key = activityKey(item, null);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push(monsterSpecialOption(item, null, "reaction"));
+      continue;
+    }
+
+    for (const activity of reactions) {
+      const key = activityKey(item, activity);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push(monsterSpecialOption(item, activity, "reaction"));
     }
   }
   return options;
@@ -275,7 +314,7 @@ function monsterAttackHub() {
 /**
  * @param {Item} item
  * @param {object|null} activity
- * @param {"legendary"|"lair"} activation
+ * @param {string} activation
  */
 function monsterSpecialOption(item, activity, activation) {
   const name = monsterAttackLabel(item, activity);

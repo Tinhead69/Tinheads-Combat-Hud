@@ -97,6 +97,25 @@ const reactions = getMonsterAttackOptions(wolf, "reaction");
 assert(reactions[0]?.kind === "opportunity" && reactions[0]?.id === "attack-of-opportunity", "every monster gets an attack of opportunity");
 assert(reactions.slice(1).map(entry => entry.name).join(",") === "Tail", "reaction attacks sit beside the opportunity attack");
 
+const amnizu = {
+  type: "npc",
+  system: { details: { cr: 18 } },
+  items: [
+    {
+      id: "charm",
+      type: "feat",
+      name: "Instinctive Charm",
+      system: {
+        activation: { type: "reaction" },
+        activities: [{ id: "charm", name: "Instinctive Charm", type: "save", activation: { type: "reaction" } }]
+      }
+    }
+  ]
+};
+const amnizuReactions = getMonsterAttackOptions(amnizu, "reaction");
+assert(amnizuReactions[0]?.id === "attack-of-opportunity", "a save reaction still keeps the opportunity attack");
+assert(amnizuReactions[1]?.name === "Instinctive Charm" && amnizuReactions[1]?.kind === "feature", "a reaction save is listed on the reaction ring");
+
 const listedOpportunity = {
   type: "npc",
   system: { details: { cr: 2 } },
