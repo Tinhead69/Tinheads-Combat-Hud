@@ -30,13 +30,14 @@
       "Dodge": "Dodge",
       "Help": "Help",
       "Ready": "Ready",
+      "DashHint": "Gain extra movement equal to your speed until the end of this turn.",
       "Hint": "Core combat action — announces in chat if no matching sheet item.",
       "FromSheet": "Uses the matching item or activity from the character sheet."
     },
     "CunningAction": {
       "Hide": "Hide",
       "HideHint": "Make a Stealth check.",
-      "DashHint": "Dash as a bonus action.",
+      "DashHint": "Dash as a bonus action and gain extra movement equal to your speed until the end of this turn.",
       "DisengageHint": "Disengage as a bonus action.",
       "Hint": "Hover for Hide, Dash, and Disengage."
     },
@@ -51,7 +52,7 @@
       "Saves": "Saves",
       "SavesHint": "Roll a saving throw.",
       "Skills": "Skills",
-      "SkillsHint": "Roll a skill check. A silver outline is proficiency. Gold is expertise.",
+      "SkillsHint": "Roll a skill check. The wedge matches that ability's save. A silver border is proficiency. A gold outline is expertise.",
       "DeathSave": "Death Saves",
       "DeathSaveProgress": "Successes {success}/3 · Failures {failure}/3",
       "Proficient": "Proficient",

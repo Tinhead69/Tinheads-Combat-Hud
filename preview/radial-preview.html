@@ -85,7 +85,7 @@
     } from "../scripts/ui/radial-geometry.mjs";
     import { appendHubArt, appendWedgeArt } from "../scripts/ui/wedge-art.mjs";
     import { applyIconPalette } from "../scripts/ui/icon-color.mjs";
-    import { wedgeCaptionLines } from "../scripts/ui/wedge-text.mjs";
+    import { appendWedgeText, wedgeTextLayout } from "../scripts/ui/wedge-text.mjs";
     import { previewWedge } from "../scripts/data/module-icons.mjs";
 
     const CHROME = {
@@ -422,10 +422,6 @@
       }
     }
 
-    function captionLines(caption) {
-      return wedgeCaptionLines(caption);
-    }
-
     function leaf(cfg) {
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.classList.add("tch-segment");
@@ -462,30 +458,24 @@
       path.setAttribute("d", d);
       g.appendChild(path);
       if (cfg.label) {
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.classList.add("tch-segment__label");
-        text.setAttribute("x", a.x);
-        text.setAttribute("y", a.y + (cfg.caption ? -8 : 0));
-        text.textContent = cfg.label;
-        g.appendChild(text);
+        const laid = wedgeTextLayout({
+          start: cfg.start, end: cfg.end, inner: cfg.inner, outer: cfg.outer,
+          text: cfg.label, cx: CX, cy: CY
+        });
+        appendWedgeText(g, "tch-segment__label", laid, a, cfg.caption ? -laid.lineH * 0.45 : 0);
       }
       if (cfg.caption) {
-        const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        cap.classList.add(cfg.label ? "tch-segment__caption" : "tch-segment__label");
-        const lines = captionLines(cfg.caption);
-        const lineH = 15;
-        const origin = a.y + (cfg.label ? 10 : 0);
-        const startY = origin - ((lines.length - 1) * lineH) / 2;
-        cap.setAttribute("x", a.x);
-        cap.setAttribute("y", startY);
-        lines.forEach((line, index) => {
-          const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-          tspan.setAttribute("x", a.x);
-          tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
-          tspan.textContent = line;
-          cap.appendChild(tspan);
+        const laid = wedgeTextLayout({
+          start: cfg.start, end: cfg.end, inner: cfg.inner, outer: cfg.outer,
+          text: cfg.caption, cx: CX, cy: CY
         });
-        g.appendChild(cap);
+        appendWedgeText(
+          g,
+          cfg.label ? "tch-segment__caption" : "tch-segment__label",
+          laid,
+          a,
+          cfg.label ? laid.lineH * 0.45 : 0
+        );
       }
       return g;
     }
