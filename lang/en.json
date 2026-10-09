@@ -65,6 +65,7 @@
     "AttackNest": {
       "Label": "Attack",
       "Hint": "Equipped weapons and unarmed strike.",
+      "MonsterHint": "Attacks and legendary actions.",
       "Unarmed": "Unarmed Strike",
       "UnarmedHint": "Strike without a weapon."
     },
