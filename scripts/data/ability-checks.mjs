@@ -108,7 +108,7 @@ export function getAbilityRollOptions(abilityOption) {
 }
 
 /**
- * First ring under Checks: Saves, Skills, and Death Saves.
+ * First ring under Checks: Saves and Skills. Death Saves are for player characters.
  * @param {Actor} actor
  * @returns {Array<object>}
  */

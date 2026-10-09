@@ -2,7 +2,7 @@
 
 Nested radial combat HUD for **Foundry VTT v13** and **dnd5e 3.0.0+**. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.1.20** (`module.json`).
+Current module version: **0.1.21** (`module.json`).
 
 ## What it does
 

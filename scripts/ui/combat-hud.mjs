@@ -693,7 +693,7 @@ export class CombatHud {
         id: "checks",
         label: t("Sections.Checks"),
         img: CHROME.checks,
-        hint: t("Sections.ChecksHint")
+        hint: isMonsterActor(this.actor) ? t("Sections.ChecksHintMonster") : t("Sections.ChecksHint")
       },
       {
         id: "bonus",
