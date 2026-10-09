@@ -37,21 +37,6 @@ export async function resolveHudOption(option, ctx = {}) {
     ?? option.item?.actor
     ?? null;
 
-  const requiresTarget = option.kind === "ability-check"
-    || option.kind === "ability-save"
-    || option.kind === "skill-check"
-    || option.kind === "death-save"
-    ? false
-    : (option.requiresTarget ?? optionRequiresTarget(option.activity, option.item));
-
-  if (requiresTarget && !hasActiveTargets()) {
-    const token = await requestTargetSelection(option.name || t("Notify.SelectTarget"));
-    if (!token) {
-      ui.notifications.warn(t("Notify.TargetCancelled"));
-      return { closed: true, ok: false };
-    }
-  }
-
   const local = shouldResolveLocally(actor) || canResolveLocally(actor);
 
   if (!local) {
@@ -135,11 +120,6 @@ export async function executeResolvePayload(payload, ctx = {}) {
     return { ok: true, closed: true };
   }
 
-  if (payload.requiresTarget && !(payload.targetUuids?.length)) {
-    // Requester said they had targets; if list empty, refuse.
-    throw new Error(t("Notify.SelectTarget"));
-  }
-
   const item = payload.itemUuid && typeof fromUuid === "function"
     ? await fromUuid(payload.itemUuid)
     : null;
@@ -167,82 +147,6 @@ export async function executeResolvePayload(payload, ctx = {}) {
 
   await useOption(option);
   return { ok: true, closed: true };
-}
-
-function hasActiveTargets() {
-  return (game.user?.targets?.size ?? 0) > 0;
-}
-
-/**
- * Ask the player to click a token, then target it.
- * @param {string} name
- * @returns {Promise<Token|null>}
- */
-function requestTargetSelection(name) {
-  const label = t("Notify.ChooseTarget", { name });
-  const hint = t("Notify.ChooseTargetHint");
-  ui.notifications?.info?.(label);
-
-  const stage = globalThis.canvas?.stage;
-  const placeables = globalThis.canvas?.tokens?.placeables;
-  if (!stage || !placeables) return Promise.resolve(null);
-
-  const banner = document.createElement("div");
-  banner.className = "tch-target-prompt";
-  banner.textContent = `${label} ${hint}`;
-  document.body.appendChild(banner);
-  document.body.classList.add("tch-targeting");
-
-  return new Promise(resolve => {
-    let settled = false;
-
-    const finish = (token) => {
-      if (settled) return;
-      settled = true;
-      banner.remove();
-      document.body.classList.remove("tch-targeting");
-      window.removeEventListener("keydown", onKey, true);
-      stage.off("pointerdown", onPointer);
-      Hooks.off("targetToken", onTarget);
-      resolve(token ?? null);
-    };
-
-    const onKey = (event) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      finish(null);
-    };
-
-    const onTarget = (user, token, targeted) => {
-      if (!targeted || user?.id !== game.user?.id || !token) return;
-      finish(token);
-    };
-
-    const onPointer = (event) => {
-      const layer = globalThis.canvas.tokens;
-      const point = event.getLocalPosition?.(layer) ?? event.data?.getLocalPosition?.(layer);
-      if (!point) return;
-      const tokens = [...placeables].reverse();
-      const hit = tokens.find(token => {
-        if (!token?.visible || token.document?.hidden) return false;
-        const bounds = token.bounds;
-        return bounds?.contains?.(point.x, point.y);
-      });
-      if (!hit) return;
-      event.stopPropagation?.();
-      try {
-        hit.setTarget(true, { releaseOthers: true, groupSelection: false });
-      } catch (_) {
-        /* targetToken hook may already have fired */
-      }
-      finish(hit);
-    };
-
-    window.addEventListener("keydown", onKey, true);
-    Hooks.on("targetToken", onTarget);
-    stage.on("pointerdown", onPointer);
-  });
 }
 
 /**
@@ -280,25 +184,41 @@ function weaponAttackActivity(option) {
   return null;
 }
 
+function midiQolActive() {
+  return !!game.modules?.get?.("midi-qol")?.active;
+}
+
 /**
- * Post the activity chat card only.
- * dnd5e opens the Attack Roll dialog from the activity's follow-up action.
- * subsequentActions: false leaves that for the Attack button on the card.
+ * Weapon attacks go through Midi-QOL when it is installed.
+ * Otherwise dnd5e activity.use() runs the built-in attack.
  * @param {object} option
  */
 async function useWeaponAttack(option) {
   const item = option.item ?? null;
   const activity = weaponAttackActivity(option);
-  const usageConfig = { subsequentActions: false };
-  const dialogConfig = { configure: false };
-  const messageConfig = { create: true };
+
+  if (midiQolActive() && activity && typeof globalThis.MidiQOL?.completeActivityUse === "function") {
+    const usage = {};
+    const targetUuids = getSelectedTargetUuids();
+    if (targetUuids.length) usage.midiOptions = { targetUuids };
+    return globalThis.MidiQOL.completeActivityUse(
+      activity,
+      usage,
+      { configure: true },
+      { create: true }
+    );
+  }
 
   if (activity && typeof activity.use === "function") {
-    return activity.use(usageConfig, dialogConfig, messageConfig);
+    return activity.use();
+  }
+
+  if (activity && typeof activity.rollAttack === "function") {
+    return activity.rollAttack();
   }
 
   if (item && typeof item.use === "function") {
-    return item.use(usageConfig, dialogConfig, messageConfig);
+    return item.use();
   }
 
   if (item && typeof item.displayCard === "function") {
@@ -309,7 +229,7 @@ async function useWeaponAttack(option) {
 }
 
 /**
- * Prefer activity.use(); weapon attacks post the chat card without the roll dialog.
+ * Prefer activity.use(). Weapon attacks use Midi-QOL or dnd5e's attack.
  * Fall back to item.use(); then basic-action chat.
  * @param {object} option
  */
