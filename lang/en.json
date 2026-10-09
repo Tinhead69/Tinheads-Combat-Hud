@@ -129,7 +129,10 @@
       "NoItemUses": "None left.",
       "NoWeaponAbilities": "No special abilities",
       "NoFeatureModes": "No feature options",
-      "NoOtherActions": "No other actions"
+      "NoOtherActions": "No other actions",
+      "NoActionAttacks": "No action attacks",
+      "NoBonusAttacks": "No bonus action attacks",
+      "NoReactionAttacks": "No reaction attacks"
     },
     "Notify": {
       "Unavailable": "That option is unavailable.",
