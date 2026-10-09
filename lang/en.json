@@ -89,6 +89,10 @@
       "Label": "Abilities",
       "Hint": "Class features from your character sheet."
     },
+    "Features": {
+      "Label": "Features",
+      "Hint": "Special abilities from this creature."
+    },
     "WeaponNest": {
       "Attack": "Attack",
       "UseAbility": "Use Ability",
@@ -99,6 +103,9 @@
     },
     "SpellLevels": {
       "0": "Cantrip",
+      "AtWill": "At Will",
+      "Innate": "Innate",
+      "Pact": "Pact Magic",
       "1": "1st",
       "2": "2nd",
       "3": "3rd",
