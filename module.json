@@ -2,7 +2,7 @@
   "id": "tinheads-combat-hud",
   "title": "Tinhead's Combat Hud",
   "description": "Nested radial combat HUD for dnd5e. Open from a token to pick Action, Bonus Action, Reaction, or Checks and resolve through the system. Supports socketlib proxy for absent-player control.",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "compatibility": {
     "minimum": "13",
     "verified": "13.351"

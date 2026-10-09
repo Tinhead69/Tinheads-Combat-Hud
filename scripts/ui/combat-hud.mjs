@@ -28,6 +28,7 @@ import {
   getSkillOptions
 } from "../data/ability-checks.mjs";
 import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
+import { getMonsterAttackOptions, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
   arcSegmentsForParent,
@@ -287,7 +288,9 @@ export class CombatHud {
     this._drawMainRing();
     this._drawHub();
 
-    if (this.state.section === "action") {
+    if (isMonsterActor(this.actor) && (this.state.section === "action" || this.state.section === "bonus" || this.state.section === "reaction")) {
+      this._drawMonsterAttackRing(this.state.section);
+    } else if (this.state.section === "action") {
       this._drawActionRing();
       if (this.state.readyOpen) this._drawReadyNest();
       else if (this.state.attackOpen) this._drawAttackNest(2);
@@ -770,6 +773,62 @@ export class CombatHud {
 
       this.svg.appendChild(g);
     }
+  }
+
+  /**
+   * Monster sheet: attacks of this activation, with no character nests.
+   * @param {"action"|"bonus"|"reaction"} activation
+   */
+  _drawMonsterAttackRing(activation) {
+    const entries = getMonsterAttackOptions(this.actor, activation);
+    const group = this._ringGroup(activation);
+    const main = mainSectionById(activation);
+    const inner = RINGS.actionInner;
+    const outer = RINGS.actionOuter;
+
+    if (!entries.length) {
+      const msg = activation === "bonus"
+        ? t("Empty.NoBonusAttacks")
+        : activation === "reaction"
+          ? t("Empty.NoReactionAttacks")
+          : t("Empty.NoActionAttacks");
+      this._emptyLabel(group, msg, (inner + outer) / 2);
+      this.svg.appendChild(group);
+      return;
+    }
+
+    const segs = arcSegmentsForParent(entries.length, main.start, main.end, { maxSpanDeg: 220 });
+    entries.forEach((opt, i) => {
+      const seg = segs[i];
+      const g = this._leafSegment({
+        start: seg.start,
+        end: seg.end,
+        inner,
+        outer,
+        caption: opt.name,
+        img: opt.img,
+        itemArt: true,
+        unavailable: opt.available === false
+      });
+
+      g.addEventListener("pointerenter", (ev) => {
+        this._clearCollapse();
+        this.showTooltip(opt.tooltip || { title: opt.name }, g, ev);
+      });
+      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
+      g.addEventListener("pointerleave", (ev) => {
+        this.hideTooltip();
+        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse(activation);
+      });
+      g.addEventListener("pointerdown", async (ev) => {
+        ev.stopPropagation();
+        await this._onLeafClick(opt);
+      });
+
+      group.appendChild(g);
+    });
+
+    this.svg.appendChild(group);
   }
 
   _drawActionRing() {
