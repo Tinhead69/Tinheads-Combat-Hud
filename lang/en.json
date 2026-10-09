@@ -14,6 +14,7 @@
       "UseItem": "Use Item",
       "ActionHint": "Attack, Cast Spell, Dodge, Dash, Disengage, Help, Ready, or Other.",
       "ChecksHint": "Saving throws, skill checks, and death saves.",
+      "ChecksHintMonster": "Saving throws and skill checks.",
       "BonusHint": "Bonus actions, bonus-action spells, and items you use as a bonus action.",
       "ReactionHint": "Attack of Opportunity, plus reactions from your sheet.",
       "CastSpellHint": "Choose a spell level, then a spell to cast.",
