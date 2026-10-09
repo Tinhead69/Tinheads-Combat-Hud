@@ -33,6 +33,7 @@ const { getActionFeatureOptions, getClassFeatureOptions, getOtherActionOptions, 
   await import("../data/action-features.mjs");
 const { buildActionRingEntries, getAttackNestEntries } = await import("../data/basic-actions.mjs");
 const { mainSectionAngles } = await import("../ui/radial-geometry.mjs");
+const { dashMovementChanges } = await import("../data/dash-movement.mjs");
 
 let passed = 0;
 function assert(cond, msg) {
@@ -314,6 +315,8 @@ const skilled = {
 const skills = getSkillOptions(skilled);
 assert(skills[0].skillId === "acr" && skills.some(entry => entry.skillId === "sur"), "skills follow the standard list");
 assert(skills.find(entry => entry.skillId === "ath").proficiency === "expertise", "expertise is marked");
+assert(skills.find(entry => entry.skillId === "ath").abilityId === "str", "athletics uses strength");
+assert(skills.find(entry => entry.skillId === "ath").tooltip.description.includes("Strength"), "skill tooltip names its ability");
 assert(skills.find(entry => entry.skillId === "prc").proficiency === "proficient", "proficiency is marked");
 assert(skills.find(entry => entry.skillId === "ste").proficiency == null, "half proficiency stays unmarked");
 assert(skills.some(entry => entry.skillId === "lockpicking"), "custom skills are included");
@@ -642,7 +645,11 @@ const maneuvers = {
     featAction("grapple", "Grapple"),
     featAction("mount", "Mount"),
     featAction("help", "Help"),
-    featAction("loh2", "Lay on Hands")
+    featAction("loh2", "Lay on Hands"),
+    featAction("fall", "Fall"),
+    featAction("suffocation", "Suffocation"),
+    featAction("underwater", "Underwater"),
+    featAction("cover", "Check Cover")
   ],
   system: { favorites: [], spells: {} },
   isOwner: true
@@ -662,11 +669,16 @@ function featAction(id, name) {
   };
 }
 const other = getOtherActionOptions(maneuvers);
-assert(other.map(entry => entry.name).sort().join(",") === "Grapple,Mount,Shove", "Other lists shove, grapple, and mount");
+assert(other.map(entry => entry.name).sort().join(",") === "Check Cover,Fall,Grapple,Mount,Shove,Suffocation,Underwater", "Other lists maneuvers and exploration actions");
 assert(!other.some(entry => entry.name === "Help"), "Help stays off Other");
-assert(!getClassFeatureOptions(maneuvers, "action").some(entry => ["Shove", "Grapple", "Mount", "Help"].includes(entry.name)), "maneuvers stay off Abilities");
+assert(!getClassFeatureOptions(maneuvers, "action").some(entry => ["Shove", "Grapple", "Mount", "Help", "Fall", "Suffocation", "Underwater", "Check Cover"].includes(entry.name)), "maneuvers stay off Abilities");
 assert(getClassFeatureOptions(maneuvers, "action").some(entry => entry.name === "Lay on Hands"), "class features stay on Abilities");
 const attacks = getAttackNestEntries(noisy, []);
+const dashWalk = dashMovementChanges({ walk: 30, fly: 0, swim: 0, climb: 0, burrow: 0 });
+assert(dashWalk.map(change => `${change.key}:${change.value}`).join(",") === "system.attributes.movement.walk:30", "dash adds the walking speed");
+const dashFlyer = dashMovementChanges({ walk: 30, fly: 60, swim: 0 });
+assert(dashFlyer.map(change => change.value).join(",") === "30,60", "dash also adds a fly speed the actor already has");
+assert(dashMovementChanges({ walk: 0, fly: 0 }).length === 0, "no speeds means no dash effect");
 assert(attacks.some(e => e.name === "Unarmed Strike"), "sheet Unarmed Strike is on the Attack nest");
 assert(!attacks.some(e => e.name === "Extra Attack"), "Extra Attack is not an attack choice");
 

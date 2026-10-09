@@ -55,7 +55,9 @@ function assert(cond, msg) {
   const action = mainSectionById("action");
   const segs = arcSegmentsForParent(12, action.start, action.end);
   const span = segs[11].end - segs[0].start;
-  assert(Math.abs(span - 360) < 1, "more than 10 options use the whole circle");
+  const closingGap = segs[0].start + 360 - segs[11].end;
+  assert(Math.abs(span + closingGap - 360) < 1, "more than 10 options use the whole circle");
+  assert(Math.abs(closingGap - ARC_DEFAULTS.gapDeg) < 0.05, "a full circle keeps a gap between the first and last wedge");
   assert(nestSpanDeg(11) === 360 && nestSpanDeg(10) === 360 && nestSpanDeg(9) === 180, "full circle from 10 options, half circle below that");
 }
 
@@ -76,6 +78,8 @@ function assert(cond, msg) {
   assert(Math.abs(centered[4].mid - north) < 0.01, "Attack wedge sits on the Action midpoint");
   assert(centered[5].mid > centered[4].mid, "the next wedge is clockwise of Attack");
   assert(centered[5].start >= centered[4].end - 0.01, "Cast Spell stays beside Attack");
+  const seam = centered[0].start + 360 - centered[9].end;
+  assert(Math.abs(seam - ARC_DEFAULTS.gapDeg) < 0.05, "Dodge and Use Item keep a gap where the ring closes");
 }
 
 console.log(`\n${passed} assertions passed`);

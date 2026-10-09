@@ -121,17 +121,20 @@ export function arcSegments(count, opts = {}) {
   const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
   const midAngle = opts.midAngle ?? 0;
 
-  const gapTotal = gapDeg * Math.max(count - 1, 0);
+  const openGaps = gapDeg * Math.max(count - 1, 0);
   let span;
   if (Number.isFinite(opts.fixedSpanDeg)) {
     span = opts.fixedSpanDeg;
   } else {
     span = Math.min(maxSpanDeg, count * idealSegmentDeg);
-    span = Math.max(span, Math.min(maxSpanDeg, count * minSegmentDeg + gapTotal));
-    const minNeeded = count * minSegmentDeg + gapTotal;
+    span = Math.max(span, Math.min(maxSpanDeg, count * minSegmentDeg + openGaps));
+    const minNeeded = count * minSegmentDeg + openGaps;
     if (minNeeded > maxSpanDeg) span = maxSpanDeg;
   }
 
+  // A full ring also needs a gap where the last wedge meets the first.
+  const closes = span >= 360 - 0.01;
+  const gapTotal = closes ? gapDeg * count : openGaps;
   const usable = Math.max(span - gapTotal, count * 4);
   const segSweep = usable / count;
   const start = midAngle - span / 2;

@@ -40,7 +40,7 @@ import {
 } from "./radial-geometry.mjs";
 import { appendHubArt, appendWedgeArt } from "./wedge-art.mjs";
 import { applyIconPalette } from "./icon-color.mjs";
-import { wedgeCaptionLines } from "./wedge-text.mjs";
+import { appendWedgeText, wedgeTextLayout } from "./wedge-text.mjs";
 import {
   DRAG_THRESHOLD_PX,
   clampHudCenter,
@@ -1613,12 +1613,16 @@ export class CombatHud {
           art.remove();
           g.classList.remove("tch-segment--has-art");
           if (!cfg.label && cfg.caption) {
-            const fallback = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            fallback.classList.add("tch-segment__label");
-            fallback.setAttribute("x", String(anchor.x));
-            fallback.setAttribute("y", String(anchor.y));
-            fallback.textContent = cfg.caption;
-            g.appendChild(fallback);
+            const laid = wedgeTextLayout({
+              start: cfg.start,
+              end: cfg.end,
+              inner: cfg.inner,
+              outer: cfg.outer,
+              text: cfg.caption,
+              cx: CX,
+              cy: CY
+            });
+            appendWedgeText(g, "tch-segment__label", laid, anchor, 0);
           }
         });
       }
@@ -1630,32 +1634,35 @@ export class CombatHud {
     g.appendChild(path);
 
     if (cfg.label) {
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      text.classList.add("tch-segment__label");
-      text.setAttribute("x", String(anchor.x));
-      text.setAttribute("y", String(anchor.y + (cfg.caption ? -6 : 0)));
-      text.textContent = cfg.label;
-      g.appendChild(text);
+      const laid = wedgeTextLayout({
+        start: cfg.start,
+        end: cfg.end,
+        inner: cfg.inner,
+        outer: cfg.outer,
+        text: cfg.label,
+        cx: CX,
+        cy: CY
+      });
+      appendWedgeText(g, "tch-segment__label", laid, anchor, cfg.caption ? -laid.lineH * 0.45 : 0);
     }
 
     if (cfg.caption) {
-      const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      const asLabel = !cfg.label;
-      cap.classList.add(asLabel ? "tch-segment__label" : "tch-segment__caption");
-      const lines = wedgeCaptionLines(cfg.caption);
-      const lineH = 14;
-      const origin = anchor.y + (cfg.label ? 10 : 0);
-      const startY = origin - ((lines.length - 1) * lineH) / 2;
-      cap.setAttribute("x", String(anchor.x));
-      cap.setAttribute("y", String(startY));
-      lines.forEach((line, index) => {
-        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-        tspan.setAttribute("x", String(anchor.x));
-        tspan.setAttribute("dy", index === 0 ? "0" : String(lineH));
-        tspan.textContent = line;
-        cap.appendChild(tspan);
+      const laid = wedgeTextLayout({
+        start: cfg.start,
+        end: cfg.end,
+        inner: cfg.inner,
+        outer: cfg.outer,
+        text: cfg.caption,
+        cx: CX,
+        cy: CY
       });
-      g.appendChild(cap);
+      appendWedgeText(
+        g,
+        cfg.label ? "tch-segment__caption" : "tch-segment__label",
+        laid,
+        anchor,
+        cfg.label ? laid.lineH * 0.45 : 0
+      );
     }
 
     return g;

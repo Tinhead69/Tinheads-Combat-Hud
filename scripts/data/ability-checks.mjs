@@ -191,7 +191,7 @@ export function getSkillOptions(actor) {
       available: true,
       tooltip: {
         title: name,
-        description: skillHint(mod, proficiency)
+        description: skillHint(mod, proficiency, abilityLabel(abilityId))
       }
     };
   });
@@ -369,8 +369,9 @@ function skillProficiency(skill) {
   return rank >= 2 ? "expertise" : "proficient";
 }
 
-function skillHint(mod, proficiency) {
+function skillHint(mod, proficiency, abilityName) {
   const parts = [];
+  if (abilityName) parts.push(abilityName);
   if (mod != null) parts.push(modLine(mod, "Checks.Mod"));
   if (proficiency === "expertise") parts.push(t("Checks.Expertise"));
   else if (proficiency === "proficient") parts.push(t("Checks.Proficient"));

@@ -40,7 +40,7 @@ const BASIC_NAMES = new Set([
  * still live on the actor, they just are not wedges.
  */
 /**
- * Mundane combat actions. They sit under Action → Other, not Abilities.
+ * Mundane and exploration actions. They sit under Action → Other, not Abilities.
  * Names and identifiers are compared after normalize().
  */
 const OTHER_ACTION_NAMES = new Set([
@@ -63,7 +63,14 @@ const OTHER_ACTION_NAMES = new Set([
   "improvise",
   "improvised action",
   "improvisation",
-  "escape a grapple"
+  "escape a grapple",
+  "fall",
+  "suffocation",
+  "suffocate",
+  "underwater",
+  "under water",
+  "check cover",
+  "checkcover"
 ]);
 
 const SUPPRESSED_FEATURES = new Set([

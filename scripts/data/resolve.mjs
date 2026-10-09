@@ -15,6 +15,7 @@ import {
   socketlibModuleActive
 } from "./permissions.mjs";
 import { rollAbilityHudOption } from "./ability-checks.mjs";
+import { grantDashMovement } from "./dash-movement.mjs";
 
 /**
  * @param {object} option
@@ -235,6 +236,11 @@ async function useWeaponAttack(option) {
  */
 async function useOption(option, actor = null) {
   const { activity, item } = option;
+  const resolvedActor = option.actor ?? item?.actor ?? actor ?? null;
+
+  if (option.basicId === "dash") {
+    await grantDashMovement(resolvedActor);
+  }
 
   if (isWeaponAttackOption(option)) {
     return useWeaponAttack(option);
@@ -255,7 +261,7 @@ async function useOption(option, actor = null) {
   if (option.kind === "basic") {
     return postBasicActionChat({
       ...option,
-      actor: option.actor ?? option.item?.actor ?? actor
+      actor: resolvedActor
     });
   }
 
@@ -281,7 +287,9 @@ async function postBasicActionChat(option) {
   const who = actor?.name || speaker.alias || "Character";
   const line = option.basicId === "ready-other"
     ? `<strong>${escapeHtml(who)}</strong> readies another action.`
-    : `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action.`;
+    : option.basicId === "dash"
+      ? `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action and gains extra movement equal to their speed until the end of this turn.`
+      : `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action.`;
   const content = `
     <div class="dnd5e chat-card tinheads-combat-hud basic-action">
       <header class="card-header flexrow">

@@ -99,7 +99,7 @@ function resolveBasicAction(actor, def) {
       source: match.source,
       tooltip: {
         title: label,
-        description: itemDescriptionText(match.item, match.activity)
+        description: dashTooltip(def.id) || itemDescriptionText(match.item, match.activity)
           || (match.source === "item" ? t("BasicActions.FromSheet") : t("BasicActions.Hint"))
       }
     };
@@ -119,7 +119,7 @@ function resolveBasicAction(actor, def) {
     source: "module",
     tooltip: {
       title: label,
-      description: t("BasicActions.Hint")
+      description: dashTooltip(def.id) || t("BasicActions.Hint")
     }
   };
 }
@@ -212,6 +212,11 @@ function normalizeName(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function dashTooltip(basicId) {
+  if (basicId !== "dash") return "";
+  return t("BasicActions.DashHint");
 }
 
 function safeLocalize(key, fallback) {

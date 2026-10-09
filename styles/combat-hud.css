@@ -408,7 +408,6 @@
 .tch-economy--checks .tch-segment--has-art.tch-segment--expertise:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--expertise:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--has-art.tch-segment--expertise:not(.tch-segment--main):hover .tch-segment__fill {
-  fill: rgba(214, 168, 64, 0.72);
   stroke: #f3d48a;
   stroke-width: 3px;
 }
@@ -479,6 +478,12 @@
   fill: var(--tch-icon-fill-hot);
   stroke: var(--tch-icon-stroke-hot);
   stroke-width: 3px;
+}
+
+.tch-segment__arc {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
 }
 
 .tch-segment__label {
