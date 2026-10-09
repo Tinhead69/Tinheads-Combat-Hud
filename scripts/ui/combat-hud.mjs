@@ -28,7 +28,7 @@ import {
   getSkillOptions
 } from "../data/ability-checks.mjs";
 import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
-import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterOpportunityAttacks, isMonsterActor } from "../data/monster-hud.mjs";
+import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
   arcSegmentsForParent,
@@ -289,11 +289,22 @@ export class CombatHud {
     this._drawHub();
 
     if (isMonsterActor(this.actor) && (this.state.section === "action" || this.state.section === "bonus" || this.state.section === "reaction")) {
-      if (this.state.section !== "action") this.state.attackOpen = false;
+      if (this.state.section !== "action") {
+        this.state.attackOpen = false;
+        this.state.castSpell = false;
+        this.state.spellLevel = null;
+        this.state.abilitiesOpen = false;
+      }
       if (this.state.section !== "reaction") this.state.opportunityOpen = false;
       this._drawMonsterAttackRing(this.state.section);
       if (this.state.section === "action" && this.state.attackOpen) {
         this._drawMonsterAttackNest();
+      }
+      if (this.state.section === "action" && this.state.castSpell) {
+        this._drawMonsterSpellNest();
+      }
+      if (this.state.section === "action" && this.state.abilitiesOpen) {
+        this._drawMonsterFeatureNest();
       }
       if (this.state.section === "reaction" && this.state.opportunityOpen) {
         this._drawMonsterOpportunityNest();
@@ -784,10 +795,8 @@ export class CombatHud {
   }
 
   /**
-   * Monster sheet: attacks of this activation.
-   * Legendary actions share the Attack nest with the creature's other attacks.
-   * Lair actions stay on the action ring. Reaction always includes
-   * Attack of Opportunity, which opens the creature's action attacks.
+   * Monster sheet. Action is Attack, Cast Spell, and Features when the creature
+   * has more than attacks. Reaction always includes Attack of Opportunity.
    * @param {"action"|"bonus"|"reaction"} activation
    */
   _drawMonsterAttackRing(activation) {
@@ -814,8 +823,16 @@ export class CombatHud {
       const seg = segs[i];
       const isOpportunity = opt.kind === "opportunity";
       const isAttackHub = opt.kind === "attack";
+      const isCast = opt.kind === "cast";
+      const isFeatures = opt.kind === "abilities";
+      const isHub = isOpportunity || isAttackHub || isCast || isFeatures;
       if (isOpportunity) this._layout.opportunitySeg = seg;
       if (isAttackHub) this._layout.monsterAttackSeg = seg;
+      if (isCast) {
+        this._layout.castSeg = seg;
+        this._layout.castDepth = 1;
+      }
+      if (isFeatures) this._layout.monsterFeatureSeg = seg;
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
@@ -823,9 +840,12 @@ export class CombatHud {
         outer,
         caption: opt.name,
         img: opt.img,
-        itemArt: !isOpportunity && !isAttackHub,
+        itemArt: !isHub,
         unavailable: opt.available === false,
-        active: (isOpportunity && this.state.opportunityOpen) || (isAttackHub && this.state.attackOpen)
+        active: (isOpportunity && this.state.opportunityOpen)
+          || (isAttackHub && this.state.attackOpen)
+          || (isCast && this.state.castSpell)
+          || (isFeatures && this.state.abilitiesOpen)
       });
 
       g.addEventListener("pointerenter", (ev) => {
@@ -837,18 +857,43 @@ export class CombatHud {
             this._draw();
           }
         } else if (isAttackHub) {
-          if (!this.state.attackOpen) {
+          if (!this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen) {
             this.state.attackOpen = true;
+            this.state.castSpell = false;
+            this.state.spellLevel = null;
+            this.state.abilitiesOpen = false;
             this.state.weaponNestId = null;
             this._draw();
           }
-        } else if (this.state.opportunityOpen || this.state.attackOpen) {
+        } else if (isCast) {
+          if (!this.state.castSpell || this.state.attackOpen || this.state.abilitiesOpen) {
+            this.state.castSpell = true;
+            this.state.spellEconomy = opt.economy || "action";
+            this.state.spellLevel = null;
+            this.state.attackOpen = false;
+            this.state.abilitiesOpen = false;
+            this.state.weaponNestId = null;
+            this._draw();
+          }
+        } else if (isFeatures) {
+          if (!this.state.abilitiesOpen || this.state.attackOpen || this.state.castSpell) {
+            this.state.abilitiesOpen = true;
+            this.state.attackOpen = false;
+            this.state.castSpell = false;
+            this.state.spellLevel = null;
+            this.state.weaponNestId = null;
+            this._draw();
+          }
+        } else if (this.state.opportunityOpen || this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen) {
           this.state.opportunityOpen = false;
           this.state.attackOpen = false;
+          this.state.castSpell = false;
+          this.state.spellLevel = null;
+          this.state.abilitiesOpen = false;
           this.state.weaponNestId = null;
           this._draw();
         }
-        if (isOpportunity || isAttackHub) this.hideTooltip();
+        if (isHub) this.hideTooltip();
         else this.showTooltip(opt.tooltip || { title: opt.name }, g, ev);
       });
       g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
@@ -858,7 +903,7 @@ export class CombatHud {
       });
       g.addEventListener("pointerdown", async (ev) => {
         ev.stopPropagation();
-        if (isOpportunity || isAttackHub) return;
+        if (isOpportunity || isAttackHub || isCast || isFeatures) return;
         await this._onLeafClick(opt);
       });
 
@@ -880,6 +925,125 @@ export class CombatHud {
       groupName: "monster-attack-nest",
       store: "attack",
       empty: t("Empty.NoActionAttacks")
+    });
+  }
+
+  /**
+   * Cast Spell: at-will and innate groups, then any slotted levels.
+   * One group lists its spells directly.
+   */
+  _drawMonsterSpellNest() {
+    const groups = getMonsterSpellGroups(this.actor);
+    const parent = this._layout?.castSeg ?? mainSectionById("action");
+    if (!groups.length) {
+      const group = this._ringGroup("monster-spells");
+      this._emptyLabel(group, t("Empty.NoSpellLevels"), (RINGS.nest1Inner + RINGS.nest1Outer) / 2);
+      this.svg.appendChild(group);
+      return;
+    }
+    if (groups.length === 1) {
+      this._drawMonsterSpellList(groups[0].spells, parent, RINGS.nest1Inner, RINGS.nest1Outer, "level");
+      return;
+    }
+
+    const group = this._ringGroup("monster-spell-groups");
+    const segs = arcSegmentsForParent(groups.length, parent.start, parent.end, { maxSpanDeg: 170 });
+    this._layout.levelSegs = segs;
+    this._layout.levelInfos = groups;
+    groups.forEach((entry, i) => {
+      const seg = segs[i];
+      const g = this._leafSegment({
+        start: seg.start,
+        end: seg.end,
+        inner: RINGS.nest1Inner,
+        outer: RINGS.nest1Outer,
+        caption: entry.label,
+        img: CHROME.castSpell,
+        active: this.state.spellLevel === entry.id
+      });
+      g.addEventListener("pointerenter", (ev) => {
+        this._clearCollapse();
+        if (this.state.spellLevel !== entry.id) {
+          this.state.spellLevel = entry.id;
+          this._draw();
+        }
+        this.hideTooltip();
+      });
+      g.addEventListener("pointerleave", (ev) => {
+        this.hideTooltip();
+        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("cast");
+      });
+      g.addEventListener("pointerdown", (ev) => {
+        ev.stopPropagation();
+      });
+      group.appendChild(g);
+    });
+    this.svg.appendChild(group);
+
+    if (this.state.spellLevel == null) return;
+    const selected = groups.findIndex(entry => entry.id === this.state.spellLevel);
+    const spellParent = selected >= 0 && segs[selected] ? segs[selected] : parent;
+    const spells = selected >= 0 ? groups[selected].spells : [];
+    this._drawMonsterSpellList(spells, spellParent, RINGS.nest2Inner, RINGS.nest2Outer, "level");
+  }
+
+  /**
+   * @param {Array<object>} spells
+   * @param {{ start: number, end: number }} parent
+   * @param {number} inner
+   * @param {number} outer
+   * @param {string} collapseKeep
+   */
+  _drawMonsterSpellList(spells, parent, inner, outer, collapseKeep) {
+    const group = this._ringGroup("monster-spells");
+    if (!spells.length) {
+      this._emptyLabel(group, t("Empty.NoSpellsAtLevel"), (inner + outer) / 2);
+      this.svg.appendChild(group);
+      return;
+    }
+    const segs = arcSegmentsForParent(spells.length, parent.start, parent.end, { maxSpanDeg: 160 });
+    spells.forEach((spell, i) => {
+      const seg = segs[i];
+      const g = this._leafSegment({
+        start: seg.start,
+        end: seg.end,
+        inner,
+        outer,
+        caption: spell.name,
+        img: spell.img,
+        itemArt: true,
+        unavailable: spell.available === false
+      });
+      g.addEventListener("pointerenter", (ev) => {
+        this._clearCollapse();
+        this.showTooltip(spell.tooltip || { title: spell.name }, g, ev);
+      });
+      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
+      g.addEventListener("pointerleave", (ev) => {
+        this.hideTooltip();
+        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse(collapseKeep);
+      });
+      g.addEventListener("pointerdown", async (ev) => {
+        ev.stopPropagation();
+        await this._onLeafClick(spell);
+      });
+      group.appendChild(g);
+    });
+    this.svg.appendChild(group);
+  }
+
+  /**
+   * Special abilities and other non-attack actions.
+   */
+  _drawMonsterFeatureNest() {
+    const entries = getMonsterFeatureOptions(this.actor);
+    this._drawChoiceRing(entries, {
+      depth: 2,
+      parent: this._layout?.monsterFeatureSeg ?? mainSectionById("action"),
+      source: "abilities",
+      groupName: "monster-features",
+      store: "abilities",
+      empty: t("Empty.NoFeatureModes")
     });
   }
 

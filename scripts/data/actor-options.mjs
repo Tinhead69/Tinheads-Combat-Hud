@@ -291,6 +291,8 @@ export function spellEconomy(item) {
  * @returns {{ levels: Array<{ level: number, label: string, slots: string|null, slotHint: string, spells: object[] }>, empty: boolean }}
  */
 export function getSpellLevels(actor, economy = "action") {
+  const innate = [];
+  const pact = [];
   const byLevel = new Map();
 
   for (const item of actor.items ?? []) {
@@ -298,41 +300,85 @@ export function getSpellLevels(actor, economy = "action") {
     if (spellEconomy(item) !== economy) continue;
     if (!isSpellAvailableForHud(actor, item)) continue;
 
-    const level = Number(item.system?.level ?? 0);
-    if (!byLevel.has(level)) byLevel.set(level, []);
+    const spell = spellRingOption(item);
+    const method = spellCastingMethod(item);
+    if (method === "innate") {
+      innate.push(spell);
+      continue;
+    }
+    if (method === "pact") {
+      pact.push(spell);
+      continue;
+    }
 
-    const cast = getCastActivity(item);
-    const available = canAttemptUse(cast, item);
-    byLevel.get(level).push({
-      id: `spell:${item.id}`,
-      name: item.name,
-      img: itemArtwork(item, cast) || getDefaultIcon("spell"),
-      item,
-      activity: cast,
-      level,
-      available: available.ok,
-      reason: available.reason,
-      requiresTarget: optionRequiresTarget(cast, item),
-      tooltip: buildSpellTooltipData(item, cast)
+    const level = Number(item.system?.level ?? 0);
+    const key = Number.isFinite(level) && level >= 0 ? level : 0;
+    if (!byLevel.has(key)) byLevel.set(key, []);
+    byLevel.get(key).push(spell);
+  }
+
+  // Innate and Pact Magic are their own wedges. Slot levels follow.
+  const levels = [];
+  if (innate.length) {
+    innate.sort((a, b) => a.name.localeCompare(b.name));
+    levels.push({
+      id: "innate",
+      level: "innate",
+      label: t("SpellLevels.Innate"),
+      slots: null,
+      slotHint: "",
+      spells: innate
+    });
+  }
+  if (pact.length) {
+    pact.sort((a, b) => a.name.localeCompare(b.name));
+    const counts = pactPoolCounts(actor);
+    levels.push({
+      id: "pact",
+      level: "pact",
+      label: t("SpellLevels.Pact"),
+      slots: formatSpellSlots(counts),
+      slotHint: formatSpellSlotHint(counts),
+      spells: pact
     });
   }
 
   // Only levels that actually have spells — UI lays them on a partial arc via arcSegmentsForParent.
-  const levels = Array.from(byLevel.keys())
-    .sort((a, b) => a - b)
-    .map(level => {
-      const slotCounts = spellSlotCounts(actor, level);
-      return {
-        level,
-        label: spellLevelLabel(level),
-        slots: formatSpellSlots(slotCounts),
-        slotHint: formatSpellSlotHint(slotCounts),
-        spells: byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name))
-      };
-    })
-    .filter(entry => entry.spells.length > 0);
+  for (const level of [...byLevel.keys()].sort((a, b) => a - b)) {
+    const slotCounts = spellSlotCounts(actor, level);
+    const regularCounts = slotCounts?.regular ? { regular: slotCounts.regular, pact: null } : null;
+    levels.push({
+      id: level,
+      level,
+      label: spellLevelLabel(level),
+      slots: formatSpellSlots(regularCounts),
+      slotHint: formatSpellSlotHint(regularCounts),
+      spells: byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name))
+    });
+  }
 
   return { levels, empty: levels.length === 0 };
+}
+
+/**
+ * @param {Item} item
+ */
+function spellRingOption(item) {
+  const cast = getCastActivity(item);
+  const available = canAttemptUse(cast, item);
+  const level = Number(item.system?.level ?? 0);
+  return {
+    id: `spell:${item.id}`,
+    name: item.name,
+    img: itemArtwork(item, cast) || getDefaultIcon("spell"),
+    item,
+    activity: cast,
+    level: Number.isFinite(level) ? level : 0,
+    available: available.ok,
+    reason: available.reason,
+    requiresTarget: optionRequiresTarget(cast, item),
+    tooltip: buildSpellTooltipData(item, cast)
+  };
 }
 
 /**
@@ -464,6 +510,15 @@ function slotSentence(key, data, fallback) {
 }
 
 /**
+ * dnd5e casting method: spell, atwill, innate, pact, ritual.
+ * @param {Item} item
+ * @returns {string}
+ */
+export function spellCastingMethod(item) {
+  return spellCastingState(item).method;
+}
+
+/**
  * dnd5e 5.1 stores casting on `system.method` and preparation on `system.prepared`
  * (0 unprepared, 1 prepared, 2 always). Reading `system.preparation` logs a deprecation warning.
  * Plain objects that still carry the old shape are accepted without touching a live getter
@@ -575,6 +630,16 @@ export function hasSpellSlotForLevel(actor, level) {
 function hasPactSlots(actor) {
   const pact = actor?.system?.spells?.pact;
   return !!pact && Number(pact.max ?? 0) > 0;
+}
+
+/**
+ * The shared pact-magic pool, independent of which spell level it can cast.
+ * @param {Actor} actor
+ * @returns {{ regular: null, pact: { value: number, max: number } }|null}
+ */
+function pactPoolCounts(actor) {
+  const pact = readSlotPool(actor?.system?.spells?.pact);
+  return pact ? { regular: null, pact } : null;
 }
 
 /**

@@ -6,14 +6,19 @@
 
 import {
   activityOptionName,
+  buildSpellTooltipData,
   canAttemptUse,
   getActivities,
   getActivationType,
+  getCastActivity,
   getDefaultIcon,
+  isSpellAvailableForHud,
   isGenericMidiActivityName,
   itemArtwork,
   optionRequiresTarget,
   sheetItemTooltip,
+  spellCastingMethod,
+  spellEconomy,
   t
 } from "./actor-options.mjs";
 import { CHROME } from "./module-icons.mjs";
@@ -84,8 +89,8 @@ function parseChallengeRating(raw) {
 /**
  * Attack activities that spend this activation.
  * An empty activation on a weapon counts as an action.
- * When the creature has legendary actions, those share an Attack nest with its
- * action attacks. Lair actions stay on the action ring.
+ * When the creature has more than attacks, Action is Attack, Cast Spell, and Features.
+ * Legendary actions share the Attack nest. Special abilities sit under Features.
  * The reaction ring lists every reaction on the sheet, including saves,
  * and always offers Attack of Opportunity.
  * @param {Actor} actor
@@ -134,9 +139,228 @@ export function getMonsterOpportunityAttacks(actor) {
  * @returns {Array<object>}
  */
 function actionRingOptions(actor, attacks, seen) {
-  const { legendary, lair } = legendaryAndLairOptions(actor, seen);
-  if (!legendary.length) return [...attacks, ...lair];
-  return [monsterAttackHub(), ...lair];
+  const { legendary } = legendaryAndLairOptions(actor, seen);
+  const features = getMonsterFeatureOptions(actor);
+  const cast = monsterOffersCastSpell(actor);
+  if (!cast && !features.length && !legendary.length) return attacks;
+  const ring = [];
+  if (attacks.length || legendary.length) ring.push(monsterAttackHub());
+  if (cast) ring.push(monsterCastHub());
+  if (features.length) ring.push(monsterFeaturesHub());
+  return ring.length ? ring : attacks;
+}
+
+/**
+ * Special abilities and other non-attack actions, including lair actions.
+ * Spellcasting itself is the Cast Spell wedge.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getMonsterFeatureOptions(actor) {
+  const seen = new Set();
+  collectAttacks(actor, "action", seen);
+  const features = collectActionFeatures(actor, seen);
+  const { lair } = legendaryAndLairOptions(actor, seen);
+  features.push(...lair);
+  features.sort((a, b) => a.name.localeCompare(b.name));
+  return features;
+}
+
+/**
+ * Spellbook groups for a monster's Cast Spell wedge.
+ * At-will and innate spells stay in those groups instead of a slot level.
+ * @param {Actor} actor
+ * @returns {Array<{ id: string, level: number|null, label: string, spells: Array<object> }>}
+ */
+export function getMonsterSpellGroups(actor) {
+  const atwill = [];
+  const innate = [];
+  const pact = [];
+  const byLevel = new Map();
+
+  for (const item of actor?.items ?? []) {
+    if (item?.type !== "spell") continue;
+    if (spellEconomy(item) !== "action") continue;
+    if (!isSpellAvailableForHud(actor, item)) continue;
+    const spell = monsterSpellOption(item);
+    const method = spellCastingMethod(item);
+    if (method === "atwill") atwill.push(spell);
+    else if (method === "innate") innate.push(spell);
+    else if (method === "pact") pact.push(spell);
+    else {
+      const level = Number(item.system?.level ?? 0);
+      const key = Number.isFinite(level) && level >= 0 ? level : 0;
+      if (!byLevel.has(key)) byLevel.set(key, []);
+      byLevel.get(key).push(spell);
+    }
+  }
+
+  const groups = [];
+  if (atwill.length) {
+    atwill.sort((a, b) => a.name.localeCompare(b.name));
+    groups.push({ id: "atwill", level: null, label: t("SpellLevels.AtWill"), spells: atwill });
+  }
+  if (innate.length) {
+    innate.sort((a, b) => a.name.localeCompare(b.name));
+    groups.push({ id: "innate", level: null, label: t("SpellLevels.Innate"), spells: innate });
+  }
+  if (pact.length) {
+    pact.sort((a, b) => a.name.localeCompare(b.name));
+    groups.push({ id: "pact", level: null, label: t("SpellLevels.Pact"), spells: pact });
+  }
+  for (const level of [...byLevel.keys()].sort((a, b) => a - b)) {
+    const spells = byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name));
+    groups.push({ id: `level:${level}`, level, label: monsterSpellLevelLabel(level), spells });
+  }
+  return groups;
+}
+
+/**
+ * @param {Actor} actor
+ * @returns {boolean}
+ */
+function monsterOffersCastSpell(actor) {
+  if (getMonsterSpellGroups(actor).length) return true;
+  for (const item of actor?.items ?? []) {
+    if (!isSpellcastingFeature(item)) continue;
+    const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
+    if (!activities.length) {
+      const type = attackActivation(null, item);
+      if (type === "action" || type === "special") return true;
+      continue;
+    }
+    if (activities.some(activity => {
+      const type = attackActivation(activity, item);
+      return type === "action" || type === "special";
+    })) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {Item} item
+ * @returns {boolean}
+ */
+function isSpellcastingFeature(item) {
+  const name = normalizeMonsterName(item?.name);
+  const ident = normalizeMonsterName(item?.system?.identifier);
+  return name === "spellcasting"
+    || name === "innate spellcasting"
+    || ident === "spellcasting"
+    || ident === "innate spellcasting";
+}
+
+/**
+ * @param {string} name
+ * @returns {string}
+ */
+function normalizeMonsterName(name) {
+  return String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * Non-attack actions. Legendary actions stay in the attack nest.
+ * @param {Actor} actor
+ * @param {Set<string>} seen
+ * @returns {Array<object>}
+ */
+function collectActionFeatures(actor, seen) {
+  const options = [];
+  for (const item of actor?.items ?? []) {
+    if (item?.type === "spell" || isSpellcastingFeature(item)) continue;
+    const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
+    const features = activities.filter(activity => {
+      if (isAttackActivity(activity)) return false;
+      const type = attackActivation(activity, item);
+      return type === "action" || type === "special";
+    });
+
+    if (!features.length) {
+      if (activities.length || item?.type === "weapon") continue;
+      const type = attackActivation(null, item);
+      if (type !== "action" && type !== "special") continue;
+      const key = activityKey(item, null);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push(monsterSpecialOption(item, null, type));
+      continue;
+    }
+
+    for (const activity of features) {
+      const key = activityKey(item, activity);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const type = attackActivation(activity, item);
+      options.push(monsterSpecialOption(item, activity, type));
+    }
+  }
+  return options;
+}
+
+/**
+ * @param {Item} item
+ */
+function monsterSpellOption(item) {
+  const cast = getCastActivity(item);
+  const available = canAttemptUse(cast, item);
+  return {
+    id: `spell:${item.id}`,
+    kind: "spell",
+    name: item.name,
+    img: itemArtwork(item, cast) || getDefaultIcon("spell"),
+    item,
+    activity: cast,
+    available: available.ok,
+    reason: available.reason,
+    requiresTarget: optionRequiresTarget(cast, item),
+    tooltip: buildSpellTooltipData(item, cast)
+  };
+}
+
+/**
+ * @param {number} level
+ * @returns {string}
+ */
+function monsterSpellLevelLabel(level) {
+  const key = `SpellLevels.${level}`;
+  const localized = t(key);
+  if (localized && !String(localized).includes(`SpellLevels.${level}`)) return localized;
+  if (level === 0) return "Cantrip";
+  if (level === 1) return "1st";
+  if (level === 2) return "2nd";
+  if (level === 3) return "3rd";
+  return `${level}th`;
+}
+
+function monsterCastHub() {
+  return {
+    kind: "cast",
+    id: "cast-spell",
+    economy: "action",
+    name: t("Sections.CastSpell"),
+    img: CHROME.castSpell,
+    available: true,
+    activation: "action",
+    tooltip: {
+      title: t("Sections.CastSpell"),
+      description: t("Sections.CastSpellHint")
+    }
+  };
+}
+
+function monsterFeaturesHub() {
+  return {
+    kind: "abilities",
+    id: "monster-features",
+    name: t("Features.Label"),
+    img: CHROME.classFeature,
+    available: true,
+    activation: "action",
+    tooltip: {
+      title: t("Features.Label"),
+      description: t("Features.Hint")
+    }
+  };
 }
 
 /**

@@ -11,7 +11,14 @@ globalThis.foundry = { utils: { duplicate: (v) => JSON.parse(JSON.stringify(v)) 
 globalThis.CONFIG = { DND5E: { defaultArtwork: { Item: {} }, abilities: {} } };
 globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 } };
 
-const { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterOpportunityAttacks, isMonsterActor } = await import("../data/monster-hud.mjs");
+const {
+  getMonsterAttackNestOptions,
+  getMonsterAttackOptions,
+  getMonsterFeatureOptions,
+  getMonsterOpportunityAttacks,
+  getMonsterSpellGroups,
+  isMonsterActor
+} = await import("../data/monster-hud.mjs");
 const { getChecksMenuOptions } = await import("../data/ability-checks.mjs");
 
 let passed = 0;
@@ -85,10 +92,11 @@ assert(!isMonsterActor({
 }), "homebrew without a CR keeps the full sheet");
 
 const actions = getMonsterAttackOptions(wolf, "action");
-assert(actions.map(entry => entry.name).join(",") === "Bite,Gore", "action attacks are Bite and Gore");
-assert(actions.every(entry => entry.kind === "weapon-attack"), "monster attacks resolve as attacks");
-assert(!actions.some(entry => entry.name === "Frightful Presence"), "a save is not an attack");
-assert(!actions.some(entry => entry.name === "Auto"), "automation-only riders stay off the ring");
+assert(actions.map(entry => entry.kind).join(",") === "attack,abilities", "a save action opens Attack and Features");
+assert(getMonsterAttackNestOptions(wolf).map(entry => entry.name).join(",") === "Bite,Gore", "action attacks are Bite and Gore");
+assert(getMonsterAttackNestOptions(wolf).every(entry => entry.kind === "weapon-attack"), "monster attacks resolve as attacks");
+assert(getMonsterFeatureOptions(wolf).map(entry => entry.name).join(",") === "Frightful Presence", "a save action sits under Features");
+assert(!getMonsterFeatureOptions(wolf).some(entry => entry.name === "Auto"), "automation-only riders stay off the ring");
 
 const bonus = getMonsterAttackOptions(wolf, "bonus");
 assert(bonus.map(entry => entry.name).join(",") === "Claw", "bonus action attacks sit on the bonus ring");
@@ -182,12 +190,13 @@ const dragon = {
 };
 const dragonActions = getMonsterAttackOptions(dragon, "action");
 assert(dragonActions[0]?.kind === "attack" && dragonActions[0]?.id === "monster-attack", "legendary actions nest under Attack");
-assert(dragonActions.slice(1).map(entry => entry.name).join(",") === "Torrent", "lair actions stay on the action ring");
+assert(dragonActions[1]?.kind === "abilities" && dragonActions[1]?.id === "monster-features", "lair actions sit under Features");
+assert(getMonsterFeatureOptions(dragon).map(entry => entry.name).join(",") === "Torrent", "a lair action is a feature");
 const dragonNest = getMonsterAttackNestOptions(dragon);
 assert(dragonNest.map(entry => entry.name).join(",") === "Bite,Detect,Wing Attack", "legendary actions sit with the other attacks");
 assert(dragonNest.find(entry => entry.name === "Wing Attack")?.kind === "weapon-attack", "a legendary attack still resolves as an attack");
 assert(dragonNest.find(entry => entry.name === "Detect")?.kind === "feature", "a legendary save resolves as its activity");
-assert(dragonActions.find(entry => entry.name === "Torrent")?.kind === "feature", "a lair save resolves as its activity");
+assert(getMonsterFeatureOptions(dragon).find(entry => entry.name === "Torrent")?.kind === "feature", "a lair save resolves as its activity");
 assert(!dragonNest.some(entry => entry.name === "Claw"), "a bonus attack stays off the attack nest");
 assert(!dragonActions.some(entry => entry.name === "Restore") && !dragonNest.some(entry => entry.name === "Restore"), "mythic actions stay off the attack list");
 assert(
@@ -210,5 +219,69 @@ const bare = {
   ]
 };
 assert(getMonsterAttackOptions(bare, "action").map(entry => entry.name).join(",") === "Slam", "a weapon with no activities still counts as an action attack");
+
+const caster = {
+  type: "npc",
+  system: { details: { cr: 18 } },
+  items: [
+    weapon({
+      name: "Taskmaster Whip",
+      activities: [{ id: "whip", name: "Taskmaster Whip", type: "attack", activation: { type: "action" } }]
+    }),
+    {
+      id: "forget",
+      type: "feat",
+      name: "Forgetfulness",
+      system: {
+        activation: { type: "action" },
+        activities: [{ id: "forget", name: "Forgetfulness", type: "save", activation: { type: "action" } }]
+      }
+    },
+    {
+      id: "multi",
+      type: "feat",
+      name: "Multiattack",
+      system: {
+        activation: { type: "action" },
+        activities: [{ id: "multi", name: "Multiattack", type: "utility", activation: { type: "action" } }]
+      }
+    },
+    {
+      id: "casting",
+      type: "feat",
+      name: "Spellcasting",
+      system: { activation: { type: "action" }, activities: [] }
+    },
+    {
+      id: "command",
+      type: "spell",
+      name: "Command",
+      system: { level: 1, method: "atwill", prepared: 2, activation: { type: "action" } }
+    },
+    {
+      id: "feeblemind",
+      type: "spell",
+      name: "Feeblemind",
+      system: { level: 8, method: "atwill", prepared: 2, activation: { type: "action" } }
+    },
+    {
+      id: "fireball",
+      type: "spell",
+      name: "Burning Hands",
+      system: { level: 3, method: "innate", prepared: 2, activation: { type: "action" } }
+    }
+  ]
+};
+const casterRing = getMonsterAttackOptions(caster, "action");
+assert(casterRing.map(entry => entry.kind).join(",") === "attack,cast,abilities", "Action is Attack, Cast Spell, and Features");
+assert(getMonsterAttackNestOptions(caster).map(entry => entry.name).join(",") === "Taskmaster Whip", "the attack nest is the weapon attack");
+assert(
+  getMonsterFeatureOptions(caster).map(entry => entry.name).join(",") === "Forgetfulness,Multiattack",
+  "special abilities sit under Features and Spellcasting does not"
+);
+const groups = getMonsterSpellGroups(caster);
+assert(groups.map(entry => entry.id).join(",") === "atwill,innate", "at-will and innate spells are not grouped by slot level");
+assert(groups[0].spells.map(entry => entry.name).join(",") === "Command,Feeblemind", "at-will spells stay together");
+assert(groups[1].spells.map(entry => entry.name).join(",") === "Burning Hands", "an innate spell stays in the innate group");
 
 console.log(`\n${passed} assertions passed`);

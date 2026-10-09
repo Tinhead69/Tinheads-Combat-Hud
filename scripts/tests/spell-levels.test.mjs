@@ -142,14 +142,27 @@ const guidance = spell({ name: "Guidance", level: 0, mode: "atwill" });
 {
   const actor = actorWith([eldritch], { pact: { value: 1, max: 1, level: 1 } });
   assert(isSpellAvailableForHud(actor, eldritch), "pact spell with pact slots");
-  assert(getSpellLevels(actor).levels.find(l => l.level === 1).slots === "1/1", "pact slots show on the pact level");
+  const pactLevels = getSpellLevels(actor).levels;
+  assert(pactLevels.map(level => level.level).join(",") === "pact", "pact spells are their own wedge");
+  assert(pactLevels[0].slots === "1/1", "pact slots show on Pact Magic");
   const none = actorWith([eldritch], { pact: { value: 0, max: 0, level: 0 } });
   assert(!isSpellAvailableForHud(none, eldritch), "pact spell without pact slots excluded");
   const both = actorWith(
     [magicMissile, eldritch],
     { spell1: { value: 3, max: 4 }, pact: { value: 1, max: 2, level: 1 } }
   );
-  assert(getSpellLevels(both).levels.find(l => l.level === 1).slots === "3/4 · P 1/2", "regular and pact slots both show");
+  const mixed = getSpellLevels(both).levels;
+  assert(mixed.find(level => level.level === 1).slots === "3/4", "regular slots stay on the spell level");
+  assert(mixed.find(level => level.level === "pact").slots === "1/2", "pact slots stay on Pact Magic");
+}
+
+{
+  const hellish = spell({ name: "Hellish Rebuke", level: 1, mode: "innate" });
+  const actor = actorWith([fireBolt, hellish, magicMissile], { spell1: { value: 2, max: 2 } });
+  const levels = getSpellLevels(actor).levels;
+  assert(levels.map(level => level.level).join(",") === "innate,0,1", "innate spellcasting is its own wedge");
+  assert(levels.find(level => level.level === "innate").spells.map(spell => spell.name).join(",") === "Hellish Rebuke", "the innate wedge lists the innate spell");
+  assert(!levels.find(level => level.level === 1).spells.some(spell => spell.name === "Hellish Rebuke"), "an innate spell is not filed under its slot level");
 }
 
 // At-will ignores slots
