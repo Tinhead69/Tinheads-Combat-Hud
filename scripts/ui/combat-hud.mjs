@@ -28,7 +28,7 @@ import {
   getSkillOptions
 } from "../data/ability-checks.mjs";
 import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
-import { getMonsterAttackOptions, isMonsterActor } from "../data/monster-hud.mjs";
+import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterOpportunityAttacks, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
   arcSegmentsForParent,
@@ -289,7 +289,15 @@ export class CombatHud {
     this._drawHub();
 
     if (isMonsterActor(this.actor) && (this.state.section === "action" || this.state.section === "bonus" || this.state.section === "reaction")) {
+      if (this.state.section !== "action") this.state.attackOpen = false;
+      if (this.state.section !== "reaction") this.state.opportunityOpen = false;
       this._drawMonsterAttackRing(this.state.section);
+      if (this.state.section === "action" && this.state.attackOpen) {
+        this._drawMonsterAttackNest();
+      }
+      if (this.state.section === "reaction" && this.state.opportunityOpen) {
+        this._drawMonsterOpportunityNest();
+      }
     } else if (this.state.section === "action") {
       this._drawActionRing();
       if (this.state.readyOpen) this._drawReadyNest();
@@ -776,7 +784,10 @@ export class CombatHud {
   }
 
   /**
-   * Monster sheet: attacks of this activation, with no character nests.
+   * Monster sheet: attacks of this activation.
+   * Legendary actions share the Attack nest with the creature's other attacks.
+   * Lair actions stay on the action ring. Reaction always includes
+   * Attack of Opportunity, which opens the creature's action attacks.
    * @param {"action"|"bonus"|"reaction"} activation
    */
   _drawMonsterAttackRing(activation) {
@@ -798,8 +809,13 @@ export class CombatHud {
     }
 
     const segs = arcSegmentsForParent(entries.length, main.start, main.end, { maxSpanDeg: 220 });
+    this._layout = { ...(this._layout || {}) };
     entries.forEach((opt, i) => {
       const seg = segs[i];
+      const isOpportunity = opt.kind === "opportunity";
+      const isAttackHub = opt.kind === "attack";
+      if (isOpportunity) this._layout.opportunitySeg = seg;
+      if (isAttackHub) this._layout.monsterAttackSeg = seg;
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
@@ -807,13 +823,33 @@ export class CombatHud {
         outer,
         caption: opt.name,
         img: opt.img,
-        itemArt: true,
-        unavailable: opt.available === false
+        itemArt: !isOpportunity && !isAttackHub,
+        unavailable: opt.available === false,
+        active: (isOpportunity && this.state.opportunityOpen) || (isAttackHub && this.state.attackOpen)
       });
 
       g.addEventListener("pointerenter", (ev) => {
         this._clearCollapse();
-        this.showTooltip(opt.tooltip || { title: opt.name }, g, ev);
+        if (isOpportunity) {
+          if (!this.state.opportunityOpen) {
+            this.state.opportunityOpen = true;
+            this.state.weaponNestId = null;
+            this._draw();
+          }
+        } else if (isAttackHub) {
+          if (!this.state.attackOpen) {
+            this.state.attackOpen = true;
+            this.state.weaponNestId = null;
+            this._draw();
+          }
+        } else if (this.state.opportunityOpen || this.state.attackOpen) {
+          this.state.opportunityOpen = false;
+          this.state.attackOpen = false;
+          this.state.weaponNestId = null;
+          this._draw();
+        }
+        if (isOpportunity || isAttackHub) this.hideTooltip();
+        else this.showTooltip(opt.tooltip || { title: opt.name }, g, ev);
       });
       g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
       g.addEventListener("pointerleave", (ev) => {
@@ -822,6 +858,7 @@ export class CombatHud {
       });
       g.addEventListener("pointerdown", async (ev) => {
         ev.stopPropagation();
+        if (isOpportunity || isAttackHub) return;
         await this._onLeafClick(opt);
       });
 
@@ -829,6 +866,37 @@ export class CombatHud {
     });
 
     this.svg.appendChild(group);
+  }
+
+  /**
+   * Attack nest: the creature's action attacks and its legendary actions.
+   */
+  _drawMonsterAttackNest() {
+    const entries = getMonsterAttackNestOptions(this.actor);
+    this._drawChoiceRing(entries, {
+      depth: 2,
+      parent: this._layout?.monsterAttackSeg ?? mainSectionById("action"),
+      source: "attack",
+      groupName: "monster-attack-nest",
+      store: "attack",
+      empty: t("Empty.NoActionAttacks")
+    });
+  }
+
+  /**
+   * Opportunity attacks use the monster's action attacks.
+   */
+  _drawMonsterOpportunityNest() {
+    const entries = getMonsterOpportunityAttacks(this.actor);
+    this._drawChoiceRing(entries, {
+      depth: 2,
+      parent: this._layout?.opportunitySeg ?? mainSectionById("reaction"),
+      source: "attack",
+      groupName: "opportunity-attack",
+      store: "attack",
+      empty: t("Empty.NoActionAttacks"),
+      band: { inner: RINGS.flatNestInner, outer: RINGS.flatNestOuter }
+    });
   }
 
   _drawActionRing() {

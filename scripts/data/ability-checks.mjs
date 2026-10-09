@@ -4,6 +4,7 @@
  */
 
 import { t } from "./actor-options.mjs";
+import { isMonsterActor } from "./monster-hud.mjs";
 import { CHROME } from "./module-icons.mjs";
 
 /** Stable ability order (PHB). */
@@ -112,7 +113,7 @@ export function getAbilityRollOptions(abilityOption) {
  * @returns {Array<object>}
  */
 export function getChecksMenuOptions(actor) {
-  return [
+  const options = [
     {
       id: "checks:saves",
       kind: "checks-branch",
@@ -136,9 +137,10 @@ export function getChecksMenuOptions(actor) {
         title: t("Checks.Skills"),
         description: t("Checks.SkillsHint")
       }
-    },
-    deathSaveOption(actor)
+    }
   ];
+  if (!isMonsterActor(actor)) options.push(deathSaveOption(actor));
+  return options;
 }
 
 /**

@@ -13,8 +13,10 @@ import {
   isGenericMidiActivityName,
   itemArtwork,
   optionRequiresTarget,
-  sheetItemTooltip
+  sheetItemTooltip,
+  t
 } from "./actor-options.mjs";
+import { CHROME } from "./module-icons.mjs";
 import { isAttackActivity } from "./weapon-abilities.mjs";
 
 const GENERIC_ATTACK_NAMES = new Set([
@@ -24,6 +26,12 @@ const GENERIC_ATTACK_NAMES = new Set([
   "ranged attack",
   "melee weapon attack",
   "ranged weapon attack"
+]);
+
+const OPPORTUNITY_NAMES = new Set([
+  "attack of opportunity",
+  "opportunity attack",
+  "opportunity attacks"
 ]);
 
 /**
@@ -76,15 +84,67 @@ function parseChallengeRating(raw) {
 /**
  * Attack activities that spend this activation.
  * An empty activation on a weapon counts as an action.
+ * When the creature has legendary actions, those share an Attack nest with its
+ * action attacks. Lair actions stay on the action ring.
+ * The reaction ring always offers Attack of Opportunity.
  * @param {Actor} actor
  * @param {"action"|"bonus"|"reaction"} activation
  * @returns {Array<object>}
  */
 export function getMonsterAttackOptions(actor, activation) {
   const wanted = String(activation || "").toLowerCase();
-  const options = [];
   const seen = new Set();
+  const options = collectAttacks(actor, wanted, seen);
+  options.sort((a, b) => a.name.localeCompare(b.name));
+  if (wanted === "action") return actionRingOptions(actor, options, seen);
+  if (wanted === "reaction") ensureOpportunityAttack(options);
+  return options;
+}
 
+/**
+ * Action attacks and legendary actions, in one nest.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getMonsterAttackNestOptions(actor) {
+  const seen = new Set();
+  const attacks = collectAttacks(actor, "action", seen);
+  attacks.sort((a, b) => a.name.localeCompare(b.name));
+  const { legendary } = legendaryAndLairOptions(actor, seen);
+  return [...attacks, ...legendary];
+}
+
+/**
+ * Melee-style action attacks a monster can use for an opportunity attack.
+ * Legendary and lair actions stay out of that nest.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getMonsterOpportunityAttacks(actor) {
+  return getMonsterAttackNestOptions(actor)
+    .filter(entry => entry.kind === "weapon-attack" && entry.activation === "action");
+}
+
+/**
+ * @param {Actor} actor
+ * @param {Array<object>} attacks
+ * @param {Set<string>} seen
+ * @returns {Array<object>}
+ */
+function actionRingOptions(actor, attacks, seen) {
+  const { legendary, lair } = legendaryAndLairOptions(actor, seen);
+  if (!legendary.length) return [...attacks, ...lair];
+  return [monsterAttackHub(), ...lair];
+}
+
+/**
+ * @param {Actor} actor
+ * @param {string} wanted
+ * @param {Set<string>} seen
+ * @returns {Array<object>}
+ */
+function collectAttacks(actor, wanted, seen) {
+  const options = [];
   for (const item of actor?.items ?? []) {
     const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
     const attacks = activities.filter(activity => isAttackActivity(activity));
@@ -92,14 +152,12 @@ export function getMonsterAttackOptions(actor, activation) {
 
     for (const activity of pool) {
       if (attackActivation(activity, item) !== wanted) continue;
-      const key = `${item.id}:${activity?.id ?? activity?._id ?? activity?.name ?? "item"}`;
+      const key = activityKey(item, activity);
       if (seen.has(key)) continue;
       seen.add(key);
       options.push(monsterAttackOption(item, activity));
     }
   }
-
-  options.sort((a, b) => a.name.localeCompare(b.name));
   return options;
 }
 
@@ -141,6 +199,7 @@ function monsterAttackOption(item, activity) {
     img: itemArtwork(item, activity) || getDefaultIcon(item?.type || "weapon"),
     item,
     activity,
+    activation: attackActivation(activity, item),
     available: available.ok,
     reason: available.reason,
     requiresTarget: optionRequiresTarget(activity, item),
@@ -150,6 +209,136 @@ function monsterAttackOption(item, activity) {
       reason: available.ok ? "" : available.reason
     })
   };
+}
+
+/**
+ * Legendary actions and lair actions.
+ * Saves and other non-attack activities are included. Attack activities stay attacks.
+ * @param {Actor} actor
+ * @param {Set<string>} seen
+ * @returns {{ legendary: Array<object>, lair: Array<object> }}
+ */
+function legendaryAndLairOptions(actor, seen) {
+  const legendary = [];
+  const lair = [];
+
+  for (const item of actor?.items ?? []) {
+    const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
+    const special = activities.filter(activity => {
+      const type = attackActivation(activity, item);
+      return type === "legendary" || type === "lair";
+    });
+
+    if (!special.length) {
+      if (activities.length) continue;
+      const type = attackActivation(null, item);
+      if (type !== "legendary" && type !== "lair") continue;
+      const key = activityKey(item, null);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      (type === "lair" ? lair : legendary).push(monsterSpecialOption(item, null, type));
+      continue;
+    }
+
+    for (const activity of special) {
+      const type = attackActivation(activity, item);
+      const key = activityKey(item, activity);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const option = isAttackActivity(activity)
+        ? monsterAttackOption(item, activity)
+        : monsterSpecialOption(item, activity, type);
+      (type === "lair" ? lair : legendary).push(option);
+    }
+  }
+
+  legendary.sort((a, b) => a.name.localeCompare(b.name));
+  lair.sort((a, b) => a.name.localeCompare(b.name));
+  return { legendary, lair };
+}
+
+function monsterAttackHub() {
+  return {
+    kind: "attack",
+    id: "monster-attack",
+    name: t("AttackNest.Label"),
+    img: CHROME.attack,
+    available: true,
+    activation: "action",
+    tooltip: {
+      title: t("AttackNest.Label"),
+      description: t("AttackNest.MonsterHint")
+    }
+  };
+}
+
+/**
+ * @param {Item} item
+ * @param {object|null} activity
+ * @param {"legendary"|"lair"} activation
+ */
+function monsterSpecialOption(item, activity, activation) {
+  const name = monsterAttackLabel(item, activity);
+  const available = canAttemptUse(activity, item);
+  return {
+    id: `monster:${item.id}:${activity?.id ?? activity?._id ?? activation}`,
+    kind: "feature",
+    name,
+    img: itemArtwork(item, activity) || getDefaultIcon(item?.type || "feat"),
+    item,
+    activity,
+    activation,
+    available: available.ok,
+    reason: available.reason,
+    requiresTarget: optionRequiresTarget(activity, item),
+    tooltip: sheetItemTooltip(item, {
+      title: name,
+      activity,
+      reason: available.ok ? "" : available.reason
+    })
+  };
+}
+
+/**
+ * Every monster can make an opportunity attack, even when the sheet omits one.
+ * A sheet entry that is already that attack is kept and not repeated.
+ * @param {Array<object>} options
+ */
+function ensureOpportunityAttack(options) {
+  if (options.some(entry => isOpportunityName(entry.name) || entry.kind === "opportunity")) return;
+  options.unshift(monsterOpportunityOption());
+}
+
+function monsterOpportunityOption() {
+  return {
+    kind: "opportunity",
+    id: "attack-of-opportunity",
+    name: t("Opportunity.Label"),
+    img: CHROME.attack,
+    available: true,
+    activation: "reaction",
+    tooltip: {
+      title: t("Opportunity.Label"),
+      description: t("Opportunity.Hint")
+    }
+  };
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isOpportunityName(name) {
+  return OPPORTUNITY_NAMES.has(String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim());
+}
+
+/**
+ * @param {Item} item
+ * @param {object|null} activity
+ * @returns {string}
+ */
+function activityKey(item, activity) {
+  return `${item.id}:${activity?.id ?? activity?._id ?? activity?.name ?? "item"}`;
 }
 
 /**
