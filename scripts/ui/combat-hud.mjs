@@ -1548,8 +1548,9 @@ export class CombatHud {
     const outer = onBonus ? RINGS.flatNestOuter : RINGS.nest1Outer;
 
     if (!items.length) {
-      this._emptyLabel(group, t("Empty.NoUsableItems"), (inner + outer) / 2);
+      const highlight = this._emptyLabel(group, t("Empty.NoUsableItems"), (inner + outer) / 2, { highlight: true });
       this.svg.appendChild(group);
+      this._fitEmptyPlate(highlight);
       return;
     }
 
@@ -2057,7 +2058,14 @@ export class CombatHud {
     return g;
   }
 
-  _emptyLabel(group, message, r) {
+  /**
+   * @param {SVGGElement} group
+   * @param {string} message
+   * @param {number} r
+   * @param {{ highlight?: boolean }} [options]
+   * @returns {SVGGElement|null}
+   */
+  _emptyLabel(group, message, r, options = {}) {
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.classList.add("tch-ring-empty");
     // Place empty copy on the top of the ring
@@ -2065,7 +2073,49 @@ export class CombatHud {
     text.setAttribute("x", String(anchor.x));
     text.setAttribute("y", String(anchor.y));
     text.textContent = message;
-    group.appendChild(text);
+    if (!options.highlight) {
+      group.appendChild(text);
+      return null;
+    }
+    text.classList.add("tch-ring-empty--highlight");
+    const wrap = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    wrap.classList.add("tch-ring-empty-highlight");
+    const plate = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    plate.classList.add("tch-ring-empty__plate");
+    plate.setAttribute("rx", "7");
+    plate.setAttribute("ry", "7");
+    wrap.append(plate, text);
+    group.appendChild(wrap);
+    return wrap;
+  }
+
+  /**
+   * Size the blue plate to the label once it is in the document.
+   * @param {SVGGElement|null} wrap
+   */
+  _fitEmptyPlate(wrap) {
+    const text = wrap?.querySelector(".tch-ring-empty");
+    const plate = wrap?.querySelector(".tch-ring-empty__plate");
+    if (!text || !plate) return;
+    const padX = 12;
+    const padY = 7;
+    let box = null;
+    try { box = text.getBBox(); } catch { box = null; }
+    if (!box?.width) {
+      const x = Number(text.getAttribute("x"));
+      const y = Number(text.getAttribute("y"));
+      const width = Math.ceil(String(text.textContent ?? "").length * 7.6) + padX * 2;
+      const height = 28;
+      plate.setAttribute("x", String(x - width / 2));
+      plate.setAttribute("y", String(y - height / 2));
+      plate.setAttribute("width", String(width));
+      plate.setAttribute("height", String(height));
+      return;
+    }
+    plate.setAttribute("x", String(box.x - padX));
+    plate.setAttribute("y", String(box.y - padY));
+    plate.setAttribute("width", String(box.width + padX * 2));
+    plate.setAttribute("height", String(box.height + padY * 2));
   }
 
   async _onLeafClick(option) {

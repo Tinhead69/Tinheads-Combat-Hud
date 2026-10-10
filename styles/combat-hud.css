@@ -610,6 +610,20 @@
   dominant-baseline: middle;
 }
 
+.tch-ring-empty__plate {
+  fill: #1f62c7;
+  stroke: #ffffff;
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.tch-ring-empty.tch-ring-empty--highlight {
+  fill: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .tch-tooltip {
   position: fixed;
   z-index: calc(var(--tch-z) + 1);
