@@ -1,19 +1,30 @@
 import { normalizeMid } from "./radial-geometry.mjs";
 
 /**
+ * Bottom sector, where a clockwise caption would turn upside down.
+ * The sides stay with the clockwise arc so letters face outward, matching the top of the ring.
+ * @param {number} midAngle
+ * @returns {boolean}
+ */
+export function captionFacesInward(midAngle) {
+  const mid = ((Number(midAngle) % 360) + 360) % 360;
+  return mid > 135 && mid < 225;
+}
+
+/**
  * Rotation that runs the caption along the wedge and keeps it right-side up.
- * 0° is north, clockwise. The lower half is flipped so letters do not turn over.
+ * 0° is north, clockwise. Only the bottom sector is flipped.
  * @param {number} midAngle
  * @returns {number}
  */
 export function uprightTangentRotation(midAngle) {
   const mid = ((Number(midAngle) % 360) + 360) % 360;
-  if (mid > 90 && mid < 270) return mid + 180;
+  if (captionFacesInward(mid)) return mid + 180;
   return mid;
 }
 
 /**
- * SVG path along a wedge arc. Reversed runs the lower half so letters stay upright.
+ * SVG path along a wedge arc. Reversed runs the bottom sector so letters stay upright.
  * Angles match the HUD: 0° is north, clockwise.
  * @param {number} cx
  * @param {number} cy
@@ -46,7 +57,7 @@ export function wedgeArcPath(cx, cy, radius, startAngle, endAngle, reversed) {
 /**
  * Caption lines that follow the wedge arc.
  * Wide slices keep a long name on the curve instead of a straight line
- * that leaves the box. The lower half is reversed so text stays upright.
+ * that leaves the box. The bottom sector is reversed so text stays upright.
  * @param {{ start: number, end: number, inner: number, outer: number, text: string, cx?: number, cy?: number }} geom
  */
 export function wedgeTextLayout(geom) {
@@ -56,7 +67,7 @@ export function wedgeTextLayout(geom) {
   const outer = Number(geom?.outer) || 0;
   const mid = ((normalizeMid(start, end) % 360) + 360) % 360;
   const sweep = end < start ? end + 360 - start : end - start;
-  const reversed = mid > 90 && mid < 270;
+  const reversed = captionFacesInward(mid);
   const midR = (inner + outer) / 2;
   const pad = Math.min(2.4, sweep * 0.08);
   const pathSweep = Math.max(sweep - pad * 2, 4);

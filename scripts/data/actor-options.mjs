@@ -869,6 +869,8 @@ function plainText(raw) {
     .replace(/<\/p>/gi, " ")
     .replace(/<[^>]+>/g, " ");
   return replaceEnrichers(decodeEntities(stripped))
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/^[,.;:\s]+/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -948,16 +950,85 @@ function readableId(id) {
   return tail.replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
 }
 
+const ROLL_FLAGS = new Set(["average", "extended", "critical"]);
+
+const ABILITY_NAMES = {
+  str: "Strength",
+  dex: "Dexterity",
+  con: "Constitution",
+  int: "Intelligence",
+  wis: "Wisdom",
+  cha: "Charisma"
+};
+
 function inlineRollLabel(body) {
   let rest = String(body).trim();
   const kindMatch = rest.match(/^\/([a-z]+)\s*/i);
+  let kind = "";
   if (kindMatch) {
-    const kind = kindMatch[1].toLowerCase();
+    kind = kindMatch[1].toLowerCase();
     rest = rest.slice(kindMatch[0].length);
     if (kind === "lookup") return "";
   }
   rest = rest.split("#")[0].split("|")[0].trim();
-  return rest.replace(/\[([^\]]+)\]/g, " $1").replace(/\s+/g, " ").trim();
+  rest = rest.replace(/\[([^\]]+)\]/g, " $1");
+  const { formula, config } = splitRollConfig(rest);
+  const dice = humanizeFormula(formula);
+  const type = formatRollType(config.type);
+  if (kind === "damage" || kind === "heal" || type) return [dice, type].filter(Boolean).join(" ");
+  return dice;
+}
+
+/**
+ * Dice stay. `type=slashing` becomes the type name. `average=true` and `extended` drop out.
+ * @param {string} rest
+ * @returns {{ formula: string, config: Record<string, string> }}
+ */
+function splitRollConfig(rest) {
+  const formula = [];
+  const config = {};
+  for (const token of String(rest).split(/\s+/).filter(Boolean)) {
+    const eq = token.match(/^([A-Za-z][\w-]*)=(.*)$/);
+    if (eq) {
+      config[eq[1].toLowerCase()] = eq[2];
+      continue;
+    }
+    if (Object.keys(config).length) continue;
+    if (ROLL_FLAGS.has(token.toLowerCase())) continue;
+    formula.push(token);
+  }
+  return { formula: formula.join(" ").trim(), config };
+}
+
+/**
+ * @param {string} formula
+ * @returns {string}
+ */
+function humanizeFormula(formula) {
+  return String(formula)
+    .replace(/@abilities\.([a-z]{3})\.(mod|value|save|dc)/gi, (_, abl, prop) => {
+      const name = ABILITY_NAMES[abl.toLowerCase()] || abl.toUpperCase();
+      const key = prop.toLowerCase();
+      if (key === "mod") return `${name} modifier`;
+      if (key === "save" || key === "dc") return `${name} save`;
+      return name;
+    })
+    .replace(/@mod\b/gi, "ability modifier")
+    .replace(/@prof\b/gi, "proficiency bonus")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * @param {string|undefined} type
+ * @returns {string}
+ */
+function formatRollType(type) {
+  return String(type ?? "")
+    .split(/[,|]/)
+    .map(part => part.replace(/[-_]+/g, " ").trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 function decodeEntities(text) {

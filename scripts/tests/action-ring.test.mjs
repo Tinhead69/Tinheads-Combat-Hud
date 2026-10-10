@@ -306,5 +306,18 @@ const devils = itemDescriptionText({
 });
 assert(devils.includes("2d4 bearded devils"), "a count other than one uses the plural label");
 assert(devils.includes("1 barbed devil") && !devils.includes("barbed devils"), "a count of one uses the singular label");
+const whip = itemDescriptionText({
+  name: "Taskmaster Whip",
+  system: {
+    description: {
+      value: "[[/attack extended]], one target. Hit: [[/damage 1d8 + @abilities.int.mod type=slashing average=true]] damage plus [[/damage 3d10 type=force average=true]] damage."
+    }
+  }
+});
+assert(
+  whip === "one target. Hit: 1d8 + Intelligence modifier slashing damage plus 3d10 force damage.",
+  `damage enrichers read as dice and type, got: ${whip}`
+);
+assert(!whip.includes("type=") && !whip.includes("average=") && !whip.includes("@abilities"), "roll config stays out of the tooltip");
 
 console.log(`\n${passed} assertions passed`);

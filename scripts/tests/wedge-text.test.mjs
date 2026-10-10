@@ -3,7 +3,7 @@
  * Run: node scripts/tests/wedge-text.test.mjs
  */
 
-import { uprightTangentRotation, wedgeArcPath, wedgeCaptionLines, wedgeTextLayout } from "../ui/wedge-text.mjs";
+import { captionFacesInward, uprightTangentRotation, wedgeArcPath, wedgeCaptionLines, wedgeTextLayout } from "../ui/wedge-text.mjs";
 
 let passed = 0;
 function assert(cond, msg) {
@@ -48,7 +48,13 @@ assert(dodge.reversed, "Dodge on the lower left stays upright");
 const dash = wedgeTextLayout({
   start: -124.5, end: -91.5, inner: 110, outer: 172, text: "Dash"
 });
-assert(dash.reversed, "Dash on the lower left stays upright");
+assert(!dash.reversed, "Dash on the left faces outward, the same way as the top of the ring");
+const javelin = wedgeTextLayout({
+  start: -151, end: -62.5, inner: 246, outer: 308, text: "Javelin"
+});
+assert(!javelin.reversed, "a lower-left attack wedge faces outward");
+assert(captionFacesInward(180), "the bottom sector still flips");
+assert(!captionFacesInward(253), "the left side does not flip");
 const arc = wedgeArcPath(380, 380, 277, spell.pathStart, spell.pathEnd, false);
 assert(arc.startsWith("M ") && arc.includes(" A "), "the caption path is an arc");
 
