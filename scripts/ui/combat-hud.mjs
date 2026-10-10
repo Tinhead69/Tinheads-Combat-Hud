@@ -31,10 +31,12 @@ import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterLegendaryOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
+  arcSegments,
   arcSegmentsForParent,
   centerArcOnIndex,
   mainSectionAngles,
   mainSectionById,
+  normalizeMid,
   sectionAnchor,
   sectionWedgePath,
   wedgeAnchor
@@ -1151,7 +1153,8 @@ export class CombatHud {
       source: "action",
       groupName: "action",
       store: "action",
-      centerOnId: "attack"
+      centerOnId: "attack",
+      spanDeg: 360
     });
   }
 
@@ -1250,6 +1253,7 @@ export class CombatHud {
    *   store?: string,
    *   empty?: string,
    *   centerOnId?: string,
+   *   spanDeg?: number,
    *   band?: { inner: number, outer: number }
    * }} cfg
    */
@@ -1264,12 +1268,18 @@ export class CombatHud {
       return;
     }
 
-    let segs = arcSegmentsForParent(
-      entries.length,
-      parent.start,
-      parent.end,
-      { maxSpanDeg: cfg.depth >= 3 ? 240 : 280 }
-    );
+    let segs;
+    if (Number.isFinite(cfg.spanDeg)) {
+      const mid = normalizeMid(parent.start, parent.end);
+      segs = arcSegments(entries.length, { midAngle: mid, fixedSpanDeg: cfg.spanDeg });
+    } else {
+      segs = arcSegmentsForParent(
+        entries.length,
+        parent.start,
+        parent.end,
+        { maxSpanDeg: cfg.depth >= 3 ? 240 : 280 }
+      );
+    }
     if (cfg.centerOnId) {
       const centerIndex = entries.findIndex(entry => entry.kind === cfg.centerOnId || entry.id === cfg.centerOnId);
       if (centerIndex >= 0) segs = centerArcOnIndex(segs, centerIndex, parent.start, parent.end);
