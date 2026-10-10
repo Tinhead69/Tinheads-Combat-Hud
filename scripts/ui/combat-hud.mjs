@@ -31,15 +31,16 @@ import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterLegendaryOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
-  arcSegments,
   arcSegmentsForParent,
   centerArcOnIndex,
   mainSectionAngles,
   mainSectionById,
+  nestSpanDeg,
   normalizeMid,
   sectionAnchor,
   sectionWedgePath,
-  wedgeAnchor
+  wedgeAnchor,
+  weightedArcSegments
 } from "./radial-geometry.mjs";
 import { appendHubArt, appendWedgeArt } from "./wedge-art.mjs";
 import { applyIconPalette } from "./icon-color.mjs";
@@ -1268,18 +1269,12 @@ export class CombatHud {
       return;
     }
 
-    let segs;
-    if (Number.isFinite(cfg.spanDeg)) {
-      const mid = normalizeMid(parent.start, parent.end);
-      segs = arcSegments(entries.length, { midAngle: mid, fixedSpanDeg: cfg.spanDeg });
-    } else {
-      segs = arcSegmentsForParent(
-        entries.length,
-        parent.start,
-        parent.end,
-        { maxSpanDeg: cfg.depth >= 3 ? 240 : 280 }
-      );
-    }
+    const labels = entries.map(entry => (
+      entry.usesLabel ? `${entry.name} · ${entry.usesLabel}` : entry.name
+    ));
+    const spanDeg = Number.isFinite(cfg.spanDeg) ? cfg.spanDeg : nestSpanDeg(entries.length);
+    const mid = normalizeMid(parent.start, parent.end);
+    let segs = weightedArcSegments(labels, { midAngle: mid, fixedSpanDeg: spanDeg });
     if (cfg.centerOnId) {
       const centerIndex = entries.findIndex(entry => entry.kind === cfg.centerOnId || entry.id === cfg.centerOnId);
       if (centerIndex >= 0) segs = centerArcOnIndex(segs, centerIndex, parent.start, parent.end);

@@ -1,19 +1,20 @@
 import { normalizeMid } from "./radial-geometry.mjs";
 
 /**
- * Bottom sector, where a clockwise caption would turn upside down.
- * The sides stay with the clockwise arc so letters face outward, matching the top of the ring.
+ * Lower half of the ring, where a clockwise caption turns the wrong way.
+ * Includes the lower-right (Other, Divine Intervention) and lower-left (Dash).
+ * The upper sides stay with the clockwise arc so they match the top of the ring.
  * @param {number} midAngle
  * @returns {boolean}
  */
 export function captionFacesInward(midAngle) {
   const mid = ((Number(midAngle) % 360) + 360) % 360;
-  return mid > 135 && mid < 225;
+  return mid > 100 && mid < 260;
 }
 
 /**
  * Rotation that runs the caption along the wedge and keeps it right-side up.
- * 0° is north, clockwise. Only the bottom sector is flipped.
+ * 0° is north, clockwise. The lower half is flipped so those letters stay upright.
  * @param {number} midAngle
  * @returns {number}
  */
@@ -57,7 +58,7 @@ export function wedgeArcPath(cx, cy, radius, startAngle, endAngle, reversed) {
 /**
  * Caption lines that follow the wedge arc.
  * Wide slices keep a long name on the curve instead of a straight line
- * that leaves the box. The bottom sector is reversed so text stays upright.
+ * that leaves the box. The lower half is reversed so text stays upright.
  * @param {{ start: number, end: number, inner: number, outer: number, text: string, cx?: number, cy?: number }} geom
  */
 export function wedgeTextLayout(geom) {

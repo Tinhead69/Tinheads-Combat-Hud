@@ -167,6 +167,43 @@ export function arcSegmentsForParent(count, parentStart, parentEnd, opts = {}) {
 }
 
 /**
+ * Same arc as equal wedges, but longer titles take a wider slice.
+ * Short names keep a minimum so they stay tappable.
+ * @param {string[]} labels
+ * @param {object} [opts]
+ * @param {number} [opts.midAngle=0]
+ * @param {number} [opts.fixedSpanDeg]
+ * @param {number} [opts.gapDeg]
+ * @returns {Array<{ index: number, start: number, end: number, mid: number }>}
+ */
+export function weightedArcSegments(labels, opts = {}) {
+  const names = Array.isArray(labels) ? labels : [];
+  const count = names.length;
+  if (count <= 0) return [];
+
+  const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
+  const midAngle = opts.midAngle ?? 0;
+  const span = Number.isFinite(opts.fixedSpanDeg) ? opts.fixedSpanDeg : nestSpanDeg(count);
+  const closes = span >= 360 - 0.01;
+  const gapTotal = closes ? gapDeg * count : gapDeg * Math.max(count - 1, 0);
+  const usable = Math.max(span - gapTotal, count * 8);
+  const weights = names.map(label => {
+    const len = String(label ?? "").trim().length;
+    return Math.max(5, Math.min(len || 5, 32));
+  });
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let cursor = midAngle - span / 2;
+
+  return weights.map((weight, index) => {
+    const segSweep = usable * (weight / total);
+    const start = cursor;
+    const end = cursor + segSweep;
+    cursor = end + gapDeg;
+    return { index, start, end, mid: (start + end) / 2 };
+  });
+}
+
+/**
  * Shift an arc so one wedge's midpoint sits on the parent midpoint.
  * Neighboring wedges stay in order, clockwise.
  * @param {Array<{ index: number, start: number, end: number, mid: number }>} segs

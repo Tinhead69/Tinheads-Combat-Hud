@@ -48,13 +48,20 @@ assert(dodge.reversed, "Dodge on the lower left stays upright");
 const dash = wedgeTextLayout({
   start: -124.5, end: -91.5, inner: 110, outer: 172, text: "Dash"
 });
-assert(!dash.reversed, "Dash on the left faces outward, the same way as the top of the ring");
+assert(dash.reversed, "Dash on the lower left flips so the caption stays upright");
+const other = wedgeTextLayout({
+  start: 90, end: 126, inner: 110, outer: 172, text: "Other"
+});
+assert(other.reversed, "Other on the lower right flips so the caption stays upright");
 const javelin = wedgeTextLayout({
   start: -151, end: -62.5, inner: 246, outer: 308, text: "Javelin"
 });
-assert(!javelin.reversed, "a lower-left attack wedge faces outward");
+assert(javelin.reversed, "a lower-left attack wedge flips so the caption stays upright");
 assert(captionFacesInward(180), "the bottom sector still flips");
-assert(!captionFacesInward(253), "the left side does not flip");
+assert(captionFacesInward(108), "the lower right flips");
+assert(captionFacesInward(252), "the lower left flips");
+assert(!captionFacesInward(72), "the upper right does not flip");
+assert(!captionFacesInward(288), "the upper left does not flip");
 const arc = wedgeArcPath(380, 380, 277, spell.pathStart, spell.pathEnd, false);
 assert(arc.startsWith("M ") && arc.includes(" A "), "the caption path is an arc");
 

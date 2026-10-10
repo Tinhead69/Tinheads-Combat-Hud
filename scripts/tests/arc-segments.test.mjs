@@ -10,7 +10,8 @@ import {
   centerArcOnIndex,
   mainSectionById,
   nestSpanDeg,
-  normalizeMid
+  normalizeMid,
+  weightedArcSegments
 } from "../ui/radial-geometry.mjs";
 
 let passed = 0;
@@ -80,6 +81,14 @@ function assert(cond, msg) {
   assert(centered[5].start >= centered[4].end - 0.01, "Cast Spell stays beside Attack");
   const seam = centered[0].start + 360 - centered[9].end;
   assert(Math.abs(seam - ARC_DEFAULTS.gapDeg) < 0.05, "Dodge and Use Item keep a gap where the ring closes");
+}
+
+{
+  const labels = ["Dragon Fear", "Divine Intervention", "Dash"];
+  const segs = weightedArcSegments(labels, { midAngle: 0, fixedSpanDeg: 180 });
+  const widths = segs.map(seg => seg.end - seg.start);
+  assert(widths[1] > widths[0] && widths[0] > widths[2], "a longer title gets a wider wedge");
+  assert(segs[1].start >= segs[0].end - 0.01, "weighted wedges stay in order");
 }
 
 console.log(`\n${passed} assertions passed`);
