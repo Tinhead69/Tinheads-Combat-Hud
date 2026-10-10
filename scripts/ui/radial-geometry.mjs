@@ -4,6 +4,7 @@
  * Angle convention: 0° = north, clockwise positive (combat HUD).
  * An opened ring is centered on its parent wedge.
  * Ten or more options use the whole circle. Fewer than ten use a half circle.
+ * A single option uses a quarter circle.
  */
 
 /** Option count below this opens a half circle. Ten or more use the whole circle. */
@@ -91,10 +92,12 @@ export function equalSegments(count, gapDeg = 2, startDeg = 0) {
 
 /**
  * Opened rings: ten or more options fill the circle. Fewer than ten use a half circle.
+ * One option uses a quarter circle.
  * @param {number} count
  * @returns {number}
  */
 export function nestSpanDeg(count) {
+  if (count <= 1) return 90;
   return count >= NEST_FULL_CIRCLE_AFTER ? 360 : 180;
 }
 
@@ -154,6 +157,7 @@ export function arcSegments(count, opts = {}) {
 /**
  * Arc centered on a parent wedge.
  * Ten or more options use the whole circle. Fewer than ten use a half circle.
+ * One option uses a quarter circle.
  *
  * @param {number} count
  * @param {number} parentStart

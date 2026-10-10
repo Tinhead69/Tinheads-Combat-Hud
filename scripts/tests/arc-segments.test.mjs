@@ -60,6 +60,14 @@ function assert(cond, msg) {
   assert(Math.abs(span + closingGap - 360) < 1, "more than 10 options use the whole circle");
   assert(Math.abs(closingGap - ARC_DEFAULTS.gapDeg) < 0.05, "a full circle keeps a gap between the first and last wedge");
   assert(nestSpanDeg(11) === 360 && nestSpanDeg(10) === 360 && nestSpanDeg(9) === 180, "full circle from 10 options, half circle below that");
+  assert(nestSpanDeg(1) === 90, "a single option uses a quarter circle");
+}
+
+{
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(1, action.start, action.end);
+  const span = segs[0].end - segs[0].start;
+  assert(Math.abs(span - 90) < 1, "one wedge in a nest is a quarter circle");
 }
 
 {
