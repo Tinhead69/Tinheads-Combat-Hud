@@ -66,7 +66,7 @@
     "AttackNest": {
       "Label": "Attack",
       "Hint": "Equipped weapons and unarmed strike.",
-      "MonsterHint": "Attacks and legendary actions.",
+      "MonsterHint": "Attacks from this creature.",
       "Unarmed": "Unarmed Strike",
       "UnarmedHint": "Strike without a weapon."
     },
@@ -92,6 +92,17 @@
     "Features": {
       "Label": "Features",
       "Hint": "Special abilities from this creature."
+    },
+    "Legendary": {
+      "Label": "Legendary",
+      "Hint": "Legendary actions from this creature."
+    },
+    "LegendaryResistance": {
+      "Label": "Legendary Resistance",
+      "Hint": "Spend one use to turn this creature's latest failed saving throw into a success.",
+      "NoneLeft": "No legendary resistances left.",
+      "NoFailedSave": "No failed saving throw to resist.",
+      "Unavailable": "This creature cannot spend a legendary resistance."
     },
     "WeaponNest": {
       "Attack": "Attack",
@@ -140,6 +151,7 @@
       "NoFeatureModes": "No feature options",
       "NoOtherActions": "No other actions",
       "NoActionAttacks": "No action attacks",
+      "NoLegendaryActions": "No legendary actions",
       "NoBonusAttacks": "No bonus action attacks",
       "NoReactionAttacks": "No reaction attacks"
     },
