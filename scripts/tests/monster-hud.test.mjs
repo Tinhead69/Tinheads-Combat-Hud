@@ -448,4 +448,49 @@ assert(
   "legendary resistance is a feat, so it is listed under Features"
 );
 
+const spellbookOnly = {
+  type: "npc",
+  system: { details: { cr: 2 } },
+  items: [
+    weapon({
+      name: "Bite",
+      activities: [{ id: "bite", name: "Bite", type: "attack", activation: { type: "action" } }]
+    }),
+    {
+      id: "casting",
+      type: "feat",
+      name: "Spellcasting",
+      system: { activation: { type: "action" }, activities: [] }
+    }
+  ]
+};
+assert(
+  !getMonsterAttackOptions(spellbookOnly, "action").some(entry => entry.kind === "cast"),
+  "a monster with no action spells does not get Cast Spell"
+);
+assert(
+  !getMonsterAttackOptions(spellbookOnly, "bonus").some(entry => entry.kind === "cast"),
+  "a monster with no bonus spells does not get Cast Spell"
+);
+const bonusCaster = {
+  type: "npc",
+  system: { details: { cr: 2 } },
+  items: [
+    {
+      id: "step",
+      type: "spell",
+      name: "Misty Step",
+      system: { level: 2, method: "innate", prepared: 2, activation: { type: "bonus" } }
+    }
+  ]
+};
+assert(
+  getMonsterAttackOptions(bonusCaster, "bonus").some(entry => entry.kind === "cast" && entry.economy === "bonus"),
+  "a monster with bonus spells gets Cast Spell on bonus"
+);
+assert(
+  !getMonsterAttackOptions(bonusCaster, "action").some(entry => entry.kind === "cast"),
+  "bonus spells do not add Cast Spell to the action ring"
+);
+
 console.log(`\n${passed} assertions passed`);

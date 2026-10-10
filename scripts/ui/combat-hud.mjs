@@ -292,17 +292,19 @@ export class CombatHud {
     if (isMonsterActor(this.actor) && (this.state.section === "action" || this.state.section === "bonus" || this.state.section === "reaction")) {
       if (this.state.section !== "action") {
         this.state.attackOpen = false;
-        this.state.castSpell = false;
-        this.state.spellLevel = null;
         this.state.abilitiesOpen = false;
         this.state.legendaryOpen = false;
+      }
+      if (this.state.section !== "action" && this.state.section !== "bonus") {
+        this.state.castSpell = false;
+        this.state.spellLevel = null;
       }
       if (this.state.section !== "reaction") this.state.opportunityOpen = false;
       this._drawMonsterAttackRing(this.state.section);
       if (this.state.section === "action" && this.state.attackOpen) {
         this._drawMonsterAttackNest();
       }
-      if (this.state.section === "action" && this.state.castSpell) {
+      if ((this.state.section === "action" || this.state.section === "bonus") && this.state.castSpell) {
         this._drawMonsterSpellNest();
       }
       if (this.state.section === "action" && this.state.abilitiesOpen) {
@@ -815,7 +817,7 @@ export class CombatHud {
 
     if (!entries.length) {
       const msg = activation === "bonus"
-        ? t("Empty.NoBonusAttacks")
+        ? t("Empty.NoBonusActions")
         : activation === "reaction"
           ? t("Empty.NoReactionAttacks")
           : t("Empty.NoActionAttacks");
@@ -1015,14 +1017,9 @@ export class CombatHud {
    * One group lists its spells directly.
    */
   _drawMonsterSpellNest() {
-    const groups = getMonsterSpellGroups(this.actor);
-    const parent = this._layout?.castSeg ?? mainSectionById("action");
-    if (!groups.length) {
-      const group = this._ringGroup("monster-spells");
-      this._emptyLabel(group, t("Empty.NoSpellLevels"), (RINGS.nest1Inner + RINGS.nest1Outer) / 2);
-      this.svg.appendChild(group);
-      return;
-    }
+    const groups = getMonsterSpellGroups(this.actor, this.state.spellEconomy || "action");
+    const parent = this._layout?.castSeg ?? mainSectionById(this.state.section === "bonus" ? "bonus" : "action");
+    if (!groups.length) return;
     if (groups.length === 1) {
       this._drawMonsterSpellList(groups[0].spells, parent, RINGS.nest1Inner, RINGS.nest1Outer, "level");
       return;
@@ -1548,9 +1545,8 @@ export class CombatHud {
     const outer = onBonus ? RINGS.flatNestOuter : RINGS.nest1Outer;
 
     if (!items.length) {
-      const highlight = this._emptyLabel(group, t("Empty.NoUsableItems"), (inner + outer) / 2, { highlight: true });
+      this._emptyLabel(group, t("Empty.NoUsableItems"), (inner + outer) / 2);
       this.svg.appendChild(group);
-      this._fitEmptyPlate(highlight);
       return;
     }
 
@@ -2059,25 +2055,20 @@ export class CombatHud {
   }
 
   /**
+   * Empty radial copy, on the blue plate with a white border.
+   * The plate is sized after the caller inserts the group.
    * @param {SVGGElement} group
    * @param {string} message
    * @param {number} r
-   * @param {{ highlight?: boolean }} [options]
-   * @returns {SVGGElement|null}
    */
-  _emptyLabel(group, message, r, options = {}) {
+  _emptyLabel(group, message, r) {
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.classList.add("tch-ring-empty");
+    text.classList.add("tch-ring-empty", "tch-ring-empty--highlight");
     // Place empty copy on the top of the ring
     const anchor = wedgeAnchor(CX, CY, r, -20, 20);
     text.setAttribute("x", String(anchor.x));
     text.setAttribute("y", String(anchor.y));
     text.textContent = message;
-    if (!options.highlight) {
-      group.appendChild(text);
-      return null;
-    }
-    text.classList.add("tch-ring-empty--highlight");
     const wrap = document.createElementNS("http://www.w3.org/2000/svg", "g");
     wrap.classList.add("tch-ring-empty-highlight");
     const plate = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -2086,7 +2077,7 @@ export class CombatHud {
     plate.setAttribute("ry", "7");
     wrap.append(plate, text);
     group.appendChild(wrap);
-    return wrap;
+    queueMicrotask(() => this._fitEmptyPlate(wrap));
   }
 
   /**

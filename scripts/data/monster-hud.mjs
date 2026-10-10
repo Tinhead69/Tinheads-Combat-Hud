@@ -106,6 +106,7 @@ export function getMonsterAttackOptions(actor, activation) {
   if (wanted === "reaction") options.push(...collectSheetReactions(actor, seen));
   options.sort((a, b) => a.name.localeCompare(b.name));
   if (wanted === "action") return actionRingOptions(actor, options, seen);
+  if (wanted === "bonus") return bonusRingOptions(actor, options);
   if (wanted === "reaction") {
     ensureOpportunityAttack(options);
     ensureLegendaryResistance(actor, options);
@@ -154,7 +155,7 @@ export function getMonsterOpportunityAttacks(actor) {
 function actionRingOptions(actor, attacks, seen) {
   const { legendary } = legendaryAndLairOptions(actor, seen);
   const features = getMonsterFeatureOptions(actor);
-  const cast = monsterOffersCastSpell(actor);
+  const cast = monsterOffersCastSpell(actor, "action");
   if (!cast && !features.length && !legendary.length) return attacks;
   const ring = [];
   if (attacks.length) ring.push(monsterAttackHub());
@@ -183,12 +184,24 @@ export function getMonsterFeatureOptions(actor) {
 }
 
 /**
+ * Bonus attacks, plus Cast Spell when this creature has bonus spells.
+ * @param {Actor} actor
+ * @param {Array<object>} attacks
+ * @returns {Array<object>}
+ */
+function bonusRingOptions(actor, attacks) {
+  if (!monsterOffersCastSpell(actor, "bonus")) return attacks;
+  return [monsterCastHub("bonus"), ...attacks];
+}
+
+/**
  * Spellbook groups for a monster's Cast Spell wedge.
  * At-will and innate spells stay in those groups instead of a slot level.
  * @param {Actor} actor
+ * @param {"action"|"bonus"|"reaction"} [economy]
  * @returns {Array<{ id: string, level: number|null, label: string, spells: Array<object> }>}
  */
-export function getMonsterSpellGroups(actor) {
+export function getMonsterSpellGroups(actor, economy = "action") {
   const atwill = [];
   const innate = [];
   const pact = [];
@@ -196,7 +209,7 @@ export function getMonsterSpellGroups(actor) {
 
   for (const item of actor?.items ?? []) {
     if (item?.type !== "spell") continue;
-    if (spellEconomy(item) !== "action") continue;
+    if (spellEconomy(item) !== economy) continue;
     if (!isSpellAvailableForHud(actor, item)) continue;
     const spell = monsterSpellOption(item);
     const method = spellCastingMethod(item);
@@ -232,25 +245,14 @@ export function getMonsterSpellGroups(actor) {
 }
 
 /**
+ * Cast Spell is offered only when this economy has spells to cast.
+ * A Spellcasting feature with an empty spellbook does not create the wedge.
  * @param {Actor} actor
+ * @param {"action"|"bonus"|"reaction"} [economy]
  * @returns {boolean}
  */
-function monsterOffersCastSpell(actor) {
-  if (getMonsterSpellGroups(actor).length) return true;
-  for (const item of actor?.items ?? []) {
-    if (!isSpellcastingFeature(item)) continue;
-    const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
-    if (!activities.length) {
-      const type = attackActivation(null, item);
-      if (type === "action" || type === "special") return true;
-      continue;
-    }
-    if (activities.some(activity => {
-      const type = attackActivation(activity, item);
-      return type === "action" || type === "special";
-    })) return true;
-  }
-  return false;
+function monsterOffersCastSpell(actor, economy = "action") {
+  return getMonsterSpellGroups(actor, economy).length > 0;
 }
 
 /**
@@ -386,15 +388,15 @@ function monsterSpellLevelLabel(level) {
   return `${level}th`;
 }
 
-function monsterCastHub() {
+function monsterCastHub(economy = "action") {
   return {
     kind: "cast",
-    id: "cast-spell",
-    economy: "action",
+    id: economy === "action" ? "cast-spell" : `cast-spell-${economy}`,
+    economy,
     name: t("Sections.CastSpell"),
     img: CHROME.castSpell,
     available: true,
-    activation: "action",
+    activation: economy,
     tooltip: {
       title: t("Sections.CastSpell"),
       description: t("Sections.CastSpellHint")

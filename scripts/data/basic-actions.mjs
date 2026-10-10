@@ -242,13 +242,15 @@ function safeLocalize(key, fallback) {
 export function buildActionRingEntries(actor, _weapons) {
   const basics = Object.fromEntries(getBasicActionOptions(actor).map(entry => [entry.basicId, entry]));
   const ready = basics.ready;
-  return [
+  const entries = [
     basics.dodge,
     basics.dash,
     basics.disengage,
     basics.help,
-    attackHub(),
-    castSpellHub("action"),
+    attackHub()
+  ];
+  if (!getSpellLevels(actor, "action").empty) entries.push(castSpellHub("action"));
+  entries.push(
     {
       ...ready,
       kind: "ready",
@@ -270,7 +272,8 @@ export function buildActionRingEntries(actor, _weapons) {
       }
     },
     useItemHub()
-  ];
+  );
+  return entries;
 }
 
 const OPPORTUNITY_NAMES = new Set([
@@ -283,8 +286,8 @@ const OPPORTUNITY_NAMES = new Set([
  * Bonus Action or Reaction ring.
  * Spells of that economy stay inside Cast Spell. They are not their own wedges.
  * Bonus-action consumables stay inside Use Item. They are not their own wedges.
- * Bonus always offers Cast Spell and Use Item. Reaction always offers Attack of Opportunity,
- * and Cast Spell only when reaction spells exist.
+ * Cast Spell appears only when this economy has spells to cast.
+ * Bonus always offers Use Item. Reaction always offers Attack of Opportunity.
  * @param {Actor} actor
  * @param {"bonus"|"reaction"} activation
  * @returns {Array<object>}
@@ -298,7 +301,7 @@ export function buildEconomyRingEntries(actor, activation) {
     .filter(entry => !(activation === "bonus" && entry.item?.type === "consumable"));
   const entries = [];
   if (activation === "reaction") entries.push(opportunityHub());
-  if (activation === "bonus" || !spells.empty) entries.push(castSpellHub(activation));
+  if (!spells.empty) entries.push(castSpellHub(activation));
   if (activation === "bonus") entries.push(useItemHub("bonus"));
   return [...entries, ...features, ...others];
 }
