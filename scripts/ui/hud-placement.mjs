@@ -30,7 +30,7 @@ export function contentOuterRadius(state, rings) {
   if (state.section !== "action") return rings.mainOuter;
 
   let depth = 1;
-  if (state.attackOpen || state.readyOpen || state.otherOpen || state.abilitiesOpen || state.useItem) depth = 2;
+  if (state.attackOpen || state.readyOpen || state.otherOpen || state.abilitiesOpen || state.legendaryOpen || state.useItem) depth = 2;
   if (state.useItem && state.useItemGroup) depth = 3;
   if (state.readyOpen && state.attackOpen) depth = 3;
   if (state.castSpell) depth += 1;

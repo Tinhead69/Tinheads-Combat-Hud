@@ -28,7 +28,7 @@ import {
   getSkillOptions
 } from "../data/ability-checks.mjs";
 import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
-import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
+import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterLegendaryOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
   arcSegmentsForParent,
@@ -136,6 +136,7 @@ export class CombatHud {
       section: null,       // action | checks | bonus | reaction
       castSpell: false,
       opportunityOpen: false,
+      legendaryOpen: false,
       spellEconomy: "action",
       useItem: false,
       useItemGroup: null,  // potion | scroll nest inside Use Item
@@ -294,6 +295,7 @@ export class CombatHud {
         this.state.castSpell = false;
         this.state.spellLevel = null;
         this.state.abilitiesOpen = false;
+        this.state.legendaryOpen = false;
       }
       if (this.state.section !== "reaction") this.state.opportunityOpen = false;
       this._drawMonsterAttackRing(this.state.section);
@@ -305,6 +307,9 @@ export class CombatHud {
       }
       if (this.state.section === "action" && this.state.abilitiesOpen) {
         this._drawMonsterFeatureNest();
+      }
+      if (this.state.section === "action" && this.state.legendaryOpen) {
+        this._drawMonsterLegendaryNest();
       }
       if (this.state.section === "reaction" && this.state.opportunityOpen) {
         this._drawMonsterOpportunityNest();
@@ -487,6 +492,7 @@ export class CombatHud {
     this.state.readyOpen = false;
     this.state.otherOpen = false;
     this.state.abilitiesOpen = false;
+    this.state.legendaryOpen = false;
     this.state.castSpell = false;
     this.state.spellEconomy = "action";
     this.state.useItem = false;
@@ -795,8 +801,9 @@ export class CombatHud {
   }
 
   /**
-   * Monster sheet. Action is Attack, Cast Spell, and Features when the creature
-   * has more than attacks. Reaction always includes Attack of Opportunity.
+   * Monster sheet. Action is Attack, Legendary, Cast Spell, and Features when the creature
+   * has more than attacks. Legendary appears only when the creature has legendary actions.
+   * Reaction always includes Attack of Opportunity.
    * @param {"action"|"bonus"|"reaction"} activation
    */
   _drawMonsterAttackRing(activation) {
@@ -823,11 +830,13 @@ export class CombatHud {
       const seg = segs[i];
       const isOpportunity = opt.kind === "opportunity";
       const isAttackHub = opt.kind === "attack";
+      const isLegendary = opt.kind === "legendary";
       const isCast = opt.kind === "cast";
       const isFeatures = opt.kind === "abilities";
-      const isHub = isOpportunity || isAttackHub || isCast || isFeatures;
+      const isHub = isOpportunity || isAttackHub || isLegendary || isCast || isFeatures;
       if (isOpportunity) this._layout.opportunitySeg = seg;
       if (isAttackHub) this._layout.monsterAttackSeg = seg;
+      if (isLegendary) this._layout.monsterLegendarySeg = seg;
       if (isCast) {
         this._layout.castSeg = seg;
         this._layout.castDepth = 1;
@@ -838,12 +847,13 @@ export class CombatHud {
         end: seg.end,
         inner,
         outer,
-        caption: opt.name,
+        caption: opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name,
         img: opt.img,
         itemArt: !isHub,
         unavailable: opt.available === false,
         active: (isOpportunity && this.state.opportunityOpen)
           || (isAttackHub && this.state.attackOpen)
+          || (isLegendary && this.state.legendaryOpen)
           || (isCast && this.state.castSpell)
           || (isFeatures && this.state.abilitiesOpen)
       });
@@ -857,8 +867,19 @@ export class CombatHud {
             this._draw();
           }
         } else if (isAttackHub) {
-          if (!this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen) {
+          if (!this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen || this.state.legendaryOpen) {
             this.state.attackOpen = true;
+            this.state.castSpell = false;
+            this.state.spellLevel = null;
+            this.state.abilitiesOpen = false;
+            this.state.legendaryOpen = false;
+            this.state.weaponNestId = null;
+            this._draw();
+          }
+        } else if (isLegendary) {
+          if (!this.state.legendaryOpen || this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen) {
+            this.state.legendaryOpen = true;
+            this.state.attackOpen = false;
             this.state.castSpell = false;
             this.state.spellLevel = null;
             this.state.abilitiesOpen = false;
@@ -866,30 +887,33 @@ export class CombatHud {
             this._draw();
           }
         } else if (isCast) {
-          if (!this.state.castSpell || this.state.attackOpen || this.state.abilitiesOpen) {
+          if (!this.state.castSpell || this.state.attackOpen || this.state.abilitiesOpen || this.state.legendaryOpen) {
             this.state.castSpell = true;
             this.state.spellEconomy = opt.economy || "action";
             this.state.spellLevel = null;
             this.state.attackOpen = false;
             this.state.abilitiesOpen = false;
+            this.state.legendaryOpen = false;
             this.state.weaponNestId = null;
             this._draw();
           }
         } else if (isFeatures) {
-          if (!this.state.abilitiesOpen || this.state.attackOpen || this.state.castSpell) {
+          if (!this.state.abilitiesOpen || this.state.attackOpen || this.state.castSpell || this.state.legendaryOpen) {
             this.state.abilitiesOpen = true;
             this.state.attackOpen = false;
             this.state.castSpell = false;
             this.state.spellLevel = null;
+            this.state.legendaryOpen = false;
             this.state.weaponNestId = null;
             this._draw();
           }
-        } else if (this.state.opportunityOpen || this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen) {
+        } else if (this.state.opportunityOpen || this.state.attackOpen || this.state.castSpell || this.state.abilitiesOpen || this.state.legendaryOpen) {
           this.state.opportunityOpen = false;
           this.state.attackOpen = false;
           this.state.castSpell = false;
           this.state.spellLevel = null;
           this.state.abilitiesOpen = false;
+          this.state.legendaryOpen = false;
           this.state.weaponNestId = null;
           this._draw();
         }
@@ -903,6 +927,18 @@ export class CombatHud {
       });
       g.addEventListener("pointerdown", async (ev) => {
         ev.stopPropagation();
+        if (isLegendary) {
+          if (!this.state.legendaryOpen) {
+            this.state.legendaryOpen = true;
+            this.state.attackOpen = false;
+            this.state.castSpell = false;
+            this.state.spellLevel = null;
+            this.state.abilitiesOpen = false;
+            this.state.weaponNestId = null;
+            this._draw();
+          }
+          return;
+        }
         if (isOpportunity || isAttackHub || isCast || isFeatures) return;
         await this._onLeafClick(opt);
       });
@@ -914,7 +950,7 @@ export class CombatHud {
   }
 
   /**
-   * Attack nest: the creature's action attacks and its legendary actions.
+   * Attack nest: the creature's action attacks.
    */
   _drawMonsterAttackNest() {
     const entries = getMonsterAttackNestOptions(this.actor);
@@ -926,6 +962,52 @@ export class CombatHud {
       store: "attack",
       empty: t("Empty.NoActionAttacks")
     });
+  }
+
+  /**
+   * Outer radial: one wedge per legendary action.
+   */
+  _drawMonsterLegendaryNest() {
+    const entries = getMonsterLegendaryOptions(this.actor);
+    const parent = this._layout?.monsterLegendarySeg ?? mainSectionById("action");
+    const inner = RINGS.nest1Inner;
+    const outer = RINGS.nest1Outer;
+    const group = this._ringGroup("monster-legendary");
+    if (!entries.length) {
+      this._emptyLabel(group, t("Empty.NoLegendaryActions"), (inner + outer) / 2);
+      this.svg.appendChild(group);
+      return;
+    }
+
+    const segs = arcSegmentsForParent(entries.length, parent.start, parent.end, { maxSpanDeg: 220 });
+    entries.forEach((entry, index) => {
+      const seg = segs[index];
+      const g = this._leafSegment({
+        start: seg.start,
+        end: seg.end,
+        inner,
+        outer,
+        caption: entry.name,
+        img: entry.img,
+        itemArt: true,
+        unavailable: entry.available === false
+      });
+      g.addEventListener("pointerenter", (ev) => {
+        this._clearCollapse();
+        this.showTooltip(entry.tooltip || { title: entry.name }, g, ev);
+      });
+      g.addEventListener("pointermove", (ev) => this._positionTooltip(ev));
+      g.addEventListener("pointerleave", (ev) => {
+        this.hideTooltip();
+        if (!this._relatedTargetInHud(ev)) this._scheduleCollapse("legendary");
+      });
+      g.addEventListener("pointerdown", async (ev) => {
+        ev.stopPropagation();
+        await this._onLeafClick(entry);
+      });
+      group.appendChild(g);
+    });
+    this.svg.appendChild(group);
   }
 
   /**
@@ -2083,6 +2165,8 @@ export class CombatHud {
         this.state.useAbility = false;
       } else if (keep === "abilities" || keep === "other") {
         this.state.featureNestId = null;
+      } else if (keep === "legendary") {
+        return;
       } else if (keep === "checks") {
         this.state.checksBranch = null;
       } else if (keep === "bonus" || keep === "reaction") {

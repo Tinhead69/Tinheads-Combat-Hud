@@ -15,6 +15,7 @@ const {
   getMonsterAttackNestOptions,
   getMonsterAttackOptions,
   getMonsterFeatureOptions,
+  getMonsterLegendaryOptions,
   getMonsterOpportunityAttacks,
   getMonsterSpellGroups,
   isMonsterActor
@@ -189,16 +190,71 @@ const dragon = {
   ]
 };
 const dragonActions = getMonsterAttackOptions(dragon, "action");
-assert(dragonActions[0]?.kind === "attack" && dragonActions[0]?.id === "monster-attack", "legendary actions nest under Attack");
-assert(dragonActions[1]?.kind === "abilities" && dragonActions[1]?.id === "monster-features", "lair actions sit under Features");
+assert(dragonActions.map(entry => entry.kind).join(",") === "attack,legendary,abilities", "legendary actions are their own action wedge");
+assert(dragonActions[0]?.id === "monster-attack", "attacks stay on the Attack wedge");
+assert(dragonActions[1]?.id === "monster-legendary", "the Legendary wedge is on the action ring");
+assert(dragonActions[2]?.kind === "abilities" && dragonActions[2]?.id === "monster-features", "lair actions sit under Features");
 assert(getMonsterFeatureOptions(dragon).map(entry => entry.name).join(",") === "Torrent", "a lair action is a feature");
 const dragonNest = getMonsterAttackNestOptions(dragon);
-assert(dragonNest.map(entry => entry.name).join(",") === "Bite,Detect,Wing Attack", "legendary actions sit with the other attacks");
-assert(dragonNest.find(entry => entry.name === "Wing Attack")?.kind === "weapon-attack", "a legendary attack still resolves as an attack");
-assert(dragonNest.find(entry => entry.name === "Detect")?.kind === "feature", "a legendary save resolves as its activity");
+assert(dragonNest.map(entry => entry.name).join(",") === "Bite", "the attack nest is the action attacks");
+const dragonLegendary = getMonsterLegendaryOptions(dragon);
+assert(dragonLegendary.map(entry => entry.name).join(",") === "Detect,Wing Attack", "legendary actions sit on the Legendary wedge");
+assert(dragonLegendary.find(entry => entry.name === "Wing Attack")?.kind === "weapon-attack", "a legendary attack still resolves as an attack");
+assert(dragonLegendary.find(entry => entry.name === "Detect")?.kind === "feature", "a legendary save resolves as its activity");
 assert(getMonsterFeatureOptions(dragon).find(entry => entry.name === "Torrent")?.kind === "feature", "a lair save resolves as its activity");
 assert(!dragonNest.some(entry => entry.name === "Claw"), "a bonus attack stays off the attack nest");
-assert(!dragonActions.some(entry => entry.name === "Restore") && !dragonNest.some(entry => entry.name === "Restore"), "mythic actions stay off the attack list");
+assert(
+  !dragonActions.some(entry => entry.name === "Restore")
+  && !dragonNest.some(entry => entry.name === "Restore")
+  && !dragonLegendary.some(entry => entry.name === "Restore"),
+  "mythic actions stay off the attack list"
+);
+const legendaryOnly = {
+  type: "npc",
+  system: { details: { cr: 10 } },
+  items: [dragon.items.find(item => item.name === "Wing Attack")]
+};
+const legendaryOnlyActions = getMonsterAttackOptions(legendaryOnly, "action");
+assert(legendaryOnlyActions.map(entry => entry.id).join(",") === "monster-legendary", "a creature with only legendary actions still gets that wedge");
+assert(getMonsterLegendaryOptions(legendaryOnly).map(entry => entry.name).join(",") === "Wing Attack", "that wedge lists the legendary action");
+
+const grouped = {
+  type: "npc",
+  system: { details: { cr: 10 } },
+  items: [
+    {
+      id: "legend-blurb",
+      type: "feat",
+      name: "Legendary Actions",
+      system: { identifier: "legendary-actions", activation: { type: "legendary" }, description: { value: "The dragon can take 3 legendary actions." } }
+    },
+    {
+      id: "legend-pack",
+      type: "feat",
+      name: "Legendary Actions",
+      system: {
+        activation: { type: "legendary" },
+        activities: [
+          { id: "detect", name: "Detect", type: "utility", activation: "legendary" },
+          { id: "tail", name: "Tail Attack", type: "attack", activation: "legendary" },
+          { id: "wing", name: "Wing Attack", type: "attack", activation: { type: "legendary", value: 2 } }
+        ]
+      }
+    }
+  ]
+};
+assert(
+  getMonsterAttackOptions(grouped, "action").map(entry => entry.id).join(",") === "monster-legendary",
+  "grouped legendary actions stay behind one wedge"
+);
+assert(
+  getMonsterLegendaryOptions(grouped).map(entry => entry.name).join(",") === "Detect,Tail Attack,Wing Attack",
+  "each legendary action is its own nest entry"
+);
+assert(
+  !getMonsterLegendaryOptions(grouped).some(entry => entry.name === "Legendary Actions"),
+  "the legendary actions description is not a wedge"
+);
 assert(
   getMonsterOpportunityAttacks(dragon).map(entry => entry.name).join(",") === "Bite",
   "an opportunity attack uses the creature's action attacks"
@@ -210,6 +266,46 @@ const quiet = {
   items: []
 };
 assert(getMonsterAttackOptions(quiet, "reaction")[0]?.id === "attack-of-opportunity", "a monster with no reaction on its sheet still gets an opportunity attack");
+assert(
+  getMonsterAttackOptions(quiet, "reaction").every(entry => entry.kind !== "legendary-resistance"),
+  "a monster without legendary resistance does not get that wedge"
+);
+
+const resistant = {
+  type: "npc",
+  system: { details: { cr: 17 }, resources: { legres: { max: 3, spent: 1, value: 2 } } },
+  items: [
+    {
+      id: "lr",
+      type: "feat",
+      name: "Legendary Resistance",
+      img: "icons/magic/defensive/shield-barrier-blue.webp",
+      system: { identifier: "legendary-resistance", activation: { type: "legendary" } }
+    }
+  ]
+};
+const resistantReactions = getMonsterAttackOptions(resistant, "reaction");
+assert(resistantReactions[0]?.id === "attack-of-opportunity", "legendary resistance stays beside the opportunity attack");
+assert(resistantReactions[1]?.kind === "legendary-resistance", "legendary resistance is on the reaction ring");
+assert(resistantReactions[1]?.usesLabel === "2/3", "legendary resistance shows the uses left");
+assert(resistantReactions[1]?.available === true, "a remaining legendary resistance can be spent");
+assert(
+  resistantReactions.filter(entry => entry.name === "Legendary Resistance").length === 1,
+  "the trait is not listed twice"
+);
+assert(
+  getMonsterLegendaryOptions(resistant).length === 0,
+  "legendary resistance is not a legendary action"
+);
+
+const spentResistance = {
+  type: "npc",
+  system: { details: { cr: 10 }, resources: { legres: { max: 3, spent: 3 } } },
+  items: []
+};
+const spentReactions = getMonsterAttackOptions(spentResistance, "reaction");
+assert(spentReactions[1]?.kind === "legendary-resistance", "a spent pool still shows the trait");
+assert(spentReactions[1]?.usesLabel === "0/3" && spentReactions[1]?.available === false, "a spent legendary resistance cannot be used");
 
 const bare = {
   type: "npc",

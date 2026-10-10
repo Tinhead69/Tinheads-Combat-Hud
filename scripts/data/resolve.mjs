@@ -185,6 +185,57 @@ function weaponAttackActivity(option) {
   return null;
 }
 
+/**
+ * Spend one legendary resistance on this actor's latest failed save.
+ * @param {Actor|null} actor
+ */
+async function useLegendaryResistance(actor) {
+  if (typeof actor?.system?.resistSave !== "function") {
+    ui.notifications.warn(t("LegendaryResistance.Unavailable"));
+    return;
+  }
+  const message = latestFailedSave(actor);
+  if (!message) {
+    ui.notifications.warn(t("LegendaryResistance.NoFailedSave"));
+    return;
+  }
+  await actor.system.resistSave(message);
+}
+
+/**
+ * Most recent failed save card for this actor that has not already been resisted.
+ * @param {Actor} actor
+ * @returns {ChatMessage|null}
+ */
+function latestFailedSave(actor) {
+  const collection = game.messages;
+  const messages = collection?.contents
+    ?? (typeof collection?.[Symbol.iterator] === "function" ? Array.from(collection) : []);
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (!saveBelongsToActor(message, actor)) continue;
+    const roll = message.getFlag?.("dnd5e", "roll") ?? message.flags?.dnd5e?.roll ?? null;
+    if (roll?.type !== "save" || roll.forceSuccess) continue;
+    const rolls = message.rolls ?? [];
+    if (rolls.some(entry => entry?.isSuccess)) continue;
+    return message;
+  }
+  return null;
+}
+
+/**
+ * @param {ChatMessage} message
+ * @param {Actor} actor
+ * @returns {boolean}
+ */
+function saveBelongsToActor(message, actor) {
+  const actorId = actor?.id;
+  if (!actorId) return false;
+  if (message.speaker?.actor === actorId) return true;
+  const associated = message.getAssociatedActor?.();
+  return associated?.id === actorId;
+}
+
 function midiQolActive() {
   return !!game.modules?.get?.("midi-qol")?.active;
 }
@@ -240,6 +291,10 @@ async function useOption(option, actor = null) {
 
   if (option.basicId === "dash") {
     await grantDashMovement(resolvedActor);
+  }
+
+  if (option.kind === "legendary-resistance") {
+    return useLegendaryResistance(resolvedActor);
   }
 
   if (isWeaponAttackOption(option)) {

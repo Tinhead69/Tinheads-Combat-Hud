@@ -128,11 +128,20 @@ export function getActivities(item) {
  * @returns {string}
  */
 export function getActivationType(activity, item) {
-  const fromActivity = activity?.activation?.type
-    ?? activity?.system?.activation?.type
-    ?? "";
+  const fromActivity = readActivationType(activity?.activation)
+    || readActivationType(activity?.system?.activation);
   if (fromActivity) return fromActivity;
-  return item?.system?.activation?.type ?? "";
+  return readActivationType(item?.system?.activation);
+}
+
+/**
+ * Activity activation may be `{ type }` or a plain string such as `"legendary"`.
+ * @param {object|string|null|undefined} activation
+ * @returns {string}
+ */
+function readActivationType(activation) {
+  if (typeof activation === "string") return activation.trim();
+  return String(activation?.type ?? "").trim();
 }
 
 /**

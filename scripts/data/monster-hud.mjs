@@ -89,10 +89,12 @@ function parseChallengeRating(raw) {
 /**
  * Attack activities that spend this activation.
  * An empty activation on a weapon counts as an action.
- * When the creature has more than attacks, Action is Attack, Cast Spell, and Features.
- * Legendary actions share the Attack nest. Special abilities sit under Features.
+ * When the creature has more than attacks, Action is Attack, Legendary, Cast Spell, and Features.
+ * Legendary is its own wedge when the creature has legendary actions.
+ * Special abilities sit under Features.
  * The reaction ring lists every reaction on the sheet, including saves,
- * and always offers Attack of Opportunity.
+ * always offers Attack of Opportunity, and lists Legendary Resistance
+ * when the creature has that trait.
  * @param {Actor} actor
  * @param {"action"|"bonus"|"reaction"} activation
  * @returns {Array<object>}
@@ -104,21 +106,32 @@ export function getMonsterAttackOptions(actor, activation) {
   if (wanted === "reaction") options.push(...collectSheetReactions(actor, seen));
   options.sort((a, b) => a.name.localeCompare(b.name));
   if (wanted === "action") return actionRingOptions(actor, options, seen);
-  if (wanted === "reaction") ensureOpportunityAttack(options);
+  if (wanted === "reaction") {
+    ensureOpportunityAttack(options);
+    ensureLegendaryResistance(actor, options);
+  }
   return options;
 }
 
 /**
- * Action attacks and legendary actions, in one nest.
+ * Action attacks for the Attack nest. Legendary actions have their own wedge.
  * @param {Actor} actor
  * @returns {Array<object>}
  */
 export function getMonsterAttackNestOptions(actor) {
-  const seen = new Set();
-  const attacks = collectAttacks(actor, "action", seen);
+  const attacks = collectAttacks(actor, "action", new Set());
   attacks.sort((a, b) => a.name.localeCompare(b.name));
-  const { legendary } = legendaryAndLairOptions(actor, seen);
-  return [...attacks, ...legendary];
+  return attacks;
+}
+
+/**
+ * Legendary actions for the Legendary wedge.
+ * @param {Actor} actor
+ * @returns {Array<object>}
+ */
+export function getMonsterLegendaryOptions(actor) {
+  const { legendary } = legendaryAndLairOptions(actor, new Set());
+  return legendary;
 }
 
 /**
@@ -144,7 +157,8 @@ function actionRingOptions(actor, attacks, seen) {
   const cast = monsterOffersCastSpell(actor);
   if (!cast && !features.length && !legendary.length) return attacks;
   const ring = [];
-  if (attacks.length || legendary.length) ring.push(monsterAttackHub());
+  if (attacks.length) ring.push(monsterAttackHub());
+  if (legendary.length) ring.push(monsterLegendaryHub());
   if (cast) ring.push(monsterCastHub());
   if (features.length) ring.push(monsterFeaturesHub());
   return ring.length ? ring : attacks;
@@ -259,7 +273,7 @@ function normalizeMonsterName(name) {
 }
 
 /**
- * Non-attack actions. Legendary actions stay in the attack nest.
+ * Non-attack actions. Legendary and lair actions have their own wedges.
  * @param {Actor} actor
  * @param {Set<string>} seen
  * @returns {Array<object>}
@@ -272,7 +286,9 @@ function collectActionFeatures(actor, seen) {
     const features = activities.filter(activity => {
       if (isAttackActivity(activity)) return false;
       const type = attackActivation(activity, item);
-      return type === "action" || type === "special";
+      if (type !== "action" && type !== "special") return false;
+      if (type === "special" && hostsLegendaryOrLair(item)) return false;
+      return true;
     });
 
     if (!features.length) {
@@ -486,38 +502,75 @@ function legendaryAndLairOptions(actor, seen) {
   const lair = [];
 
   for (const item of actor?.items ?? []) {
+    if (isLegendaryResistanceItem(item)) continue;
     const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
-    const special = activities.filter(activity => {
+    const itemType = attackActivation(null, item);
+    let special = activities.filter(activity => {
       const type = attackActivation(activity, item);
       return type === "legendary" || type === "lair";
     });
 
+    // A legendary item whose activities were not tagged still lists each activity.
+    if (!special.length && (itemType === "legendary" || itemType === "lair")) {
+      special = activities.filter(activity => {
+        const type = attackActivation(activity, item);
+        return type !== "action" && type !== "bonus" && type !== "reaction" && type !== "mythic";
+      });
+    }
+
     if (!special.length) {
-      if (activities.length) continue;
-      const type = attackActivation(null, item);
-      if (type !== "legendary" && type !== "lair") continue;
+      if (activities.length || isEconomyBlurb(item)) continue;
+      if (itemType !== "legendary" && itemType !== "lair") continue;
       const key = activityKey(item, null);
       if (seen.has(key)) continue;
       seen.add(key);
-      (type === "lair" ? lair : legendary).push(monsterSpecialOption(item, null, type));
+      (itemType === "lair" ? lair : legendary).push(monsterSpecialOption(item, null, itemType));
       continue;
     }
 
     for (const activity of special) {
       const type = attackActivation(activity, item);
+      const bucket = type === "lair" || (type !== "legendary" && itemType === "lair") ? "lair" : "legendary";
       const key = activityKey(item, activity);
       if (seen.has(key)) continue;
       seen.add(key);
       const option = isAttackActivity(activity)
         ? monsterAttackOption(item, activity)
-        : monsterSpecialOption(item, activity, type);
-      (type === "lair" ? lair : legendary).push(option);
+        : monsterSpecialOption(item, activity, bucket);
+      (bucket === "lair" ? lair : legendary).push(option);
     }
   }
 
   legendary.sort((a, b) => a.name.localeCompare(b.name));
   lair.sort((a, b) => a.name.localeCompare(b.name));
   return { legendary, lair };
+}
+
+/**
+ * True when this item is a legendary or lair action, so its untyped activities
+ * belong on that radial instead of Features.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+function hostsLegendaryOrLair(item) {
+  if (attackActivation(null, item) === "legendary" || attackActivation(null, item) === "lair") return true;
+  return getActivities(item).some(activity => {
+    const type = attackActivation(activity, item);
+    return type === "legendary" || type === "lair";
+  });
+}
+
+/**
+ * The stat-block intro ("The dragon can take 3 legendary actions…"), not an action.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+function isEconomyBlurb(item) {
+  const ident = String(item?.system?.identifier || item?.name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  return ident === "legendary actions" || ident === "lair actions" || ident === "regional effects";
 }
 
 function monsterAttackHub() {
@@ -531,6 +584,21 @@ function monsterAttackHub() {
     tooltip: {
       title: t("AttackNest.Label"),
       description: t("AttackNest.MonsterHint")
+    }
+  };
+}
+
+function monsterLegendaryHub() {
+  return {
+    kind: "legendary",
+    id: "monster-legendary",
+    name: t("Legendary.Label"),
+    img: CHROME.useAbility,
+    available: true,
+    activation: "legendary",
+    tooltip: {
+      title: t("Legendary.Label"),
+      description: t("Legendary.Hint")
     }
   };
 }
@@ -570,6 +638,101 @@ function monsterSpecialOption(item, activity, activation) {
 function ensureOpportunityAttack(options) {
   if (options.some(entry => isOpportunityName(entry.name) || entry.kind === "opportunity")) return;
   options.unshift(monsterOpportunityOption());
+}
+
+const LEGENDARY_RESISTANCE_NAMES = new Set([
+  "legendary resistance",
+  "legendary resistances"
+]);
+
+/**
+ * Legendary Resistance sits on the reaction ring when the creature has the trait.
+ * A sheet entry with that name is replaced so the click spends a use on a failed save.
+ * @param {Actor} actor
+ * @param {Array<object>} options
+ */
+function ensureLegendaryResistance(actor, options) {
+  if (!monsterHasLegendaryResistance(actor)) return;
+  const existing = options.findIndex(entry => isLegendaryResistanceName(entry.name));
+  if (existing >= 0) options.splice(existing, 1);
+  const option = monsterLegendaryResistanceOption(actor);
+  const afterOpportunity = options.findIndex(entry =>
+    entry.kind === "opportunity" || isOpportunityName(entry.name)
+  );
+  options.splice(afterOpportunity >= 0 ? afterOpportunity + 1 : 0, 0, option);
+}
+
+/**
+ * @param {Actor} actor
+ * @returns {boolean}
+ */
+function monsterHasLegendaryResistance(actor) {
+  if (legendaryResistancePool(actor).max > 0) return true;
+  return (actor?.items ?? []).some(isLegendaryResistanceItem);
+}
+
+/**
+ * @param {Item} item
+ * @returns {boolean}
+ */
+function isLegendaryResistanceItem(item) {
+  const ident = normalizeMonsterName(item?.system?.identifier);
+  const name = normalizeMonsterName(item?.name);
+  return LEGENDARY_RESISTANCE_NAMES.has(ident) || LEGENDARY_RESISTANCE_NAMES.has(name);
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isLegendaryResistanceName(name) {
+  return LEGENDARY_RESISTANCE_NAMES.has(normalizeMonsterName(name));
+}
+
+/**
+ * Remaining and maximum legendary resistances. `value` is derived in dnd5e 5.3.
+ * @param {Actor} actor
+ * @returns {{ value: number, max: number }}
+ */
+function legendaryResistancePool(actor) {
+  const pool = actor?.system?.resources?.legres ?? {};
+  const max = Number(pool.max ?? 0);
+  const spent = Number(pool.spent);
+  const rawValue = Number(pool.value);
+  const value = Number.isFinite(rawValue)
+    ? rawValue
+    : (Number.isFinite(spent) ? Math.max(0, max - spent) : max);
+  return {
+    max: Number.isFinite(max) && max > 0 ? max : 0,
+    value: Number.isFinite(value) ? Math.max(0, value) : 0
+  };
+}
+
+/**
+ * @param {Actor} actor
+ */
+function monsterLegendaryResistanceOption(actor) {
+  const item = (actor?.items ?? []).find(isLegendaryResistanceItem) ?? null;
+  const pool = legendaryResistancePool(actor);
+  const usesLabel = pool.max > 0 ? `${pool.value}/${pool.max}` : "";
+  const available = pool.max > 0 ? pool.value > 0 : true;
+  return {
+    kind: "legendary-resistance",
+    id: "legendary-resistance",
+    name: t("LegendaryResistance.Label"),
+    img: itemArtwork(item, null) || CHROME.save,
+    item,
+    activity: null,
+    actor,
+    activation: "reaction",
+    usesLabel,
+    available,
+    reason: available ? "" : t("LegendaryResistance.NoneLeft"),
+    tooltip: {
+      title: usesLabel ? `${t("LegendaryResistance.Label")} · ${usesLabel}` : t("LegendaryResistance.Label"),
+      description: t("LegendaryResistance.Hint")
+    }
+  };
 }
 
 function monsterOpportunityOption() {
