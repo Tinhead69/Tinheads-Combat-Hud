@@ -124,6 +124,10 @@ const amnizu = {
 const amnizuReactions = getMonsterAttackOptions(amnizu, "reaction");
 assert(amnizuReactions[0]?.id === "attack-of-opportunity", "a save reaction still keeps the opportunity attack");
 assert(amnizuReactions[1]?.name === "Instinctive Charm" && amnizuReactions[1]?.kind === "feature", "a reaction save is listed on the reaction ring");
+assert(
+  getMonsterFeatureOptions(amnizu).map(entry => entry.name).join(",") === "Instinctive Charm",
+  "a reaction feat is also listed under Features"
+);
 
 const listedOpportunity = {
   type: "npc",
@@ -194,7 +198,10 @@ assert(dragonActions.map(entry => entry.kind).join(",") === "attack,legendary,ab
 assert(dragonActions[0]?.id === "monster-attack", "attacks stay on the Attack wedge");
 assert(dragonActions[1]?.id === "monster-legendary", "the Legendary wedge is on the action ring");
 assert(dragonActions[2]?.kind === "abilities" && dragonActions[2]?.id === "monster-features", "lair actions sit under Features");
-assert(getMonsterFeatureOptions(dragon).map(entry => entry.name).join(",") === "Torrent", "a lair action is a feature");
+assert(
+  getMonsterFeatureOptions(dragon).map(entry => entry.name).join(",") === "Detect,Restore,Torrent,Wing Attack",
+  "every feat is listed under Features"
+);
 const dragonNest = getMonsterAttackNestOptions(dragon);
 assert(dragonNest.map(entry => entry.name).join(",") === "Bite", "the attack nest is the action attacks");
 const dragonLegendary = getMonsterLegendaryOptions(dragon);
@@ -215,7 +222,10 @@ const legendaryOnly = {
   items: [dragon.items.find(item => item.name === "Wing Attack")]
 };
 const legendaryOnlyActions = getMonsterAttackOptions(legendaryOnly, "action");
-assert(legendaryOnlyActions.map(entry => entry.id).join(",") === "monster-legendary", "a creature with only legendary actions still gets that wedge");
+assert(
+  legendaryOnlyActions.map(entry => entry.id).join(",") === "monster-legendary,monster-features",
+  "a legendary feat stays on Legendary and is also listed under Features"
+);
 assert(getMonsterLegendaryOptions(legendaryOnly).map(entry => entry.name).join(",") === "Wing Attack", "that wedge lists the legendary action");
 
 const grouped = {
@@ -244,8 +254,12 @@ const grouped = {
   ]
 };
 assert(
-  getMonsterAttackOptions(grouped, "action").map(entry => entry.id).join(",") === "monster-legendary",
-  "grouped legendary actions stay behind one wedge"
+  getMonsterAttackOptions(grouped, "action").map(entry => entry.id).join(",") === "monster-legendary,monster-features",
+  "grouped legendary actions stay behind one wedge and the feat is also under Features"
+);
+assert(
+  getMonsterFeatureOptions(grouped).map(entry => entry.name).join(",") === "Detect,Tail Attack,Wing Attack",
+  "a feat that holds legendary actions is listed under Features"
 );
 assert(
   getMonsterLegendaryOptions(grouped).map(entry => entry.name).join(",") === "Detect,Tail Attack,Wing Attack",
@@ -379,5 +393,59 @@ const groups = getMonsterSpellGroups(caster);
 assert(groups.map(entry => entry.id).join(",") === "atwill,innate", "at-will and innate spells are not grouped by slot level");
 assert(groups[0].spells.map(entry => entry.name).join(",") === "Command,Feeblemind", "at-will spells stay together");
 assert(groups[1].spells.map(entry => entry.name).join(",") === "Burning Hands", "an innate spell stays in the innate group");
+
+const troll = {
+  type: "npc",
+  system: { details: { cr: 5 } },
+  items: [
+    weapon({
+      name: "Bite",
+      activities: [{ id: "bite", name: "Bite", type: "attack", activation: { type: "action" } }]
+    }),
+    {
+      id: "regen",
+      type: "feat",
+      name: "Regeneration",
+      system: {
+        type: { value: "monster" },
+        properties: [],
+        description: { value: "The troll regains 10 hit points at the start of its turn." }
+      }
+    },
+    {
+      id: "keen",
+      type: "feat",
+      name: "Keen Smell",
+      system: {
+        type: { value: "monster" },
+        properties: new Set(["trait"]),
+        activities: [{ id: "smell", name: "Keen Smell", type: "utility", activation: { type: "turnStart" } }]
+      }
+    },
+    {
+      id: "loathsome",
+      type: "feat",
+      name: "Loathsome Limbs",
+      system: {
+        type: { value: "monster" },
+        activities: [{ id: "limbs", name: "Loathsome Limbs", type: "utility", activation: { type: "" } }]
+      }
+    }
+  ]
+};
+const trollFeatures = getMonsterFeatureOptions(troll).map(entry => entry.name).join(",");
+assert(trollFeatures === "Keen Smell,Loathsome Limbs,Regeneration", "sheet features, including Regeneration, sit under Features");
+assert(
+  getMonsterAttackOptions(troll, "action").some(entry => entry.id === "monster-features"),
+  "a creature with only passive features still gets the Features wedge"
+);
+assert(
+  !getMonsterFeatureOptions(troll).some(entry => entry.name === "Bite"),
+  "an action attack stays off Features"
+);
+assert(
+  getMonsterFeatureOptions(resistant).some(entry => entry.name === "Legendary Resistance"),
+  "legendary resistance is a feat, so it is listed under Features"
+);
 
 console.log(`\n${passed} assertions passed`);

@@ -165,8 +165,8 @@ function actionRingOptions(actor, attacks, seen) {
 }
 
 /**
- * Special abilities and other non-attack actions, including lair actions.
- * Spellcasting itself is the Cast Spell wedge.
+ * The Features ring lists every item of type feat.
+ * Spellcasting stays the Cast Spell wedge. The legendary-actions blurb is not a feature.
  * @param {Actor} actor
  * @returns {Array<object>}
  */
@@ -174,6 +174,8 @@ export function getMonsterFeatureOptions(actor) {
   const seen = new Set();
   collectAttacks(actor, "action", seen);
   const features = collectActionFeatures(actor, seen);
+  const listed = new Set(features.map(entry => activityKey(entry.item, entry.activity)));
+  features.push(...collectFeatItems(actor, seen, listed));
   const { lair } = legendaryAndLairOptions(actor, seen);
   features.push(...lair);
   features.sort((a, b) => a.name.localeCompare(b.name));
@@ -270,6 +272,42 @@ function isSpellcastingFeature(item) {
  */
 function normalizeMonsterName(name) {
   return String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * Every feat item. Attack activities already on the Attack nest are still listed here.
+ * Keys already on this list are skipped. Newly listed keys are marked seen so lair
+ * actions are not added a second time.
+ * @param {Actor} actor
+ * @param {Set<string>} seen
+ * @param {Set<string>} listed
+ * @returns {Array<object>}
+ */
+function collectFeatItems(actor, seen, listed) {
+  const options = [];
+  for (const item of actor?.items ?? []) {
+    if (item?.type !== "feat") continue;
+    if (isSpellcastingFeature(item) || isEconomyBlurb(item)) continue;
+    const activities = getActivities(item).filter(activity => !isAutomationOnly(activity));
+    if (!activities.length) {
+      const key = activityKey(item, null);
+      if (listed.has(key)) continue;
+      listed.add(key);
+      seen.add(key);
+      options.push(monsterSpecialOption(item, null, attackActivation(null, item) || "special"));
+      continue;
+    }
+    for (const activity of activities) {
+      const key = activityKey(item, activity);
+      if (listed.has(key)) continue;
+      listed.add(key);
+      seen.add(key);
+      options.push(isAttackActivity(activity)
+        ? monsterAttackOption(item, activity)
+        : monsterSpecialOption(item, activity, attackActivation(activity, item) || "special"));
+    }
+  }
+  return options;
 }
 
 /**
