@@ -1,33 +1,25 @@
 /**
- * SVG path helpers for annular wedge segments and partial nest arcs.
+ * SVG path helpers for annular wedge segments and nest arcs.
  *
  * Angle convention: 0° = north, clockwise positive (combat HUD).
- * Nested rings use partial arcs anchored to a parent wedge mid-angle —
- * they do NOT fill a full 360° unless the option count needs the max span.
- *
- * Nested option rings size wedges from title/label length (min/max clamped).
- * Crowded nests may grow toward {@link ARC_DEFAULTS.crowdedMaxSpanDeg}; a single
- * short leaf stays compact and never stretches to fill its parent quarter.
+ * An opened ring is centered on its parent wedge.
+ * Ten or more options use the whole circle. Fewer than ten use a half circle.
+ * A single option uses a quarter circle.
  */
+
+/** Option count below this opens a half circle. Ten or more use the whole circle. */
+export const NEST_FULL_CIRCLE_AFTER = 10;
 
 /** Defaults for nested / leaf arcs (Action options, spells, Use Item, BA/R). */
 export const ARC_DEFAULTS = Object.freeze({
-  /** Soft preferred total-arc cap when titles fit comfortably. */
-  maxSpanDeg: 220,
-  /** Hard cap when many long titles need room — still leaves a visible gap. */
-  crowdedMaxSpanDeg: 300,
-  /** Preferred equal-split width when no titles are supplied (legacy). */
-  idealSegmentDeg: 34,
-  /** Floor so tiny / short leaves stay clickable. */
-  minSegmentDeg: 18,
-  /** Cap per leaf so one long title does not dominate the nest. */
-  maxSegmentDeg: 52,
-  /** Fixed padding in the title→angle formula (icon / margins). */
-  titleBaseDeg: 14,
-  /** Degrees contributed per character of title. */
-  degPerChar: 2.15,
+  /** Fallback cap when a caller does not use the half / full nest rule. */
+  maxSpanDeg: 300,
+  /** Preferred wedge width when there is room. */
+  idealSegmentDeg: 42,
+  /** Floor so a crowded ring still has a readable slice. */
+  minSegmentDeg: 26,
   /** Gap between neighboring segments. */
-  gapDeg: 2.5
+  gapDeg: 3
 });
 
 /**
@@ -79,7 +71,6 @@ export function wedgeAnchor(cx, cy, r, startAngle, endAngle) {
 
 /**
  * Full-circle equal segments (legacy / tests). Prefer {@link arcSegments} for nests.
- * Main 3/4 economy wedges use {@link mainSectionAngles}, not this helper.
  * @param {number} count
  * @param {number} [gapDeg=2]
  * @param {number} [startDeg=0]
@@ -100,181 +91,60 @@ export function equalSegments(count, gapDeg = 2, startDeg = 0) {
 }
 
 /**
- * Map a title/label to a wedge sweep (degrees), clamped to min/max.
- * Short titles → narrower wedges; long titles → wider (up to max).
- *
- * @param {string} [title]
- * @param {object} [opts]
- * @returns {number}
- */
-export function segmentDegForTitle(title, opts = {}) {
-  const minSegmentDeg = opts.minSegmentDeg ?? ARC_DEFAULTS.minSegmentDeg;
-  const maxSegmentDeg = opts.maxSegmentDeg ?? ARC_DEFAULTS.maxSegmentDeg;
-  const titleBaseDeg = opts.titleBaseDeg ?? ARC_DEFAULTS.titleBaseDeg;
-  const degPerChar = opts.degPerChar ?? ARC_DEFAULTS.degPerChar;
-  const len = String(title ?? "").trim().length;
-  const raw = titleBaseDeg + len * degPerChar;
-  return Math.min(maxSegmentDeg, Math.max(minSegmentDeg, raw));
-}
-
-/**
- * Approximate how many caption characters fit in a wedge sweep
- * (used to avoid ellipsis when the leaf was widened for a long title).
- *
- * @param {number} sweepDeg
- * @param {object} [opts]
- * @param {number} [opts.degPerChar]
- * @returns {number}
- */
-export function captionCharsForSweep(sweepDeg, opts = {}) {
-  const degPerChar = opts.degPerChar ?? ARC_DEFAULTS.degPerChar;
-  const chars = Math.floor(Math.max(0, sweepDeg) / degPerChar);
-  return Math.max(4, Math.min(48, chars));
-}
-
-/**
- * Fit caption text to a wedge sweep; ellipsis only when still too long.
- *
- * @param {string} text
- * @param {number} startDeg
- * @param {number} endDeg
- * @returns {string}
- */
-export function fitCaptionToSweep(text, startDeg, endDeg) {
-  const raw = String(text ?? "");
-  const sweep = parentSweep(startDeg, endDeg);
-  const maxChars = captionCharsForSweep(sweep);
-  if (raw.length <= maxChars) return raw;
-  const keep = Math.max(1, maxChars - 1);
-  return `${raw.slice(0, keep)}…`;
-}
-
-/**
- * Desired per-segment widths (degrees) for a nest.
- * When `titles` is provided, widths follow title length; otherwise equal ideal.
- *
+ * Opened rings: ten or more options fill the circle. Fewer than ten use a half circle.
+ * One option uses a quarter circle.
  * @param {number} count
- * @param {object} [opts]
- * @param {string[]} [opts.titles]
- * @returns {number[]}
+ * @returns {number}
  */
-export function segmentWidthsForNest(count, opts = {}) {
-  if (count <= 0) return [];
-  const minSegmentDeg = opts.minSegmentDeg ?? ARC_DEFAULTS.minSegmentDeg;
-  const maxSegmentDeg = opts.maxSegmentDeg ?? ARC_DEFAULTS.maxSegmentDeg;
-  const idealSegmentDeg = opts.idealSegmentDeg ?? ARC_DEFAULTS.idealSegmentDeg;
-  const titles = Array.isArray(opts.titles) ? opts.titles : null;
-
-  if (titles) {
-    return Array.from({ length: count }, (_, i) =>
-      segmentDegForTitle(titles[i] ?? "", {
-        minSegmentDeg,
-        maxSegmentDeg,
-        titleBaseDeg: opts.titleBaseDeg,
-        degPerChar: opts.degPerChar
-      })
-    );
-  }
-
-  return Array.from({ length: count }, () =>
-    Math.min(maxSegmentDeg, Math.max(minSegmentDeg, idealSegmentDeg))
-  );
+export function nestSpanDeg(count) {
+  if (count <= 1) return 90;
+  return count >= NEST_FULL_CIRCLE_AFTER ? 360 : 180;
 }
 
 /**
- * Scale widths to fit `usable` degrees while respecting a per-segment floor.
- * If floors cannot fit, compress equally below the floor (last resort).
- *
- * @param {number[]} widths
- * @param {number} usable
- * @param {number} minDeg
- * @returns {number[]}
- */
-function fitWidthsToUsable(widths, usable, minDeg) {
-  const n = widths.length;
-  if (n === 0) return [];
-  const sum = widths.reduce((a, b) => a + b, 0);
-  if (sum <= 0) return widths.map(() => usable / n);
-  if (Math.abs(sum - usable) < 0.01) return widths.slice();
-
-  let scaled = widths.map(w => (w / sum) * usable);
-  const floorTotal = n * minDeg;
-  if (floorTotal > usable + 0.01) {
-    // Cannot honor min — equal compress
-    return scaled.map(() => usable / n);
-  }
-
-  // Raise floors, then redistribute leftover proportionally among the rest
-  const locked = scaled.map(w => w < minDeg);
-  let lockedSum = 0;
-  let freeSum = 0;
-  for (let i = 0; i < n; i++) {
-    if (locked[i]) lockedSum += minDeg;
-    else freeSum += scaled[i];
-  }
-  const freeBudget = usable - lockedSum;
-  return scaled.map((w, i) => {
-    if (locked[i]) return minDeg;
-    if (freeSum <= 0) return freeBudget / Math.max(1, n - locked.filter(Boolean).length);
-    return (w / freeSum) * freeBudget;
-  });
-}
-
-/**
- * Partial arc of wedges centered on `midAngle`.
- * With `opts.titles`, widths follow title length (min/max clamped). Without titles,
- * equal ideal widths. Span is the natural sum of widths + gaps — never stretched
- * to fill a parent quarter. When that sum exceeds the soft max, the arc grows
- * toward `crowdedMaxSpanDeg` so labels stay readable.
+ * Partial arc of `count` equal wedges centered on `midAngle`.
+ * Span grows with count up to `maxSpanDeg`, unless `fixedSpanDeg` sets it.
  *
  * @param {number} count
  * @param {object} [opts]
  * @param {number} [opts.midAngle=0] Arc center (0 = north)
- * @param {string[]} [opts.titles] Per-segment labels for title-based sizing
- * @param {number} [opts.maxSpanDeg] Soft preferred cap
- * @param {number} [opts.crowdedMaxSpanDeg] Hard cap when titles need more room
+ * @param {number} [opts.maxSpanDeg]
+ * @param {number} [opts.fixedSpanDeg] Use this span instead of growing toward the cap
  * @param {number} [opts.idealSegmentDeg]
  * @param {number} [opts.minSegmentDeg]
- * @param {number} [opts.maxSegmentDeg]
  * @param {number} [opts.gapDeg]
  * @returns {Array<{ index: number, start: number, end: number, mid: number }>}
  */
 export function arcSegments(count, opts = {}) {
   if (count <= 0) return [];
 
-  const softMax = opts.maxSpanDeg ?? ARC_DEFAULTS.maxSpanDeg;
-  const hardMax = Math.min(
-    opts.crowdedMaxSpanDeg ?? ARC_DEFAULTS.crowdedMaxSpanDeg,
-    360 - 12
-  );
+  const maxSpanDeg = opts.maxSpanDeg ?? ARC_DEFAULTS.maxSpanDeg;
+  const idealSegmentDeg = opts.idealSegmentDeg ?? ARC_DEFAULTS.idealSegmentDeg;
   const minSegmentDeg = opts.minSegmentDeg ?? ARC_DEFAULTS.minSegmentDeg;
   const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
   const midAngle = opts.midAngle ?? 0;
 
-  const gapTotal = gapDeg * Math.max(count - 1, 0);
-  let widths = segmentWidthsForNest(count, opts);
-  let needed = widths.reduce((a, b) => a + b, 0) + gapTotal;
-
-  // Grow toward hard max when soft max is too tight for titles / count
-  const spanCap = needed <= softMax ? softMax : Math.max(softMax, hardMax);
+  const openGaps = gapDeg * Math.max(count - 1, 0);
   let span;
-  if (needed <= spanCap) {
-    // Natural size — leave empty gap; do not stretch to fill softMax
-    span = needed;
+  if (Number.isFinite(opts.fixedSpanDeg)) {
+    span = opts.fixedSpanDeg;
   } else {
-    span = spanCap;
-    const usable = Math.max(span - gapTotal, count * 4);
-    widths = fitWidthsToUsable(widths, usable, minSegmentDeg);
-    needed = widths.reduce((a, b) => a + b, 0) + gapTotal;
-    span = Math.min(spanCap, needed);
+    span = Math.min(maxSpanDeg, count * idealSegmentDeg);
+    span = Math.max(span, Math.min(maxSpanDeg, count * minSegmentDeg + openGaps));
+    const minNeeded = count * minSegmentDeg + openGaps;
+    if (minNeeded > maxSpanDeg) span = maxSpanDeg;
   }
 
+  // A full ring also needs a gap where the last wedge meets the first.
+  const closes = span >= 360 - 0.01;
+  const gapTotal = closes ? gapDeg * count : openGaps;
+  const usable = Math.max(span - gapTotal, count * 4);
+  const segSweep = usable / count;
   const start = midAngle - span / 2;
-  let cursor = start;
-  return widths.map((w, i) => {
-    const s = cursor;
-    const e = s + w;
-    cursor = e + (i < count - 1 ? gapDeg : 0);
+
+  return Array.from({ length: count }, (_, i) => {
+    const s = start + i * (segSweep + gapDeg);
+    const e = s + segSweep;
     return {
       index: i,
       start: s,
@@ -285,44 +155,84 @@ export function arcSegments(count, opts = {}) {
 }
 
 /**
- * Arc centered on a parent wedge (nests fan over the hovered parent).
- * Child arcs stay anchored on the parent mid-angle; total span may grow well
- * past the parent wedge when titles need room (up to crowdedMaxSpanDeg).
+ * Arc centered on a parent wedge.
+ * Ten or more options use the whole circle. Fewer than ten use a half circle.
+ * One option uses a quarter circle.
  *
  * @param {number} count
  * @param {number} parentStart
  * @param {number} parentEnd  (may be < start if crossing 0°)
  * @param {object} [opts]
- * @param {string[]} [opts.titles]
  */
 export function arcSegmentsForParent(count, parentStart, parentEnd, opts = {}) {
   const mid = normalizeMid(parentStart, parentEnd);
-  const softCap = opts.maxSpanDeg ?? ARC_DEFAULTS.maxSpanDeg;
-  const hardCap = opts.crowdedMaxSpanDeg ?? ARC_DEFAULTS.crowdedMaxSpanDeg;
-  return arcSegments(count, {
-    ...opts,
-    midAngle: mid,
-    maxSpanDeg: softCap,
-    crowdedMaxSpanDeg: hardCap
+  const fixedSpanDeg = nestSpanDeg(count);
+  return arcSegments(count, { ...opts, midAngle: mid, fixedSpanDeg, maxSpanDeg: fixedSpanDeg });
+}
+
+/**
+ * Same arc as equal wedges, but longer titles take a wider slice.
+ * Short names keep a minimum so they stay tappable.
+ * @param {string[]} labels
+ * @param {object} [opts]
+ * @param {number} [opts.midAngle=0]
+ * @param {number} [opts.fixedSpanDeg]
+ * @param {number} [opts.gapDeg]
+ * @returns {Array<{ index: number, start: number, end: number, mid: number }>}
+ */
+export function weightedArcSegments(labels, opts = {}) {
+  const names = Array.isArray(labels) ? labels : [];
+  const count = names.length;
+  if (count <= 0) return [];
+
+  const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
+  const midAngle = opts.midAngle ?? 0;
+  const span = Number.isFinite(opts.fixedSpanDeg) ? opts.fixedSpanDeg : nestSpanDeg(count);
+  const closes = span >= 360 - 0.01;
+  const gapTotal = closes ? gapDeg * count : gapDeg * Math.max(count - 1, 0);
+  const usable = Math.max(span - gapTotal, count * 8);
+  const weights = names.map(label => {
+    const len = String(label ?? "").trim().length;
+    return Math.max(5, Math.min(len || 5, 32));
+  });
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let cursor = midAngle - span / 2;
+
+  return weights.map((weight, index) => {
+    const segSweep = usable * (weight / total);
+    const start = cursor;
+    const end = cursor + segSweep;
+    cursor = end + gapDeg;
+    return { index, start, end, mid: (start + end) / 2 };
   });
 }
 
 /**
- * Main wedges by HUD profile.
- * - character: Action / Checks / Bonus / Reaction (4-way)
- * - monster: Action / Bonus / Reaction only (3-way; no Checks)
- * Action stays on top (crosses 0° / north).
- *
- * @param {"character"|"monster"} [profile]
+ * Shift an arc so one wedge's midpoint sits on the parent midpoint.
+ * Neighboring wedges stay in order, clockwise.
+ * @param {Array<{ index: number, start: number, end: number, mid: number }>} segs
+ * @param {number} index
+ * @param {number} parentStart
+ * @param {number} parentEnd
  */
-export function mainSectionAngles(profile = "character") {
-  if (profile === "monster") {
-    return [
-      { id: "action", start: 300, end: 60 },   // 120° top
-      { id: "bonus", start: 60, end: 180 },
-      { id: "reaction", start: 180, end: 300 }
-    ];
-  }
+export function centerArcOnIndex(segs, index, parentStart, parentEnd) {
+  if (!segs?.length) return segs ?? [];
+  const i = Math.max(0, Math.min(index, segs.length - 1));
+  const delta = normalizeMid(parentStart, parentEnd) - segs[i].mid;
+  if (!delta) return segs;
+  return segs.map(seg => ({
+    ...seg,
+    start: seg.start + delta,
+    end: seg.end + delta,
+    mid: seg.mid + delta
+  }));
+}
+
+/**
+ * Main wedges (compact 4-way split): Action, Checks, Bonus Action, Reaction.
+ * Action stays on top (crosses 0° / north).
+ */
+export function mainSectionAngles() {
   return [
     { id: "action", start: 315, end: 45 },     // crosses 0° — top
     { id: "checks", start: 45, end: 135 },
@@ -331,8 +241,8 @@ export function mainSectionAngles(profile = "character") {
   ];
 }
 
-export function mainSectionById(id, profile = "character") {
-  return mainSectionAngles(profile).find(s => s.id === id) ?? null;
+export function mainSectionById(id) {
+  return mainSectionAngles().find(s => s.id === id) ?? null;
 }
 
 export function normalizeMid(start, end) {
@@ -394,3 +304,4 @@ export function wedgeImageFrame(cx, cy, innerR, outerR, startDeg, endDeg) {
     cy: anchor.y
   };
 }
+

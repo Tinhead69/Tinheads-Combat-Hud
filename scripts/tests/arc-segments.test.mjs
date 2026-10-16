@@ -1,5 +1,5 @@
 /**
- * Partial-arc + title-based wedge geometry checks.
+ * Partial-arc geometry checks.
  * Run: node scripts/tests/arc-segments.test.mjs
  */
 
@@ -7,11 +7,11 @@ import {
   ARC_DEFAULTS,
   arcSegments,
   arcSegmentsForParent,
-  captionCharsForSweep,
-  fitCaptionToSweep,
+  centerArcOnIndex,
   mainSectionById,
+  nestSpanDeg,
   normalizeMid,
-  segmentDegForTitle
+  weightedArcSegments
 } from "../ui/radial-geometry.mjs";
 
 let passed = 0;
@@ -21,16 +21,12 @@ function assert(cond, msg) {
   console.log("ok:", msg);
 }
 
-function spanOf(segs) {
-  return segs[segs.length - 1].end - segs[0].start;
-}
-
 {
   const segs = arcSegments(3, { midAngle: 0 });
   assert(segs.length === 3, "3 segments");
-  const span = spanOf(segs);
+  const span = segs[2].end - segs[0].start;
   assert(span < 360, "does not fill full circle");
-  assert(span <= ARC_DEFAULTS.crowdedMaxSpanDeg + 0.01, "respects crowded max span");
+  assert(span <= ARC_DEFAULTS.maxSpanDeg + 0.01, "respects max span");
   const mid = (segs[0].start + segs[2].end) / 2;
   assert(Math.abs(mid) < 1 || Math.abs(mid - 0) < 1, "centered near midAngle 0");
 }
@@ -43,83 +39,64 @@ function spanOf(segs) {
 }
 
 {
-  // Hold Person case: one medium title must NOT stretch to a parent quarter (~90°)
-  const segs = arcSegments(1, {
-    midAngle: 0,
-    titles: ["Hold Person (Legacy)"],
-    maxSpanDeg: 160
-  });
-  const w = segs[0].end - segs[0].start;
-  assert(w < 70, "single titled leaf stays under quarter-circle");
-  assert(w >= ARC_DEFAULTS.minSegmentDeg - 0.01, "single titled leaf respects min");
-  assert(w <= ARC_DEFAULTS.maxSegmentDeg + 0.01, "single titled leaf respects max");
-}
-
-{
-  const short = segmentDegForTitle("Dash");
-  const long = segmentDegForTitle("Eldritch Invocations: Mask of Many Faces");
-  assert(short < long, "longer titles get wider wedges");
-  assert(short >= ARC_DEFAULTS.minSegmentDeg - 0.01, "short title hits min floor");
-  assert(long <= ARC_DEFAULTS.maxSegmentDeg + 0.01, "long title hits max cap");
-}
-
-{
-  const titles = [
-    "Eldritch Blast",
-    "Eldritch Invocations: Eldritch Mind",
-    "Eldritch Invocations: Mask of Many Faces",
-    "Eldritch Invocations: One with Shadows",
-    "Empowered Healing"
-  ];
-  const soft = arcSegments(titles.length, {
-    midAngle: 90,
-    titles,
-    maxSpanDeg: 160
-  });
-  const softSpan = spanOf(soft);
-  assert(softSpan > 160, "crowded titled nest grows past soft maxSpan");
-  assert(softSpan <= ARC_DEFAULTS.crowdedMaxSpanDeg + 0.01, "crowded nest respects hard cap");
-  assert(softSpan < 360, "crowded nest still leaves a gap");
-
-  // Wider leaves for longer titles (order preserved)
-  const widths = soft.map(s => s.end - s.start);
-  assert(widths[0] < widths[2], "longest title wider than short blast name");
-  assert(widths.every(w => w >= ARC_DEFAULTS.minSegmentDeg - 0.01), "all leaves meet min hit target");
-}
-
-{
-  const many = arcSegments(12, { midAngle: 0, maxSpanDeg: 200, crowdedMaxSpanDeg: 200 });
-  const span = spanOf(many);
-  assert(span <= 200.01, "large equal counts cap at explicit crowded max");
+  const many = arcSegments(12, { midAngle: 0, maxSpanDeg: 200 });
+  const span = many[many.length - 1].end - many[0].start;
+  assert(span <= 200.01, "large counts cap at maxSpan");
   assert(span < 360, "still leaves a gap");
 }
 
 {
   const action = mainSectionById("action");
-  const segs = arcSegmentsForParent(5, action.start, action.end, {
-    titles: ["Longsword", "Dash", "Disengage", "Use Item", "Cast Spell"]
-  });
+  const segs = arcSegmentsForParent(5, action.start, action.end);
   const mid = normalizeMid(action.start, action.end);
   assert(Math.abs(((segs[0].start + segs[4].end) / 2) - mid) < 2, "action nest fans over Action wedge");
 }
 
 {
-  // Parent quarter must not force a single leaf to fill it
-  const parent = { start: 0, end: 90 };
-  const segs = arcSegmentsForParent(1, parent.start, parent.end, {
-    titles: ["Hold Person"],
-    maxSpanDeg: 160
-  });
-  assert(segs[0].end - segs[0].start < 80, "parented single leaf leaves empty gap");
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(12, action.start, action.end);
+  const span = segs[11].end - segs[0].start;
+  const closingGap = segs[0].start + 360 - segs[11].end;
+  assert(Math.abs(span + closingGap - 360) < 1, "more than 10 options use the whole circle");
+  assert(Math.abs(closingGap - ARC_DEFAULTS.gapDeg) < 0.05, "a full circle keeps a gap between the first and last wedge");
+  assert(nestSpanDeg(11) === 360 && nestSpanDeg(10) === 360 && nestSpanDeg(9) === 180, "full circle from 10 options, half circle below that");
+  assert(nestSpanDeg(1) === 90, "a single option uses a quarter circle");
 }
 
 {
-  const maxChars = captionCharsForSweep(40);
-  assert(maxChars > 14, "wider sweep allows more caption chars than old 14 cap");
-  const fitted = fitCaptionToSweep("Eldritch Invocations: Mask of Many Faces", 0, 48);
-  assert(!fitted.endsWith("…") || fitted.length > 13, "fitCaption uses sweep-aware length");
-  const tiny = fitCaptionToSweep("Hold Person (Legacy)", 0, 10);
-  assert(tiny.includes("…"), "very narrow sweep still ellipsizes");
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(1, action.start, action.end);
+  const span = segs[0].end - segs[0].start;
+  assert(Math.abs(span - 90) < 1, "one wedge in a nest is a quarter circle");
+}
+
+{
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(6, action.start, action.end);
+  const span = segs[5].end - segs[0].start;
+  const mid = normalizeMid(action.start, action.end);
+  assert(Math.abs(span - 180) < 1, "fewer than 10 options use a half circle");
+  assert(Math.abs(((segs[0].start + segs[5].end) / 2) - mid) < 2, "half circle stays centered on the parent");
+}
+
+{
+  const action = mainSectionById("action");
+  const segs = arcSegmentsForParent(10, action.start, action.end, { maxSpanDeg: 280 });
+  const centered = centerArcOnIndex(segs, 4, action.start, action.end);
+  const north = normalizeMid(action.start, action.end);
+  assert(Math.abs(centered[4].mid - north) < 0.01, "Attack wedge sits on the Action midpoint");
+  assert(centered[5].mid > centered[4].mid, "the next wedge is clockwise of Attack");
+  assert(centered[5].start >= centered[4].end - 0.01, "Cast Spell stays beside Attack");
+  const seam = centered[0].start + 360 - centered[9].end;
+  assert(Math.abs(seam - ARC_DEFAULTS.gapDeg) < 0.05, "Dodge and Use Item keep a gap where the ring closes");
+}
+
+{
+  const labels = ["Dragon Fear", "Divine Intervention", "Dash"];
+  const segs = weightedArcSegments(labels, { midAngle: 0, fixedSpanDeg: 180 });
+  const widths = segs.map(seg => seg.end - seg.start);
+  assert(widths[1] > widths[0] && widths[0] > widths[2], "a longer title gets a wider wedge");
+  assert(segs[1].start >= segs[0].end - 0.01, "weighted wedges stay in order");
 }
 
 console.log(`\n${passed} assertions passed`);

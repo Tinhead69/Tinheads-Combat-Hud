@@ -27,47 +27,62 @@ export function actorFromToken(tokenLike) {
 export { canOpenHud, canUseActor, canResolveLocally } from "./permissions.mjs";
 
 /**
- * Resolve a favorite id (relative UUID / activity path) against an actor.
- * @param {Actor} actor
- * @param {string} favoriteId
- * @returns {Document|object|null}
- */
-function resolveFavoriteRef(actor, favoriteId) {
-  if (!favoriteId) return null;
-  try {
-    if (typeof fromUuidSync === "function") {
-      const resolved = fromUuidSync(favoriteId, { relative: actor });
-      if (resolved) return resolved;
-    }
-  } catch (_) {
-    /* fall through */
-  }
-
-  // Relative item id forms: ".Item.<id>" / "Item.<id>" / ".<id>"
-  const itemMatch = favoriteId.match(/(?:^|\.)Item\.([A-Za-z0-9]+)$/);
-  if (itemMatch) return actor.items.get(itemMatch[1]) ?? null;
-
-  const bare = favoriteId.startsWith(".") ? favoriteId.slice(1) : favoriteId;
-  if (actor.items?.get(bare)) return actor.items.get(bare);
-
-  // Activity favorites: "...Item.<id>.Activity.<activityId>"
-  const activityMatch = favoriteId.match(/Item\.([A-Za-z0-9]+)\.Activity\.([A-Za-z0-9]+)/);
-  if (activityMatch) {
-    const item = actor.items.get(activityMatch[1]);
-    const activity = item?.system?.activities?.get?.(activityMatch[2])
-      ?? item?.system?.activities?.[activityMatch[2]];
-    if (activity) return activity;
-  }
-
-  return null;
-}
-
-/**
  * @param {Item} item
  * @returns {boolean}
  */
 export function isWeaponItem(item) {
   return item?.type === "weapon";
+}
+
+/**
+ * Body attacks such as Beard, Bite, and Claw. These are weapons even when
+ * the sheet does not mark them equipped.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isNaturalWeapon(item) {
+  const value = String(item?.system?.type?.value ?? item?.system?.weaponType ?? "").toLowerCase();
+  const base = String(item?.system?.type?.baseItem ?? "").toLowerCase();
+  return value === "natural" || base === "natural";
+}
+
+/**
+ * Unarmed Strike is offered on the Attack nest even when it is not equipped.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isUnarmedItem(item) {
+  const name = String(item?.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const ident = String(item?.system?.identifier || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const typeValue = String(item?.system?.type?.value ?? "").toLowerCase();
+  const base = String(item?.system?.type?.baseItem ?? "").toLowerCase();
+  return name === "unarmed strike"
+    || ident === "unarmed strike"
+    || typeValue === "unarmed"
+    || base === "unarmed";
+}
+
+/**
+ * dnd5e inventory equipped flag (`item.system.equipped`).
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isEquippedItem(item) {
+  return item?.system?.equipped === true;
+}
+
+/**
+ * Weapons offered on Attack.
+ * Player characters: equipped weapons, plus natural weapons.
+ * NPCs: every weapon, so unequipped natural attacks such as Beard still appear.
+ * @param {Item} item
+ * @param {Actor} [actor]
+ * @returns {boolean}
+ */
+export function isListedAttackWeapon(item, actor) {
+  if (!isWeaponItem(item)) return false;
+  if (isEquippedItem(item) || isNaturalWeapon(item)) return true;
+  return actor?.type === "npc";
 }
 
 /**
@@ -91,12 +106,20 @@ export function getAttackHandle(item) {
 export function getActivities(item) {
   const collection = item?.system?.activities;
   if (!collection) return [];
-  if (typeof collection === "object" && typeof collection[Symbol.iterator] === "function") {
-    return Array.from(collection);
-  }
-  if (typeof collection.values === "function") return Array.from(collection.values());
-  if (typeof collection === "object") return Object.values(collection);
-  return [];
+
+  let entries = [];
+  if (Array.isArray(collection?.contents)) entries = collection.contents;
+  else if (typeof collection.values === "function") entries = Array.from(collection.values());
+  else if (typeof collection[Symbol.iterator] === "function") entries = Array.from(collection);
+  else if (typeof collection === "object") entries = Object.values(collection);
+
+  return entries.map(entry => {
+    // Map / Collection iterators sometimes yield [id, activity].
+    if (Array.isArray(entry) && entry.length === 2 && entry[1] && typeof entry[1] === "object") {
+      return entry[1];
+    }
+    return entry;
+  }).filter(activity => activity && typeof activity === "object");
 }
 
 /**
@@ -105,269 +128,57 @@ export function getActivities(item) {
  * @returns {string}
  */
 export function getActivationType(activity, item) {
-  const fromActivity = activity?.activation?.type
-    ?? activity?.system?.activation?.type
-    ?? "";
+  const fromActivity = readActivationType(activity?.activation)
+    || readActivationType(activity?.system?.activation);
   if (fromActivity) return fromActivity;
-  return item?.system?.activation?.type ?? "";
+  return readActivationType(item?.system?.activation);
 }
 
 /**
- * True for dnd5e NPC document type (`actor.type === "npc"`).
- * Sheet attack/feature routing uses this; HUD chrome uses {@link isMonsterHudActor}.
- * @param {Actor} actor
- * @returns {boolean}
+ * Activity activation may be `{ type }` or a plain string such as `"legendary"`.
+ * @param {object|string|null|undefined} activation
+ * @returns {string}
  */
-export function isNpcActor(actor) {
-  return String(actor?.type ?? "").toLowerCase() === "npc";
+function readActivationType(activation) {
+  if (typeof activation === "string") return activation.trim();
+  return String(activation?.type ?? "").trim();
 }
 
 /**
- * Whether the actor has a Challenge Rating (dnd5e `system.details.cr`).
- * CR `0` counts; `null` / `undefined` / `""` do not.
- *
- * @param {Actor} actor
- * @returns {boolean}
- */
-export function hasChallengeRating(actor) {
-  const cr = actor?.system?.details?.cr;
-  if (cr === null || cr === undefined) return false;
-  if (typeof cr === "number") return Number.isFinite(cr); // includes 0
-  if (typeof cr === "string") {
-    const trimmed = cr.trim();
-    if (!trimmed) return false;
-    // "0", "1", "1/4", "½"-style strings from packs
-    return true;
-  }
-  // Unexpected object/boolean — treat as present only if not empty-like
-  return Boolean(cr);
-}
-
-/**
- * Monster HUD profile: actors **with** a Challenge Rating.
- * No CR → Character HUD (PCs and non-CR NPCs).
- * @param {Actor} actor
- * @returns {boolean}
- */
-export function isMonsterHudActor(actor) {
-  return hasChallengeRating(actor);
-}
-
-/**
- * @param {Actor} actor
- * @returns {"monster"|"character"}
- */
-export function getHudProfile(actor) {
-  return isMonsterHudActor(actor) ? "monster" : "character";
-}
-
-/**
- * Activation types that belong under the NPC sheet **Actions** block
- * (plus legendary / lair / mythic for the Action radial — not Bonus / Reaction).
- * @param {string} type
- * @returns {boolean}
- */
-export function isNpcActionActivation(type) {
-  const t = String(type ?? "").toLowerCase().trim();
-  if (t === "bonus" || t === "reaction") return false;
-  return ["", "action", "special", "legendary", "lair", "mythic"].includes(t);
-}
-
-/**
- * Weapons / attack leaves for the Action ring.
- * - Monster HUD (has CR) / NPC documents: sheet attacks by Action activation
- * - Character HUD PCs: favorited weapons only
- * Non-CR NPCs use Character HUD chrome but still pull sheet attacks (not favorites-only).
+ * Weapons for the Attack nest.
+ * Characters: equipped weapons and natural attacks.
+ * NPCs: every weapon, so an unequipped Beard still appears.
  * @param {Actor} actor
  * @returns {Array<{ id: string, name: string, img: string, item: Item, activity: object|null, available: boolean, reason?: string }>}
  */
-export function getActionRingAttacks(actor) {
-  if (isMonsterHudActor(actor) || isNpcActor(actor)) {
-    return getNpcSheetAttacks(actor, "action");
-  }
-  return getFavoritedWeapons(actor);
-}
-
-/**
- * Favorited weapons for the Action ring (player characters).
- * @param {Actor} actor
- * @returns {Array<{ id: string, name: string, img: string, item: Item, activity: object|null, available: boolean, reason?: string }>}
- */
-export function getFavoritedWeapons(actor) {
-  const favorites = foundry.utils.duplicate(actor.system?.favorites ?? []);
-  favorites.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+export function getEquippedWeapons(actor) {
+  const items = [];
+  for (const item of actor?.items ?? []) items.push(item);
+  items.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
   const weapons = [];
   const seen = new Set();
 
-  for (const fav of favorites) {
-    if (fav.type && !["item", "activity"].includes(fav.type)) continue;
-    const ref = resolveFavoriteRef(actor, fav.id);
-    if (!ref) continue;
-
-    let item = null;
-    let activity = null;
-
-    // Activity favorites expose `.item`; item favorites are Item documents.
-    if (ref.item && !isWeaponItem(ref) && (ref.type || ref.activation || ref.use)) {
-      activity = ref;
-      item = ref.item;
-    } else if (isWeaponItem(ref)) {
-      item = ref;
-    } else if (ref.item && isWeaponItem(ref.item)) {
-      activity = ref;
-      item = ref.item;
-    }
-
-    if (!item || !isWeaponItem(item)) continue;
+  for (const item of items) {
+    if (!isListedAttackWeapon(item, actor)) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
 
-    weapons.push(makeAttackOption(item, activity, "action"));
+    const handle = getAttackHandle(item);
+    const available = canAttemptUse(handle.activity, handle.item);
+    weapons.push({
+      id: `weapon:${item.id}`,
+      name: item.name,
+      img: itemArtwork(item, handle.activity) || getDefaultIcon("weapon"),
+      item: handle.item,
+      activity: handle.activity,
+      available: available.ok,
+      reason: available.reason,
+      requiresTarget: optionRequiresTarget(handle.activity, handle.item)
+    });
   }
 
   return weapons;
-}
-
-/**
- * @deprecated Use {@link getNpcSheetAttacks} with `"action"`.
- * @param {Actor} actor
- */
-export function getNpcSheetActions(actor) {
-  return getNpcSheetAttacks(actor, "action");
-}
-
-/**
- * Whether an activation cost belongs on the requested combat radial.
- * Action radial also accepts blank / special / legendary / lair / mythic for NPCs.
- *
- * @param {string} type
- * @param {"action"|"bonus"|"reaction"} wanted
- * @returns {boolean}
- */
-export function npcActivationMatchesRadial(type, wanted) {
-  const t = String(type ?? "").toLowerCase().trim();
-  if (wanted === "bonus" || wanted === "reaction") return t === wanted;
-  if (wanted === "action") return isNpcActionActivation(t);
-  return false;
-}
-
-/**
- * NPC / monster attack-shaped options for one economy radial.
- * Routes by dnd5e activity/item activation — bonus never lands on Action, etc.
- *
- * | activation                         | radial        |
- * |------------------------------------|---------------|
- * | action / "" / special / legendary / lair / mythic | Action |
- * | bonus                              | Bonus Action  |
- * | reaction                           | Reaction      |
- *
- * @param {Actor} actor
- * @param {"action"|"bonus"|"reaction"} activation
- * @returns {Array<{ id: string, name: string, img: string, item: Item, activity: object|null, available: boolean, reason?: string, activation: string }>}
- */
-export function getNpcSheetAttacks(actor, activation = "action") {
-  // Sheet combat options for NPC documents (Monster HUD and non-CR NPC Character path).
-  if (!isNpcActor(actor) && !isMonsterHudActor(actor)) return [];
-
-  const options = [];
-  const seen = new Set();
-  const items = Array.from(actor.items ?? []);
-  items.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || String(a.name || "").localeCompare(String(b.name || "")));
-
-  for (const item of items) {
-    const match = findNpcAttackForActivation(item, activation);
-    if (!match) continue;
-    const key = `${item.id}:${match.activity?.id ?? match.activity?._id ?? activation}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    options.push(makeAttackOption(item, match.activity, activation));
-  }
-
-  return options;
-}
-
-/**
- * Item ids already surfaced as NPC attack leaves for an activation (skip in feature ring).
- * @param {Actor} actor
- * @param {"action"|"bonus"|"reaction"} [activation]
- * @returns {Set<string>}
- */
-export function getNpcAttackItemIds(actor, activation = "action") {
-  if (!isNpcActor(actor) && !isMonsterHudActor(actor)) return new Set();
-  return new Set(getNpcSheetAttacks(actor, activation).map(o => o.item?.id).filter(Boolean));
-}
-
-/**
- * Find a weapon / attack-feat handle whose activation matches the radial.
- * Binds the matching activity so a bonus strike is never attached to the Action leaf.
- *
- * @param {Item} item
- * @param {"action"|"bonus"|"reaction"} wanted
- * @returns {{ activity: object|null }|null}
- */
-function findNpcAttackForActivation(item, wanted) {
-  if (!item) return null;
-  if (!isWeaponItem(item) && item.type !== "feat") return null;
-
-  const activities = getActivities(item);
-  if (activities.length) {
-    const matching = activities.filter(a =>
-      npcActivationMatchesRadial(getActivationType(a, item), wanted)
-    );
-    if (!matching.length) return null;
-
-    if (isWeaponItem(item)) {
-      const attack = matching.find(a => a.type === "attack" || a.attack) ?? null;
-      if (attack) return { activity: attack };
-      // Action radial: weapons with only Action-economy non-attack activities still count
-      // (some packs omit type:"attack" on the strike). Bonus/Reaction require an attack.
-      if (wanted === "action") return { activity: matching[0] };
-      return null;
-    }
-
-    // Attack feats only when a matching-activation attack activity exists
-    const attack = matching.find(a => a.type === "attack" || a.attack);
-    return attack ? { activity: attack } : null;
-  }
-
-  const legacy = item.system?.activation?.type ?? "";
-  if (!npcActivationMatchesRadial(legacy, wanted)) return null;
-
-  if (isWeaponItem(item)) return { activity: null };
-
-  // Legacy attack feat (no activities)
-  if (item.type === "feat" && (!!item.system?.damage || !!item.system?.attack)) {
-    return { activity: null };
-  }
-  return null;
-}
-
-/**
- * @param {Item} item
- * @param {object|null} preferredActivity
- * @param {"action"|"bonus"|"reaction"} [activation]
- */
-function makeAttackOption(item, preferredActivity, activation = "action") {
-  const handle = preferredActivity
-    ? { item, activity: preferredActivity }
-    : getAttackHandle(item);
-  const available = canAttemptUse(handle.activity, handle.item);
-  const iconKind = isWeaponItem(item) ? "weapon" : (item.type || "feat");
-  const actKey = handle.activity?.id ?? handle.activity?._id ?? "item";
-  return {
-    id: activation === "action"
-      ? `weapon:${item.id}`
-      : `weapon:${activation}:${item.id}:${actKey}`,
-    name: item.name,
-    img: item.img || getDefaultIcon(iconKind),
-    item: handle.item,
-    activity: handle.activity,
-    activation,
-    available: available.ok,
-    reason: available.reason,
-    requiresTarget: optionRequiresTarget(handle.activity, handle.item)
-  };
 }
 
 /**
@@ -383,51 +194,200 @@ export function getDefaultIcon(kind = "item") {
   return "icons/svg/sword.svg";
 }
 
+/** Foundry / Midi-QOL placeholders. `aura.svg` is the usual Midi activity icon. */
+const GENERIC_ACTIVITY_FILES = new Set([
+  "aura.svg",
+  "activity.svg",
+  "item-bag.svg",
+  "mystery-man.svg",
+  "book.svg",
+  "sword.svg",
+  "combat.svg",
+  "explosion.svg"
+]);
+
+/**
+ * @param {string|null|undefined} img
+ * @returns {string}
+ */
+function cleanImg(img) {
+  return typeof img === "string" ? img.trim() : "";
+}
+
+/**
+ * Shared activity icons are not the picture on the character sheet.
+ * Midi-QOL's module icons (`modules/midi-qol/...`) count as placeholders too.
+ * @param {string|null|undefined} img
+ * @returns {boolean}
+ */
+export function isGenericActivityArtwork(img) {
+  const path = cleanImg(img).toLowerCase().split("?")[0].split("#")[0];
+  if (!path) return true;
+  if (path.includes("midi-qol") || path.includes("midiqol")) return true;
+  const file = path.split("/").pop();
+  if (GENERIC_ACTIVITY_FILES.has(file) || file.startsWith("midi-")) return true;
+  const defaults = CONFIG?.DND5E?.defaultArtwork;
+  if (!defaults) return false;
+  const values = [];
+  const walk = (node) => {
+    if (typeof node === "string") values.push(node);
+    else if (node && typeof node === "object") Object.values(node).forEach(walk);
+  };
+  walk(defaults);
+  return values.some(value => String(value).toLowerCase().split("?")[0].split("#")[0] === path);
+}
+
+/**
+ * Real sheet or activity art. Midi-QOL placeholders are skipped.
+ * The item portrait wins. A custom activity image is used only when the item has none.
+ * @param {Item|null|undefined} item
+ * @param {object|null|undefined} activity
+ * @returns {string}
+ */
+export function itemArtwork(item, activity) {
+  const itemImg = cleanImg(item?.img);
+  if (itemImg && !isGenericActivityArtwork(itemImg)) return itemImg;
+  const activityImg = cleanImg(activity?.img);
+  if (activityImg && !isGenericActivityArtwork(activityImg)) return activityImg;
+  return "";
+}
+
+/**
+ * Mode art for one activity on a shared item (weapon modes, Channel Divinity).
+ * Custom activity art stays. A Midi-QOL default falls back to the item portrait.
+ * @param {Item|null|undefined} item
+ * @param {object|null|undefined} activity
+ * @returns {string}
+ */
+export function activityArtwork(item, activity) {
+  const activityImg = cleanImg(activity?.img);
+  const itemImg = cleanImg(item?.img);
+  if (activityImg && !isGenericActivityArtwork(activityImg)) return activityImg;
+  if (itemImg && !isGenericActivityArtwork(itemImg)) return itemImg;
+  return "";
+}
+
+const SPELL_ECONOMIES = new Set(["action", "bonus", "reaction"]);
+
+/**
+ * Which action economy a spell uses.
+ * The item's own activation wins, so a bonus spell stays on Bonus Action
+ * even when a cast activity is tagged as an action.
+ * @param {Item} item
+ * @returns {"action"|"bonus"|"reaction"}
+ */
+export function spellEconomy(item) {
+  const itemType = String(item?.system?.activation?.type ?? "");
+  if (SPELL_ECONOMIES.has(itemType)) return itemType;
+  const cast = getCastActivity(item);
+  const activityType = String(
+    cast?.activation?.type
+    ?? cast?.system?.activation?.type
+    ?? ""
+  );
+  if (SPELL_ECONOMIES.has(activityType)) return activityType;
+  return "action";
+}
+
 /**
  * Castable spells grouped by **available** spell levels only.
  * Section count for the spell-level ring = `levels.length` (never a fixed 0–9 ring).
  * A level appears only when the actor has ≥1 HUD-usable spell at that level.
+ * `economy` keeps action, bonus, and reaction spells on their own rings.
  *
  * @param {Actor} actor
- * @returns {{ levels: Array<{ level: number, label: string, spells: object[] }>, empty: boolean }}
+ * @param {"action"|"bonus"|"reaction"} [economy]
+ * @returns {{ levels: Array<{ level: number, label: string, slots: string|null, slotHint: string, spells: object[] }>, empty: boolean }}
  */
-export function getSpellLevels(actor) {
+export function getSpellLevels(actor, economy = "action") {
+  const innate = [];
+  const pact = [];
   const byLevel = new Map();
 
   for (const item of actor.items ?? []) {
     if (item.type !== "spell") continue;
+    if (spellEconomy(item) !== economy) continue;
     if (!isSpellAvailableForHud(actor, item)) continue;
 
-    const level = Number(item.system?.level ?? 0);
-    if (!byLevel.has(level)) byLevel.set(level, []);
+    const spell = spellRingOption(item);
+    const method = spellCastingMethod(item);
+    if (method === "innate") {
+      innate.push(spell);
+      continue;
+    }
+    if (method === "pact") {
+      pact.push(spell);
+      continue;
+    }
 
-    const cast = getCastActivity(item);
-    const available = canAttemptUse(cast, item);
-    byLevel.get(level).push({
-      id: `spell:${item.id}`,
-      name: item.name,
-      img: item.img || getDefaultIcon("spell"),
-      item,
-      activity: cast,
-      level,
-      available: available.ok,
-      reason: available.reason,
-      requiresTarget: optionRequiresTarget(cast, item),
-      tooltip: buildSpellTooltipData(item, cast)
+    const level = Number(item.system?.level ?? 0);
+    const key = Number.isFinite(level) && level >= 0 ? level : 0;
+    if (!byLevel.has(key)) byLevel.set(key, []);
+    byLevel.get(key).push(spell);
+  }
+
+  // Innate and Pact Magic are their own wedges. Slot levels follow.
+  const levels = [];
+  if (innate.length) {
+    innate.sort((a, b) => a.name.localeCompare(b.name));
+    levels.push({
+      id: "innate",
+      level: "innate",
+      label: t("SpellLevels.Innate"),
+      slots: null,
+      slotHint: "",
+      spells: innate
+    });
+  }
+  if (pact.length) {
+    pact.sort((a, b) => a.name.localeCompare(b.name));
+    const counts = pactPoolCounts(actor);
+    levels.push({
+      id: "pact",
+      level: "pact",
+      label: t("SpellLevels.Pact"),
+      slots: formatSpellSlots(counts),
+      slotHint: formatSpellSlotHint(counts),
+      spells: pact
     });
   }
 
   // Only levels that actually have spells — UI lays them on a partial arc via arcSegmentsForParent.
-  const levels = Array.from(byLevel.keys())
-    .sort((a, b) => a - b)
-    .map(level => ({
+  for (const level of [...byLevel.keys()].sort((a, b) => a - b)) {
+    const slotCounts = spellSlotCounts(actor, level);
+    const regularCounts = slotCounts?.regular ? { regular: slotCounts.regular, pact: null } : null;
+    levels.push({
+      id: level,
       level,
       label: spellLevelLabel(level),
+      slots: formatSpellSlots(regularCounts),
+      slotHint: formatSpellSlotHint(regularCounts),
       spells: byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name))
-    }))
-    .filter(entry => entry.spells.length > 0);
+    });
+  }
 
   return { levels, empty: levels.length === 0 };
+}
+
+/**
+ * @param {Item} item
+ */
+function spellRingOption(item) {
+  const cast = getCastActivity(item);
+  const available = canAttemptUse(cast, item);
+  const level = Number(item.system?.level ?? 0);
+  return {
+    id: `spell:${item.id}`,
+    name: item.name,
+    img: itemArtwork(item, cast) || getDefaultIcon("spell"),
+    item,
+    activity: cast,
+    level: Number.isFinite(level) ? level : 0,
+    available: available.ok,
+    reason: available.reason,
+    requiresTarget: optionRequiresTarget(cast, item),
+    tooltip: buildSpellTooltipData(item, cast)
+  };
 }
 
 /**
@@ -446,6 +406,176 @@ function spellLevelLabel(level) {
 }
 
 /**
+ * Remaining spell slots for one ring level.
+ * Regular slots live on `system.spells.spellN`. Pact slots show on `pact.level`.
+ * Cantrips have no pool. `value` is remaining; `override` replaces `max` when set.
+ * @param {Actor} actor
+ * @param {number} level
+ * @returns {{ regular: { value: number, max: number }|null, pact: { value: number, max: number }|null }|null}
+ */
+export function spellSlotCounts(actor, level) {
+  if (level <= 0) return null;
+  const spells = actor?.system?.spells;
+  if (!spells) return null;
+
+  const regular = readSlotPool(spells[`spell${level}`]);
+  const pact = spells.pact;
+  const pactPool = readSlotPool(pact);
+  const pactHere = pactPool && Number(pact?.level ?? 0) === level ? pactPool : null;
+  if (!regular && !pactHere) return null;
+  return { regular, pact: pactHere };
+}
+
+/**
+ * @param {object|null|undefined} slot
+ * @returns {{ value: number, max: number }|null}
+ */
+function readSlotPool(slot) {
+  if (!slot) return null;
+  const max = effectiveSlotMax(slot);
+  if (!(max > 0)) return null;
+  const raw = Number(slot.value ?? 0);
+  const value = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  return { value, max };
+}
+
+/**
+ * A pool is usable when it has a maximum (including override) or remaining slots
+ * were exported without a maximum.
+ * @param {object|null|undefined} slot
+ * @returns {boolean}
+ */
+function slotPoolOpen(slot) {
+  if (!slot || typeof slot !== "object") return false;
+  if (effectiveSlotMax(slot) > 0) return true;
+  const value = Number(slot.value ?? 0);
+  return Number.isFinite(value) && value > 0;
+}
+
+/**
+ * dnd5e uses `override` as the effective maximum when it is set.
+ * @param {object} slot
+ * @returns {number}
+ */
+function effectiveSlotMax(slot) {
+  if (slot.override != null && slot.override !== "") {
+    const override = Number(slot.override);
+    if (Number.isFinite(override)) return override;
+  }
+  const max = Number(slot.max ?? 0);
+  return Number.isFinite(max) ? max : 0;
+}
+
+/**
+ * Wedge caption, e.g. "3/4" or "3/4 · P 1/2" when pact slots share the level.
+ * @param {{ regular: { value: number, max: number }|null, pact: { value: number, max: number }|null }|null} counts
+ * @returns {string|null}
+ */
+export function formatSpellSlots(counts) {
+  if (!counts) return null;
+  const parts = [];
+  if (counts.regular) parts.push(`${counts.regular.value}/${counts.regular.max}`);
+  if (counts.pact) {
+    const pact = `${counts.pact.value}/${counts.pact.max}`;
+    parts.push(counts.regular ? `P ${pact}` : pact);
+  }
+  return parts.join(" · ") || null;
+}
+
+/**
+ * @param {{ regular: { value: number, max: number }|null, pact: { value: number, max: number }|null }|null} counts
+ * @returns {string}
+ */
+function formatSpellSlotHint(counts) {
+  if (!counts) return "";
+  const parts = [];
+  if (counts.regular) {
+    parts.push(slotSentence(
+      "SpellLevels.SlotsHint",
+      counts.regular,
+      `${counts.regular.value} of ${counts.regular.max} slots left.`
+    ));
+  }
+  if (counts.pact) {
+    parts.push(slotSentence(
+      "SpellLevels.PactSlotsHint",
+      counts.pact,
+      `${counts.pact.value} of ${counts.pact.max} pact slots left.`
+    ));
+  }
+  return parts.join(" ");
+}
+
+/**
+ * @param {string} key
+ * @param {{ value: number, max: number }} data
+ * @param {string} fallback
+ */
+function slotSentence(key, data, fallback) {
+  const localized = t(key, data);
+  const fullKey = `TINHEADS_COMBAT_HUD.${key}`;
+  if (!localized || localized === fullKey || String(localized).endsWith(key)) return fallback;
+  return localized;
+}
+
+/**
+ * dnd5e casting method: spell, atwill, innate, pact, ritual.
+ * @param {Item} item
+ * @returns {string}
+ */
+export function spellCastingMethod(item) {
+  return spellCastingState(item).method;
+}
+
+/**
+ * dnd5e 5.1 stores casting on `system.method` and preparation on `system.prepared`
+ * (0 unprepared, 1 prepared, 2 always). Reading `system.preparation` logs a deprecation warning.
+ * Plain objects that still carry the old shape are accepted without touching a live getter
+ * when the new fields are already present.
+ * @param {Item} item
+ * @returns {{ method: string, prepared: number }}
+ */
+function spellCastingState(item) {
+  const system = item?.system ?? {};
+  if (("method" in system) || typeof system.prepared === "number") {
+    const method = system.method || "spell";
+    const prepared = Number(system.prepared ?? 0);
+    return { method, prepared: Number.isFinite(prepared) ? prepared : 0 };
+  }
+
+  const legacy = system.preparation;
+  const mode = legacy?.mode || "prepared";
+  if (mode === "always") return { method: "spell", prepared: 2 };
+  if (mode === "atwill" || mode === "innate" || mode === "ritual") {
+    return { method: mode, prepared: 2 };
+  }
+  if (mode === "pact") return { method: "pact", prepared: legacy?.prepared === false ? 0 : 1 };
+  return { method: "spell", prepared: legacy?.prepared === false ? 0 : 1 };
+}
+
+/**
+ * Spell methods that do not spend a slot.
+ * @param {string} method
+ * @returns {boolean}
+ */
+function isSlotlessSpellMethod(method) {
+  if (method === "atwill" || method === "innate" || method === "ritual") return true;
+  const config = CONFIG?.DND5E?.spellcasting?.[method];
+  return config?.slots === false || config?.static === true;
+}
+
+/**
+ * Methods whose spells can sit unprepared (paladin, cleric, wizard).
+ * @param {string} method
+ * @returns {boolean}
+ */
+function spellMethodPrepares(method) {
+  const prepares = CONFIG?.DND5E?.spellcasting?.[method]?.prepares;
+  if (prepares != null) return !!prepares;
+  return method === "spell" || method === "prepared";
+}
+
+/**
  * Whether a spell should contribute to the Cast Spell level ring / spell ring.
  * Cantrips: known spells always count.
  * Leveled: must pass prep/known rules and have a usable slot source (or be at-will/innate).
@@ -458,22 +588,21 @@ export function isSpellAvailableForHud(actor, item) {
   if (!item || item.type !== "spell") return false;
 
   const level = Number(item.system?.level ?? 0);
-  const mode = item.system?.preparation?.mode || "prepared";
-  const prepared = item.system?.preparation?.prepared;
+  const { method, prepared } = spellCastingState(item);
 
   // Cantrips never consume slots
   if (level === 0) return true;
 
-  // At-will / innate: no slot gate
-  if (mode === "atwill" || mode === "innate") return true;
+  // At-will / innate / ritual: no slot gate
+  if (isSlotlessSpellMethod(method)) return true;
 
   // Prepared casters: skip unprepared spells entirely (do not create empty/grey levels for them)
-  if (mode === "prepared" && prepared === false) return false;
+  if (spellMethodPrepares(method) && prepared <= 0) return false;
 
   // Pact magic
-  if (mode === "pact") return hasPactSlots(actor);
+  if (method === "pact") return hasPactSlots(actor);
 
-  // always / prepared / default known casters: need a slot at this level (or higher upcast source)
+  // always (prepared 2) / prepared / known casters: need a slot at this level (or higher upcast source)
   return hasSpellSlotForLevel(actor, level);
 }
 
@@ -490,13 +619,11 @@ export function hasSpellSlotForLevel(actor, level) {
     return true;
   }
 
-  const slot = spells[`spell${level}`];
-  if (slot && Number(slot.max ?? 0) > 0) return true;
+  if (slotPoolOpen(spells[`spell${level}`])) return true;
 
-  // Higher-level slots can cast lower-level spells; if any higher max exists, include the level.
+  // Higher-level slots can cast lower-level spells; if any higher pool is open, include the level.
   for (let n = level + 1; n <= 9; n++) {
-    const higher = spells[`spell${n}`];
-    if (higher && Number(higher.max ?? 0) > 0) return true;
+    if (slotPoolOpen(spells[`spell${n}`])) return true;
   }
 
   // Pact slot usable for this spell level
@@ -515,6 +642,16 @@ function hasPactSlots(actor) {
 }
 
 /**
+ * The shared pact-magic pool, independent of which spell level it can cast.
+ * @param {Actor} actor
+ * @returns {{ regular: null, pact: { value: number, max: number } }|null}
+ */
+function pactPoolCounts(actor) {
+  const pact = readSlotPool(actor?.system?.spells?.pact);
+  return pact ? { regular: null, pact } : null;
+}
+
+/**
  * @param {Item} item
  * @returns {object|null}
  */
@@ -526,6 +663,34 @@ export function getCastActivity(item) {
 }
 
 /**
+ * Midi-QOL labels its generic activities "Midi Heal", "Midi - Heal", "Midi Use", and similar.
+ * Those are not the player-facing action. A potion should read as the potion.
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isGenericMidiActivityName(name) {
+  const normalized = String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return normalized === "midi"
+    || normalized.startsWith("midi ")
+    || normalized === "midiqol"
+    || normalized.startsWith("midiqol ");
+}
+
+/**
+ * Wedge label for an item activity. Real activity names stay (Hex Damage).
+ * Generic Midi-QOL names fall back to the item (Potion of Healing).
+ * @param {Item} item
+ * @param {object|null} activity
+ * @returns {string}
+ */
+export function activityOptionName(item, activity) {
+  const activityName = String(activity?.name ?? "").trim();
+  const itemName = String(item?.name ?? "").trim();
+  if (!activityName || isGenericMidiActivityName(activityName)) return itemName || activityName;
+  return activityName;
+}
+
+/**
  * Bonus Action / Reaction leaf options from matching activities (or legacy activation).
  * @param {Actor} actor
  * @param {"bonus"|"reaction"} activation
@@ -534,13 +699,11 @@ export function getCastActivity(item) {
 export function getActivationOptions(actor, activation) {
   const options = [];
   const seen = new Set();
-  // NPC attack-shaped weapons/feats for this activation are supplied by getNpcSheetAttacks.
-  const npcAttackIds = isNpcActor(actor) ? getNpcAttackItemIds(actor, activation) : new Set();
 
   for (const item of actor.items ?? []) {
     // Class feats are grouped/nested via getClassFeatureOptions (activation-aware).
-    if (item.type === "feat") continue;
-    if (npcAttackIds.has(item.id)) continue;
+    // Spells are listed by economy (Cast Spell / bonus spell wedges), not as activities.
+    if (item.type === "feat" || item.type === "spell") continue;
 
     const activities = getActivities(item);
     if (activities.length) {
@@ -552,13 +715,18 @@ export function getActivationOptions(actor, activation) {
         const available = canAttemptUse(activity, item);
         options.push({
           id: `act:${key}`,
-          name: activity.name || item.name,
-          img: activity.img || item.img || getDefaultIcon(item.type),
+          name: activityOptionName(item, activity),
+          img: itemArtwork(item, activity) || getDefaultIcon(item.type),
           item,
           activity,
           available: available.ok,
           reason: available.reason,
-          requiresTarget: optionRequiresTarget(activity, item)
+          requiresTarget: optionRequiresTarget(activity, item),
+          tooltip: sheetItemTooltip(item, {
+            title: activityOptionName(item, activity),
+            activity,
+            reason: available.ok ? "" : available.reason
+          })
         });
       }
     } else if ((item.system?.activation?.type ?? "") === activation) {
@@ -569,12 +737,16 @@ export function getActivationOptions(actor, activation) {
       options.push({
         id: key,
         name: item.name,
-        img: item.img || getDefaultIcon(item.type),
+        img: itemArtwork(item, null) || getDefaultIcon(item.type),
         item,
         activity: null,
         available: available.ok,
         reason: available.reason,
-        requiresTarget: optionRequiresTarget(null, item)
+        requiresTarget: optionRequiresTarget(null, item),
+        tooltip: sheetItemTooltip(item, {
+          title: item.name,
+          reason: available.ok ? "" : available.reason
+        })
       });
     }
   }
@@ -603,11 +775,9 @@ export function canAttemptUse(activity, item) {
   if (activity && activity.canUse === false) {
     return { ok: false, reason: t("Notify.Unavailable") };
   }
-  // Prepared spells with preparation.value === false
   if (item.type === "spell") {
-    const mode = item.system?.preparation?.mode;
-    const prepared = item.system?.preparation?.prepared;
-    if (mode === "prepared" && prepared === false) {
+    const { method, prepared } = spellCastingState(item);
+    if (spellMethodPrepares(method) && prepared <= 0) {
       return { ok: false, reason: "Spell is not prepared." };
     }
   }
@@ -647,32 +817,239 @@ export function optionRequiresTarget(activity, item) {
  * @param {object|null} activity
  */
 export function buildSpellTooltipData(item, activity) {
-  const description = extractDescription(item);
-  const targets = formatTargets(activity, item);
-  const range = formatRange(activity, item);
-  const duration = formatDuration(activity, item);
-  const damage = formatDamage(activity, item);
-
-  return {
-    title: item.name,
-    description,
-    targets,
-    range,
-    duration,
-    damage
-  };
+  return sheetItemTooltip(item, {
+    activity,
+    targets: formatTargets(activity, item),
+    range: formatRange(activity, item),
+    duration: formatDuration(activity, item),
+    damage: formatDamage(activity, item)
+  });
 }
 
-function extractDescription(item) {
-  const raw = item.system?.description?.value
-    ?? item.system?.description
-    ?? "";
-  if (!raw) return t("Tooltip.NoDescription");
-  const text = typeof raw === "string"
-    ? raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-    : String(raw);
-  if (!text) return t("Tooltip.NoDescription");
-  return text.length > 220 ? `${text.slice(0, 217)}…` : text;
+const DESCRIPTION_LIMIT = 420;
+
+/**
+ * Plain-text description for a sheet item, preferring a real activity description.
+ * @param {Item|null|undefined} item
+ * @param {object|null|undefined} [activity]
+ * @returns {string}
+ */
+export function itemDescriptionText(item, activity = null) {
+  const useActivity = activity && !isGenericMidiActivityName(activity.name);
+  const fromActivity = useActivity ? plainText(
+    activity?.description?.value
+    ?? (typeof activity?.description === "string" ? activity.description : "")
+    ?? activity?.system?.description?.value
+    ?? ""
+  ) : "";
+  const fromItem = plainText(item?.system?.description?.value ?? item?.system?.description ?? "");
+  const text = fromActivity || fromItem;
+  if (!text) return "";
+  return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT - 1)}…` : text;
+}
+
+/**
+ * Hover card for a sheet item: its description, plus an optional note (uses, quantity).
+ * @param {Item|null|undefined} item
+ * @param {{ title?: string, activity?: object|null, note?: string, reason?: string, fallback?: string, targets?: string|null, range?: string|null, duration?: string|null, damage?: string|null }} [extras]
+ */
+export function sheetItemTooltip(item, extras = {}) {
+  const description = itemDescriptionText(item, extras.activity ?? null);
+  const parts = [extras.note, description, extras.reason].map(part => String(part ?? "").trim()).filter(Boolean);
+  if (!parts.length) parts.push(extras.fallback || t("Tooltip.NoDescription"));
+  let title = extras.title || item?.name || "";
+  if (isGenericMidiActivityName(title)) title = String(item?.name ?? "").trim() || title;
+  const tip = {
+    title,
+    description: parts.join(" ")
+  };
+  if (extras.targets != null && extras.targets !== "") tip.targets = extras.targets;
+  if (extras.range != null && extras.range !== "") tip.range = extras.range;
+  if (extras.duration != null && extras.duration !== "") tip.duration = extras.duration;
+  if (extras.damage != null && extras.damage !== "") tip.damage = extras.damage;
+  return tip;
+}
+
+function plainText(raw) {
+  if (raw == null || raw === "") return "";
+  const text = typeof raw === "string" ? raw : String(raw?.value ?? raw);
+  const stripped = text
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+  return replaceEnrichers(decodeEntities(stripped))
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/^[,.;:\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Foundry text enrichers (&Reference, @UUID, [[/r]]) become the label a player reads.
+ * @param {string} text
+ * @returns {string}
+ */
+function replaceEnrichers(text) {
+  let out = text.replace(
+    /&Reference\[([^\]]*)\](?:\{([^}]*)\})?/gi,
+    (match, config, label, offset, whole) => referenceLabel(config, label, whole.slice(0, offset))
+  );
+  out = out.replace(
+    /@([A-Za-z][\w-]*)\[([^\]]*)\](?:\{([^}]*)\})?/g,
+    (match, type, id, label, offset, whole) => {
+      if (label) return choosePlural(label, whole.slice(0, offset));
+      if (/^(embed|pdf)$/i.test(type)) return "";
+      return readableId(id);
+    }
+  );
+  out = out.replace(/\[\[([\s\S]*?)\]\]/g, (_, body) => inlineRollLabel(body));
+  out = out.replace(
+    /([\p{L}][\p{L}'’-]{0,40}(?: [\p{L}][\p{L}'’-]{0,40}){0,4});([\p{L}][\p{L}'’-]{0,40}(?: [\p{L}][\p{L}'’-]{0,40}){0,4})/gu,
+    (match, singular, plural, offset, whole) => {
+      if (!isPluralPair(singular, plural)) return match;
+      return choosePlural(`${singular};${plural}`, whole.slice(0, offset));
+    }
+  );
+  return out;
+}
+
+/**
+ * @param {string} config
+ * @param {string|undefined} label
+ * @param {string} before
+ */
+function referenceLabel(config, label, before) {
+  if (label && String(label).trim()) return choosePlural(label, before);
+  return readableId(config);
+}
+
+/**
+ * `{singular;plural}` follows a leading count. One, or no count, uses the singular.
+ * @param {string} label
+ * @param {string} before
+ */
+function choosePlural(label, before) {
+  const parts = String(label).split(";").map(part => part.trim()).filter(Boolean);
+  if (parts.length < 2) return parts[0] || "";
+  const count = precedingCount(before);
+  return count != null && count !== 1 ? parts[1] : parts[0];
+}
+
+function precedingCount(before) {
+  const match = String(before).match(/(\d+)\s*$/);
+  if (!match) return null;
+  const count = Number(match[1]);
+  return Number.isFinite(count) ? count : null;
+}
+
+function isPluralPair(singular, plural) {
+  const one = singular.toLowerCase();
+  const many = plural.toLowerCase();
+  if (one === many) return true;
+  if (many === `${one}s` || many === `${one}es`) return true;
+  if (one.endsWith("y") && many === `${one.slice(0, -1)}ies`) return true;
+  if (one.endsWith("f") && many === `${one.slice(0, -1)}ves`) return true;
+  if (one.endsWith("fe") && many === `${one.slice(0, -2)}ves`) return true;
+  return many.startsWith(one) && many.length - one.length <= 3;
+}
+
+function readableId(id) {
+  const tail = String(id ?? "").split(/[#?]/)[0].split(".").pop() ?? "";
+  if (!tail || /^[a-f0-9]{16,}$/i.test(tail)) return "";
+  return tail.replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+}
+
+const ROLL_FLAGS = new Set(["average", "extended", "critical"]);
+
+const ABILITY_NAMES = {
+  str: "Strength",
+  dex: "Dexterity",
+  con: "Constitution",
+  int: "Intelligence",
+  wis: "Wisdom",
+  cha: "Charisma"
+};
+
+function inlineRollLabel(body) {
+  let rest = String(body).trim();
+  const kindMatch = rest.match(/^\/([a-z]+)\s*/i);
+  let kind = "";
+  if (kindMatch) {
+    kind = kindMatch[1].toLowerCase();
+    rest = rest.slice(kindMatch[0].length);
+    if (kind === "lookup") return "";
+  }
+  rest = rest.split("#")[0].split("|")[0].trim();
+  rest = rest.replace(/\[([^\]]+)\]/g, " $1");
+  const { formula, config } = splitRollConfig(rest);
+  const dice = humanizeFormula(formula);
+  const type = formatRollType(config.type);
+  if (kind === "damage" || kind === "heal" || type) return [dice, type].filter(Boolean).join(" ");
+  return dice;
+}
+
+/**
+ * Dice stay. `type=slashing` becomes the type name. `average=true` and `extended` drop out.
+ * @param {string} rest
+ * @returns {{ formula: string, config: Record<string, string> }}
+ */
+function splitRollConfig(rest) {
+  const formula = [];
+  const config = {};
+  for (const token of String(rest).split(/\s+/).filter(Boolean)) {
+    const eq = token.match(/^([A-Za-z][\w-]*)=(.*)$/);
+    if (eq) {
+      config[eq[1].toLowerCase()] = eq[2];
+      continue;
+    }
+    if (Object.keys(config).length) continue;
+    if (ROLL_FLAGS.has(token.toLowerCase())) continue;
+    formula.push(token);
+  }
+  return { formula: formula.join(" ").trim(), config };
+}
+
+/**
+ * @param {string} formula
+ * @returns {string}
+ */
+function humanizeFormula(formula) {
+  return String(formula)
+    .replace(/@abilities\.([a-z]{3})\.(mod|value|save|dc)/gi, (_, abl, prop) => {
+      const name = ABILITY_NAMES[abl.toLowerCase()] || abl.toUpperCase();
+      const key = prop.toLowerCase();
+      if (key === "mod") return `${name} modifier`;
+      if (key === "save" || key === "dc") return `${name} save`;
+      return name;
+    })
+    .replace(/@mod\b/gi, "ability modifier")
+    .replace(/@prof\b/gi, "proficiency bonus")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * @param {string|undefined} type
+ * @returns {string}
+ */
+function formatRollType(type) {
+  return String(type ?? "")
+    .split(/[,|]/)
+    .map(part => part.replace(/[-_]+/g, " ").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function decodeEntities(text) {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
 }
 
 function formatTargets(activity, item) {
