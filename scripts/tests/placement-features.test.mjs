@@ -53,31 +53,13 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
   const collapsed = contentOuterRadius({ section: null }, RINGS);
   assert(collapsed === RINGS.mainOuter, "collapsed uses main outer");
   const nested = contentOuterRadius({
-    section: "action", attackOpen: true, castSpell: true, spellLevel: 0
+    section: "action", castSpell: true, spellLevel: 1
   }, RINGS);
-  assert(nested === RINGS.nest3Outer, "spells under Attack use nest3");
-  const readyAttack = contentOuterRadius({
-    section: "action", readyOpen: true, attackOpen: true
-  }, RINGS);
-  assert(readyAttack === RINGS.nest2Outer, "Ready then Attack uses nest2");
-  const checksMenu = contentOuterRadius({ section: "checks" }, RINGS);
-  assert(checksMenu === RINGS.actionOuter, "Saves, Skills, and Death Saves sit on the checks ring");
+  assert(nested === RINGS.nest2Outer, "spell nest uses nest2");
   const checks = contentOuterRadius({
-    section: "checks", checksBranch: "skills"
+    section: "checks", abilityId: "str"
   }, RINGS);
-  assert(checks === RINGS.nest1Outer, "skill nest uses nest1");
-  const bonus = contentOuterRadius({ section: "bonus" }, RINGS);
-  assert(bonus === RINGS.flatOuter, "bonus options use the same wedge height as Action");
-  const bonusNest = contentOuterRadius({ section: "bonus", featureNestId: "font" }, RINGS);
-  assert(bonusNest === RINGS.flatNestOuter, "bonus feature nest sits outside the flat ring");
-  const bonusCast = contentOuterRadius({ section: "bonus", castSpell: true }, RINGS);
-  assert(bonusCast === RINGS.flatNestOuter, "bonus Cast Spell opens the level nest");
-  const bonusSpells = contentOuterRadius({ section: "bonus", castSpell: true, spellLevel: 1 }, RINGS);
-  assert(bonusSpells === RINGS.flatSpellOuter, "bonus spell names sit outside the level nest");
-  const bonusItems = contentOuterRadius({ section: "bonus", useItem: true }, RINGS);
-  assert(bonusItems === RINGS.flatNestOuter, "bonus Use Item opens the item nest");
-  const bonusPotions = contentOuterRadius({ section: "bonus", useItem: true, useItemGroup: "potion" }, RINGS);
-  assert(bonusPotions === RINGS.flatSpellOuter, "bonus potion nest sits outside Use Item");
+  assert(checks === RINGS.nest1Outer, "check|save nest uses nest1");
 }
 
 assert(matchesActivation("action", "action"), "action matches action");
@@ -148,42 +130,5 @@ const modes = getFeatureModeOptions(font);
 assert(modes.length === 2, "two flexible-casting modes (no recover)");
 assert(!modes.some(m => /recover/i.test(m.name)), "recover sorcery not in BA nest");
 assert(font.usesLabel === "4/4", "sorcery uses pool visible");
-
-const cunningFeat = {
-  id: "cunning",
-  name: "Cunning Action",
-  type: "feat",
-  img: "",
-  isOwner: true,
-  system: {
-    identifier: "cunning-action",
-    activities: [
-      { id: "use", name: "Cunning Action", type: "utility", activation: { type: "bonus" } }
-    ]
-  }
-};
-const rogue = {
-  id: "R1",
-  items: [
-    { id: "cls", name: "Rogue", type: "class", system: { identifier: "rogue" } },
-    cunningFeat
-  ]
-};
-const rogueBonus = getClassFeatureOptions(rogue, "bonus");
-const cunning = rogueBonus.find(f => f.name === "Cunning Action");
-assert(cunning?.hasNest === true && cunning?.cunningAction === true, "rogue Cunning Action opens a nest");
-const cunningModes = getFeatureModeOptions(cunning);
-assert(cunningModes.map(m => m.skillId || m.basicId).join(",") === "ste,dash,disengage", "Hide, Dash, Disengage");
-assert(cunningModes[0].kind === "skill-check", "Hide is a Stealth check");
-
-const fighter = {
-  id: "F1",
-  items: [
-    { id: "cls", name: "Fighter", type: "class", system: { identifier: "fighter" } },
-    cunningFeat
-  ]
-};
-const fighterCunning = getClassFeatureOptions(fighter, "bonus").find(f => f.name === "Cunning Action");
-assert(fighterCunning && !fighterCunning.cunningAction, "non-rogue Cunning Action stays a single wedge");
 
 console.log(`\n${passed} assertions passed`);

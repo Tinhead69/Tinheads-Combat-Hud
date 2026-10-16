@@ -66,7 +66,7 @@ export const CHROME = Object.freeze({
   abilities: Object.freeze({
     str: moduleWedge("str"),
     dex: moduleWedge("dex"),
-    con: moduleWedge("constitution"),
+    con: moduleWedge("con"),
     int: moduleWedge("int"),
     wis: moduleWedge("wis"),
     cha: moduleWedge("cha")
@@ -78,7 +78,6 @@ export const CHROME = Object.freeze({
  * @param {number} level
  */
 export function spellLevelIcon(level) {
-  if (level === "innate" || level === "pact" || level === "atwill") return CHROME.castSpell;
   if (level === 0) return CHROME.spellCantrip;
   if (level >= 1 && level <= 9) return moduleWedge(`spell-${level}`);
   return CHROME.fallback;

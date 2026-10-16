@@ -15,7 +15,6 @@ import {
   socketlibModuleActive
 } from "./permissions.mjs";
 import { rollAbilityHudOption } from "./ability-checks.mjs";
-import { grantDashMovement } from "./dash-movement.mjs";
 
 /**
  * @param {object} option
@@ -37,6 +36,15 @@ export async function resolveHudOption(option, ctx = {}) {
     ?? option.actor
     ?? option.item?.actor
     ?? null;
+
+  const requiresTarget = option.kind === "ability-check" || option.kind === "ability-save"
+    ? false
+    : (option.requiresTarget ?? optionRequiresTarget(option.activity, option.item));
+
+  if (requiresTarget && !hasActiveTargets()) {
+    ui.notifications.warn(t("Notify.SelectTarget"));
+    return { closed: true, ok: false };
+  }
 
   const local = shouldResolveLocally(actor) || canResolveLocally(actor);
 
@@ -65,11 +73,11 @@ export async function resolveHudOption(option, ctx = {}) {
   }
 
   try {
-    if (option.kind === "ability-check" || option.kind === "ability-save" || option.kind === "skill-check" || option.kind === "death-save") {
+    if (option.kind === "ability-check" || option.kind === "ability-save") {
       await rollAbilityHudOption(actor, option);
       return { closed: true, ok: true };
     }
-    await useOption(option, actor);
+    await useOption(option);
     return { closed: true, ok: true };
   } catch (err) {
     console.error("Tinhead's Combat Hud | resolve failed", err);
@@ -93,7 +101,6 @@ export function serializeResolveOption(option, actor) {
     name: option.name ?? null,
     img: option.img ?? null,
     abilityId: option.abilityId ?? null,
-    skillId: option.skillId ?? null,
     targetUuids: getSelectedTargetUuids(),
     requiresTarget: !!(option.requiresTarget
       ?? optionRequiresTarget(option.activity, option.item))
@@ -112,13 +119,17 @@ export async function executeResolvePayload(payload, ctx = {}) {
       : null);
   if (!actor) throw new Error(t("Notify.NoActor"));
 
-  if (payload.kind === "ability-check" || payload.kind === "ability-save" || payload.kind === "skill-check" || payload.kind === "death-save") {
+  if (payload.kind === "ability-check" || payload.kind === "ability-save") {
     await rollAbilityHudOption(actor, {
       kind: payload.kind,
-      abilityId: payload.abilityId,
-      skillId: payload.skillId
+      abilityId: payload.abilityId
     });
     return { ok: true, closed: true };
+  }
+
+  if (payload.requiresTarget && !(payload.targetUuids?.length)) {
+    // Requester said they had targets; if list empty, refuse.
+    throw new Error(t("Notify.SelectTarget"));
   }
 
   const item = payload.itemUuid && typeof fromUuid === "function"
@@ -150,156 +161,16 @@ export async function executeResolvePayload(payload, ctx = {}) {
   return { ok: true, closed: true };
 }
 
-/**
- * A weapon wedge or the Attack leaf under a special weapon.
- * @param {object} option
- * @returns {boolean}
- */
-function isWeaponAttackOption(option) {
-  return option?.kind === "weapon" || option?.kind === "weapon-attack";
+function hasActiveTargets() {
+  return (game.user?.targets?.size ?? 0) > 0;
 }
 
 /**
- * Live attack activity. The option may hold a stale copy without use()/rollAttack().
- * @param {object} option
- * @returns {object|null}
- */
-function weaponAttackActivity(option) {
-  const item = option?.item;
-  const stored = option?.activity;
-  const storedId = stored?.id ?? stored?._id ?? null;
-  const collection = item?.system?.activities;
-  const live = storedId && collection?.get?.(storedId);
-  if (live && (live.type === "attack" || typeof live.rollAttack === "function")) return live;
-
-  let entries = [];
-  if (collection?.contents && Array.isArray(collection.contents)) entries = collection.contents;
-  else if (typeof collection?.values === "function") entries = Array.from(collection.values());
-  else if (collection && typeof collection[Symbol.iterator] === "function") entries = Array.from(collection);
-
-  const found = entries.find(activity =>
-    activity?.type === "attack" || typeof activity?.rollAttack === "function"
-  );
-  if (found) return found;
-  if (stored && typeof stored.use === "function") return stored;
-  return null;
-}
-
-/**
- * Spend one legendary resistance on this actor's latest failed save.
- * @param {Actor|null} actor
- */
-async function useLegendaryResistance(actor) {
-  if (typeof actor?.system?.resistSave !== "function") {
-    ui.notifications.warn(t("LegendaryResistance.Unavailable"));
-    return;
-  }
-  const message = latestFailedSave(actor);
-  if (!message) {
-    ui.notifications.warn(t("LegendaryResistance.NoFailedSave"));
-    return;
-  }
-  await actor.system.resistSave(message);
-}
-
-/**
- * Most recent failed save card for this actor that has not already been resisted.
- * @param {Actor} actor
- * @returns {ChatMessage|null}
- */
-function latestFailedSave(actor) {
-  const collection = game.messages;
-  const messages = collection?.contents
-    ?? (typeof collection?.[Symbol.iterator] === "function" ? Array.from(collection) : []);
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (!saveBelongsToActor(message, actor)) continue;
-    const roll = message.getFlag?.("dnd5e", "roll") ?? message.flags?.dnd5e?.roll ?? null;
-    if (roll?.type !== "save" || roll.forceSuccess) continue;
-    const rolls = message.rolls ?? [];
-    if (rolls.some(entry => entry?.isSuccess)) continue;
-    return message;
-  }
-  return null;
-}
-
-/**
- * @param {ChatMessage} message
- * @param {Actor} actor
- * @returns {boolean}
- */
-function saveBelongsToActor(message, actor) {
-  const actorId = actor?.id;
-  if (!actorId) return false;
-  if (message.speaker?.actor === actorId) return true;
-  const associated = message.getAssociatedActor?.();
-  return associated?.id === actorId;
-}
-
-function midiQolActive() {
-  return !!game.modules?.get?.("midi-qol")?.active;
-}
-
-/**
- * Weapon attacks go through Midi-QOL when it is installed.
- * Otherwise dnd5e activity.use() runs the built-in attack.
+ * Prefer activity.use(); fall back to item.use(); then basic-action chat.
  * @param {object} option
  */
-async function useWeaponAttack(option) {
-  const item = option.item ?? null;
-  const activity = weaponAttackActivity(option);
-
-  if (midiQolActive() && activity && typeof globalThis.MidiQOL?.completeActivityUse === "function") {
-    const usage = {};
-    const targetUuids = getSelectedTargetUuids();
-    if (targetUuids.length) usage.midiOptions = { targetUuids };
-    return globalThis.MidiQOL.completeActivityUse(
-      activity,
-      usage,
-      { configure: true },
-      { create: true }
-    );
-  }
-
-  if (activity && typeof activity.use === "function") {
-    return activity.use();
-  }
-
-  if (activity && typeof activity.rollAttack === "function") {
-    return activity.rollAttack();
-  }
-
-  if (item && typeof item.use === "function") {
-    return item.use();
-  }
-
-  if (item && typeof item.displayCard === "function") {
-    return item.displayCard();
-  }
-
-  throw new Error("No usable activity or item.use() on option");
-}
-
-/**
- * Prefer activity.use(). Weapon attacks use Midi-QOL or dnd5e's attack.
- * Fall back to item.use(); then basic-action chat.
- * @param {object} option
- */
-async function useOption(option, actor = null) {
+async function useOption(option) {
   const { activity, item } = option;
-  const resolvedActor = option.actor ?? item?.actor ?? actor ?? null;
-
-  if (option.basicId === "dash") {
-    await grantDashMovement(resolvedActor);
-  }
-
-  if (option.kind === "legendary-resistance") {
-    return useLegendaryResistance(resolvedActor);
-  }
-
-  if (isWeaponAttackOption(option)) {
-    return useWeaponAttack(option);
-  }
 
   if (activity && typeof activity.use === "function") {
     return activity.use(
@@ -314,10 +185,7 @@ async function useOption(option, actor = null) {
   }
 
   if (option.kind === "basic") {
-    return postBasicActionChat({
-      ...option,
-      actor: resolvedActor
-    });
+    return postBasicActionChat(option);
   }
 
   throw new Error("No usable activity or item.use() on option");
@@ -340,11 +208,6 @@ async function postBasicActionChat(option) {
     ?? { alias: actor?.name || game.user?.name };
 
   const who = actor?.name || speaker.alias || "Character";
-  const line = option.basicId === "ready-other"
-    ? `<strong>${escapeHtml(who)}</strong> readies another action.`
-    : option.basicId === "dash"
-      ? `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action and gains extra movement equal to their speed until the end of this turn.`
-      : `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action.`;
   const content = `
     <div class="dnd5e chat-card tinheads-combat-hud basic-action">
       <header class="card-header flexrow">
@@ -352,7 +215,7 @@ async function postBasicActionChat(option) {
         <h3>${escapeHtml(name)}</h3>
       </header>
       <div class="card-content">
-        <p>${line}</p>
+        <p><strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action.</p>
       </div>
     </div>
   `;
