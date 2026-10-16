@@ -70,13 +70,13 @@
   <div class="token-mock c"></div>
   <div class="preview-banner">
     <h1>Tinhead's Combat Hud</h1>
-    <p>Static preview (no Foundry). Compact 4-wedge radial — title-sized partial arcs, artwork-first. In Foundry: draggable + viewport clamp; socketlib proxy for OBSERVER. Try <code>?shot=checks</code> or <code>?shot=weapon</code>.</p>
+    <p id="preview-note">Loading Cornholio the lesser…</p>
   </div>
 
   <script type="module">
     import {
       arcSegmentsForParent,
-      fitCaptionToSweep,
+      centerArcOnIndex,
       mainSectionAngles,
       mainSectionById,
       sectionAnchor,
@@ -84,6 +84,8 @@
       wedgeAnchor
     } from "../scripts/ui/radial-geometry.mjs";
     import { appendHubArt, appendWedgeArt } from "../scripts/ui/wedge-art.mjs";
+    import { applyIconPalette } from "../scripts/ui/icon-color.mjs";
+    import { appendWedgeText, wedgeTextLayout } from "../scripts/ui/wedge-text.mjs";
     import { previewWedge } from "../scripts/data/module-icons.mjs";
 
     const CHROME = {
@@ -101,10 +103,12 @@
       bonus: previewWedge("bonus"),
       reaction: previewWedge("reaction"),
       attack: previewWedge("attack"),
+      classFeature: previewWedge("class-feature"),
+      channelDivinity: previewWedge("channel-divinity"),
       useAbility: previewWedge("use-ability"),
       spell0: previewWedge("spell-cantrip"),
       abilities: {
-        str: previewWedge("str"), dex: previewWedge("dex"), con: previewWedge("con"),
+        str: previewWedge("str"), dex: previewWedge("dex"), con: previewWedge("constitution"),
         int: previewWedge("int"), wis: previewWedge("wis"), cha: previewWedge("cha")
       }
     };
@@ -115,20 +119,41 @@
       return `${prefix}-${clipSeq}`;
     }
 
-    // Keep in sync with scripts/ui/combat-hud.mjs SIZE / RINGS
-    const SIZE = 640;
+    // Keep in sync with scripts/ui/combat-hud.mjs SIZE / RINGS.
+    // Every wedge is 62px thick, with a 6px gap between rings.
+    const SIZE = 760;
     const CX = SIZE / 2;
     const CY = SIZE / 2;
+    const WEDGE_DEPTH = 62;
+    const RING_GAP = 6;
+    const mainInner = 42;
+    const mainOuter = mainInner + WEDGE_DEPTH;
+    const actionInner = mainOuter + RING_GAP;
+    const actionOuter = actionInner + WEDGE_DEPTH;
+    const nest1Inner = actionOuter + RING_GAP;
+    const nest1Outer = nest1Inner + WEDGE_DEPTH;
+    const nest2Inner = nest1Outer + RING_GAP;
+    const nest2Outer = nest2Inner + WEDGE_DEPTH;
+    const nest3Inner = nest2Outer + RING_GAP;
+    const nest3Outer = nest3Inner + WEDGE_DEPTH;
     const RINGS = {
       hub: 34,
-      mainInner: 42,
-      mainOuter: 108,
-      actionInner: 116,
-      actionOuter: 178,
-      nest1Inner: 186,
-      nest1Outer: 238,
-      nest2Inner: 246,
-      nest2Outer: 292
+      mainInner,
+      mainOuter,
+      actionInner,
+      actionOuter,
+      nest1Inner,
+      nest1Outer,
+      nest2Inner,
+      nest2Outer,
+      nest3Inner,
+      nest3Outer,
+      flatInner: actionInner,
+      flatOuter: actionOuter,
+      flatNestInner: nest1Inner,
+      flatNestOuter: nest1Outer,
+      flatSpellInner: nest2Inner,
+      flatSpellOuter: nest2Outer
     };
 
     function icon(bg, glyph, fg = "#f4f7fb") {
@@ -146,63 +171,22 @@
 
     const FALLBACK = previewWedge("fallback");
 
-    const MOCK = {
-      weapons: [
-        { name: "Longsword", img: icon("#5a4630", "S"), hasSpecial: false },
-        { name: "Wave", img: icon("#1e4a6a", "W", "#d7efff"), hasSpecial: true, abilities: [
-          { name: "Cube — Wall", img: icon("#2e5a7a", "1") },
-          { name: "Cube — Cage", img: icon("#2e5a7a", "2") },
-          { name: "Cube — Keep Out", img: icon("#2e5a7a", "3") }
-        ] },
-        { name: "Dagger", img: icon("#4a5564", "D"), hasSpecial: false }
-      ],
-      levels: [
-        {
-          level: 0, label: "Cantrip",
-          spells: [
-            { name: "Fire Bolt", img: icon("#7a2e1e", "F", "#ffd7c8"), tooltip: { title: "Fire Bolt", description: "Hurl a mote of fire.", targets: "1 creature", range: "120 ft", duration: "Instant", damage: "1d10 fire" } },
-            { name: "Ray of Frost", img: icon("#1e4a6a", "R", "#d7efff"), tooltip: { title: "Ray of Frost", description: "A frigid beam of blue-white light.", targets: "1 creature", range: "60 ft", duration: "Instant", damage: "1d8 cold" } }
-          ]
-        },
-        {
-          level: 1, label: "1st",
-          spells: [
-            { name: "Magic Missile", img: icon("#2e3f7a", "M", "#e0e7ff"), tooltip: { title: "Magic Missile", description: "Three darts of magical force.", targets: "up to 3 creatures", range: "120 ft", duration: "Instant", damage: "1d4+1 force" } },
-            { name: "Shield", img: icon("#2f5a4a", "Sh", "#d8fff0"), tooltip: { title: "Shield", description: "An invisible barrier of magical force.", targets: "Self", range: "Self", duration: "1 round", damage: null } }
-          ]
-        },
-        {
-          level: 2, label: "2nd",
-          spells: [
-            { name: "Hold Person (Legacy)", img: icon("#4a2e6a", "HP", "#e8d7ff"), tooltip: { title: "Hold Person (Legacy)", description: "Paralyze a humanoid that you can see.", targets: "1 humanoid", range: "60 ft", duration: "Conc. 1 min", damage: null } }
-          ]
-        }
-      ],
-      bonus: [
-        { name: "Second Wind", img: icon("#6a5a20", "2") },
-        { name: "Misty Step", img: icon("#3a5a6a", "MS") },
-        { name: "Eldritch Invocations: Eldritch Mind", img: icon("#5a2e6a", "EM") },
-        { name: "Eldritch Invocations: Mask of Many Faces", img: icon("#5a2e6a", "MM") },
-        { name: "Eldritch Invocations: One with Shadows", img: icon("#5a2e6a", "OS") },
-        { name: "Pact Boon: Pact of the Talisman", img: icon("#6a4a20", "PT") },
-        { name: "Empowered Healing", img: icon("#2f5a4a", "EH") }
-      ],
-      reaction: [
-        { name: "Shield", img: icon("#2f5a4a", "Sh", "#d8fff0") },
-        { name: "Opportunity Attack", img: icon("#5a3030", "OA") }
-      ],
-      basics: [
-        { name: "Dash", img: CHROME.dash },
-        { name: "Disengage", img: CHROME.disengage },
-        { name: "Dodge", img: CHROME.dodge },
-        { name: "Ready", img: CHROME.ready }
-      ],
-      inventory: [
-        { name: "Potion of Healing", img: icon("#5a2030", "P", "#ffd0d8") },
-        { name: "Alchemist's Fire", img: icon("#6a3a10", "AF", "#ffe0c0") },
-        { name: "Thieves' Tools", img: icon("#3a3a40", "TT") }
-      ]
+    const sheet = {
+      name: "Cornholio the lesser",
+      action: [],
+      attack: [],
+      ready: [],
+      other: [],
+      abilities: [],
+      inventory: [],
+      bonusInventory: [],
+      levels: [],
+      bonus: [],
+      reaction: [],
+      checks: []
     };
+    let featureModesFor = () => [];
+    let weaponModesFor = () => [];
 
     const params = new URLSearchParams(location.search);
     const shot = params.get("shot") || "action";
@@ -212,11 +196,17 @@
         : shot === "checks" || shot === "check-roll" ? "checks"
         : shot === "main" ? null
         : "action",
-      castSpell: shot === "action" || shot === "tooltip",
+      attackOpen: shot === "action" || shot === "tooltip" || shot === "weapon",
+      otherOpen: false,
+      readyOpen: shot === "ready",
+      abilitiesOpen: false,
+      featureNestId: null,
+      castSpell: shot === "tooltip",
       useItem: shot === "items",
       weaponNest: shot === "weapon" ? "Wave" : null,
-      useAbility: shot === "weapon",
-      abilityId: shot === "checks" || shot === "check-roll" ? "str" : null,
+      opportunityOpen: false,
+      useAbility: false,
+      checksBranch: shot === "checks" || shot === "check-roll" ? "skills" : null,
       spellLevel: shot === "action" || shot === "tooltip" ? 0 : null,
       endTurnEnabled: shot !== "main"
     };
@@ -245,6 +235,9 @@
       svg.setAttribute("width", String(SIZE));
       svg.setAttribute("height", String(SIZE));
       svg.setAttribute("viewBox", `0 0 ${SIZE} ${SIZE}`);
+      svg.addEventListener("pointermove", (ev) => {
+        if (!tooltipEl.hidden) positionTooltip(ev);
+      });
       stage.appendChild(svg);
 
       tooltipEl = document.createElement("div");
@@ -267,17 +260,22 @@
       });
       draw();
       if (shot === "tooltip") {
-        const tip = MOCK.levels[0].spells[0].tooltip;
-        showTooltip(tip, null);
+        const tip = sheet.levels[0]?.spells?.[0]?.tooltip;
+        if (tip) showTooltip(tip, null);
       }
     }
 
     function clearNests() {
+      state.attackOpen = false;
+      state.readyOpen = false;
+      state.otherOpen = false;
+      state.abilitiesOpen = false;
+      state.featureNestId = null;
       state.castSpell = false;
       state.useItem = false;
       state.weaponNest = null;
       state.useAbility = false;
-      state.abilityId = null;
+      state.checksBranch = null;
       state.spellLevel = null;
     }
 
@@ -288,20 +286,41 @@
       drawHub();
       if (state.section === "action") {
         drawAction();
-        if (state.weaponNest) {
-          drawWeaponMenu();
-          if (state.useAbility) drawWeaponAbilities();
+        if (state.readyOpen) drawReady();
+        else if (state.attackOpen) drawAttackNest(RINGS.nest1Inner, RINGS.nest1Outer);
+        else if (state.otherOpen) drawOtherActions(RINGS.nest1Inner, RINGS.nest1Outer);
+        else if (state.abilitiesOpen) drawAbilityFeatures(RINGS.nest1Inner, RINGS.nest1Outer);
+        else if (state.useItem) drawInventory();
+        if (state.readyOpen && state.attackOpen) drawAttackNest(RINGS.nest2Inner, RINGS.nest2Outer);
+        if (state.featureNestId && (state.abilitiesOpen || state.otherOpen)) {
+          drawFeatureModes(state.readyOpen ? RINGS.nest3Inner : RINGS.nest2Inner, state.readyOpen ? RINGS.nest3Outer : RINGS.nest2Outer);
         }
-        if (state.useItem) drawInventory();
+        if (state.weaponNest) drawWeaponSpecials();
         if (state.castSpell) {
           drawLevels();
           if (state.spellLevel != null) drawSpells(state.spellLevel);
         }
       } else if (state.section === "checks") {
-        drawAbilities();
-        if (state.abilityId) drawAbilityRolls();
-      } else if (state.section === "bonus") drawFlat(MOCK.bonus);
-      else if (state.section === "reaction") drawFlat(MOCK.reaction);
+        drawChecksMenu();
+        if (state.checksBranch === "saves") drawSavingThrows();
+        else if (state.checksBranch === "skills") drawSkills();
+      } else if (state.section === "bonus") {
+        drawFlat(sheet.bonus);
+        if (state.featureNestId) drawFeatureModes(RINGS.flatNestInner, RINGS.flatNestOuter);
+        if (state.useItem) drawInventory();
+        if (state.castSpell) {
+          drawLevels();
+          if (state.spellLevel != null) drawSpells(state.spellLevel);
+        }
+      } else if (state.section === "reaction") {
+        drawFlat(sheet.reaction);
+        if (state.featureNestId) drawFeatureModes(RINGS.flatNestInner, RINGS.flatNestOuter);
+        if (state.opportunityOpen) drawAttackNest(RINGS.flatNestInner, RINGS.flatNestOuter);
+        if (state.castSpell) {
+          drawLevels();
+          if (state.spellLevel != null) drawSpells(state.spellLevel);
+        }
+      }
     }
 
     function drawHub() {
@@ -373,17 +392,30 @@
         text.setAttribute("x", a.x); text.setAttribute("y", a.y);
         text.textContent = meta.name;
         g.appendChild(text);
-        g.addEventListener("pointerenter", () => {
+        g.addEventListener("pointerenter", (ev) => {
           clearCollapse();
+          if (state.section === ang.id) {
+            if (ang.id === "checks" && pointerRadius(ev) < RINGS.actionInner && state.checksBranch) {
+              state.checksBranch = null;
+              draw();
+            }
+            return;
+          }
           state.section = ang.id;
+          state.featureNestId = null;
           if (ang.id !== "action") {
+            state.attackOpen = false;
+            state.readyOpen = false;
+            state.otherOpen = false;
+            state.abilitiesOpen = false;
             state.castSpell = false;
             state.useItem = false;
             state.weaponNest = null;
             state.useAbility = false;
             state.spellLevel = null;
           }
-          if (ang.id !== "checks") state.abilityId = null;
+          state.checksBranch = null;
+          if (ang.id !== "reaction") state.opportunityOpen = false;
           draw();
         });
         svg.appendChild(g);
@@ -394,6 +426,10 @@
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.classList.add("tch-segment");
       if (cfg.active) g.classList.add("tch-segment--active");
+      if (cfg.proficiency === "proficient") g.classList.add("tch-segment--proficient");
+      if (cfg.proficiency === "expertise") g.classList.add("tch-segment--expertise");
+      if (cfg.itemArt) g.classList.add("tch-segment--item-art");
+      if (cfg.itemArt && cfg.img) applyIconPalette(g, cfg.img);
       const eco = cfg.economy || state.section;
       if (eco) {
         g.classList.add(`tch-economy--${eco}`);
@@ -422,20 +458,24 @@
       path.setAttribute("d", d);
       g.appendChild(path);
       if (cfg.label) {
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.classList.add("tch-segment__label");
-        text.setAttribute("x", a.x);
-        text.setAttribute("y", a.y);
-        text.textContent = cfg.label;
-        g.appendChild(text);
+        const laid = wedgeTextLayout({
+          start: cfg.start, end: cfg.end, inner: cfg.inner, outer: cfg.outer,
+          text: cfg.label, cx: CX, cy: CY
+        });
+        appendWedgeText(g, "tch-segment__label", laid, a, cfg.caption ? -laid.lineH * 0.45 : 0);
       }
       if (cfg.caption) {
-        const cap = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        cap.classList.add("tch-segment__caption");
-        cap.setAttribute("x", a.x);
-        cap.setAttribute("y", a.y + 10);
-        cap.textContent = fitCaptionToSweep(cfg.caption, cfg.start, cfg.end);
-        g.appendChild(cap);
+        const laid = wedgeTextLayout({
+          start: cfg.start, end: cfg.end, inner: cfg.inner, outer: cfg.outer,
+          text: cfg.caption, cx: CX, cy: CY
+        });
+        appendWedgeText(
+          g,
+          cfg.label ? "tch-segment__caption" : "tch-segment__label",
+          laid,
+          a,
+          cfg.label ? laid.lineH * 0.45 : 0
+        );
       }
       return g;
     }
@@ -443,44 +483,43 @@
     let actionLayout = { segs: [], entries: [], levelSegs: [], levelInfos: [], weaponMenuSegs: [] };
 
     function drawAction() {
-      const entries = [
-        ...MOCK.weapons.map(w => ({ kind: "weapon", ...w })),
-        ...MOCK.basics.map(b => ({ kind: "basic", ...b })),
-        { kind: "useItem", name: "Use Item", img: CHROME.useItem },
-        { kind: "cast", name: "Cast Spell", img: CHROME.castSpell }
-      ];
+      const entries = sheet.action;
       const actionMain = mainSectionById("action");
-      const segs = arcSegmentsForParent(entries.length, actionMain.start, actionMain.end, {
-        titles: entries.map(e => e.name || "")
-      });
+      let segs = arcSegmentsForParent(entries.length, actionMain.start, actionMain.end, { maxSpanDeg: 280 });
+      const attackIndex = entries.findIndex(entry => entry.kind === "attack");
+      if (attackIndex >= 0) segs = centerArcOnIndex(segs, attackIndex, actionMain.start, actionMain.end);
       actionLayout = { segs, entries, levelSegs: [], levelInfos: [], weaponMenuSegs: [] };
 
       entries.forEach((entry, i) => {
         const seg = segs[i];
-        const isNest = entry.kind === "cast" || entry.kind === "useItem";
+        const isNest = entry.kind === "attack" || entry.kind === "cast" || entry.kind === "ready" || entry.kind === "other" || entry.kind === "abilities" || entry.kind === "useItem";
+        if (entry.kind === "cast") actionLayout.castSeg = seg;
         const g = leaf({
           start: seg.start, end: seg.end,
           inner: RINGS.actionInner, outer: RINGS.actionOuter,
           label: isNest ? entry.name : "",
           caption: !isNest ? entry.name : "",
           img: entry.img,
-          active: (entry.kind === "cast" && state.castSpell)
+          active: (entry.kind === "attack" && state.attackOpen && !state.readyOpen)
+            || (entry.kind === "cast" && state.castSpell && !state.readyOpen)
+            || (entry.kind === "ready" && state.readyOpen)
+            || (entry.kind === "other" && state.otherOpen)
+            || (entry.kind === "abilities" && state.abilitiesOpen && !state.readyOpen)
             || (entry.kind === "useItem" && state.useItem)
-            || (entry.kind === "weapon" && entry.name === state.weaponNest)
         });
         g.addEventListener("pointerenter", () => {
           clearCollapse();
-          if (entry.kind === "cast") {
-            clearNests(); state.castSpell = true; draw();
-          } else if (entry.kind === "useItem") {
-            clearNests(); state.useItem = true; draw();
-          } else if (entry.kind === "weapon" && entry.hasSpecial) {
-            clearNests(); state.weaponNest = entry.name; state.useAbility = false; draw();
-          } else {
-            clearNests();
-            showTooltip({ title: entry.name }, null);
-            draw();
-          }
+          clearNests();
+          if (entry.kind === "attack") state.attackOpen = true;
+          else if (entry.kind === "cast") {
+            state.castSpell = true;
+            state.spellEconomy = entry.economy || "action";
+          } else if (entry.kind === "ready") state.readyOpen = true;
+          else if (entry.kind === "other") state.otherOpen = true;
+          else if (entry.kind === "abilities") state.abilitiesOpen = true;
+          else if (entry.kind === "useItem") state.useItem = true;
+          hideTooltip();
+          draw();
         });
         svg.appendChild(g);
       });
@@ -493,89 +532,195 @@
       return { start: a.start, end: a.end };
     }
 
-    function drawWeaponMenu() {
-      const parent = parentSeg(state.weaponNest);
-      const menu = [
-        { kind: "attack", name: "Attack", img: CHROME.attack },
-        { kind: "use-ability", name: "Use Ability", img: CHROME.useAbility }
-      ];
-      const segs = arcSegmentsForParent(menu.length, parent.start, parent.end, {
-        maxSpanDeg: 120,
-        titles: menu.map(m => m.name || "")
-      });
-      actionLayout.weaponMenuSegs = segs;
-      menu.forEach((opt, i) => {
+    function drawAttackNest(inner, outer) {
+      const entries = state.readyOpen
+        ? sheet.attack.filter(entry => entry.kind !== "cast")
+        : sheet.attack;
+      const parent = state.opportunityOpen
+        ? (actionLayout.opportunitySeg || mainSectionById("reaction"))
+        : state.readyOpen
+          ? (actionLayout.readyAttackSeg || parentSeg("ready"))
+          : parentSeg("attack");
+      const segs = arcSegmentsForParent(entries.length, parent.start, parent.end, { maxSpanDeg: 220 });
+      actionLayout.attackSegs = segs;
+      actionLayout.attackEntries = entries;
+      entries.forEach((entry, i) => {
         const seg = segs[i];
+        if (entry.kind === "cast") actionLayout.castSeg = seg;
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
-          label: opt.name,
-          img: opt.img,
-          active: opt.kind === "use-ability" && state.useAbility
+          inner, outer,
+          caption: entry.name,
+          img: entry.img,
+          itemArt: entry.kind === "weapon" || entry.kind === "weapon-attack" || entry.kind === "weapon-ability",
+          active: (entry.kind === "cast" && state.castSpell) || (entry.id && entry.id === state.weaponNest)
         });
-        g.addEventListener("pointerenter", () => {
+        g.addEventListener("pointerenter", (ev) => {
           clearCollapse();
-          if (opt.kind === "use-ability") { state.useAbility = true; draw(); }
-          else if (state.useAbility) { state.useAbility = false; draw(); }
+          state.castSpell = entry.kind === "cast";
+          state.spellLevel = state.castSpell ? state.spellLevel : null;
+          state.weaponNest = (entry.kind === "weapon" && entry.hasSpecial) ? entry.id : null;
+          showTooltip(entry.tooltip || { title: entry.name }, ev);
+          draw();
         });
         svg.appendChild(g);
       });
     }
 
-    function drawWeaponAbilities() {
-      const weapon = MOCK.weapons.find(w => w.name === state.weaponNest);
-      const abilities = weapon?.abilities ?? [];
-      const parent = actionLayout.weaponMenuSegs[1] || parentSeg(state.weaponNest);
-      const segs = arcSegmentsForParent(abilities.length, parent.start, parent.end, {
-        maxSpanDeg: 150,
-        titles: abilities.map(a => a.name || "")
+    function drawReady() {
+      const entries = sheet.ready;
+      const parent = parentSeg("ready");
+      const segs = arcSegmentsForParent(entries.length, parent.start, parent.end, { maxSpanDeg: 160 });
+      entries.forEach((entry, i) => {
+        const seg = segs[i];
+        if (entry.kind === "cast") actionLayout.castSeg = seg;
+        if (entry.kind === "attack") actionLayout.readyAttackSeg = seg;
+        const nest = entry.kind === "cast" || entry.kind === "attack";
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          label: nest ? entry.name : "",
+          caption: nest ? "" : entry.name,
+          img: entry.img,
+          active: (entry.kind === "cast" && state.castSpell) || (entry.kind === "attack" && state.attackOpen)
+        });
+        g.addEventListener("pointerenter", () => {
+          clearCollapse();
+          state.featureNestId = null;
+          state.attackOpen = entry.kind === "attack";
+          state.castSpell = entry.kind === "cast";
+          if (entry.kind === "cast") state.spellEconomy = entry.economy || "action";
+          state.abilitiesOpen = false;
+          state.weaponNest = null;
+          state.spellLevel = state.castSpell ? state.spellLevel : null;
+          hideTooltip();
+          draw();
+        });
+        svg.appendChild(g);
       });
-      abilities.forEach((opt, i) => {
+    }
+
+    function drawChoiceNest(entries, inner, outer, parent) {
+      const segs = arcSegmentsForParent(entries.length, parent.start, parent.end, { maxSpanDeg: 220 });
+      entries.forEach((entry, i) => {
+        const seg = segs[i];
+        if (entry.id === state.featureNestId) actionLayout.featureSeg = seg;
+        const caption = entry.usesLabel ? `${entry.name} · ${entry.usesLabel}` : entry.name;
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner, outer,
+          caption,
+          img: entry.img,
+          active: entry.id === state.featureNestId
+        });
+        g.addEventListener("pointerenter", (ev) => {
+          clearCollapse();
+          state.featureNestId = entry.hasNest ? entry.id : null;
+          showTooltip(entry.tooltip || { title: entry.name }, ev);
+          draw();
+        });
+        svg.appendChild(g);
+      });
+    }
+
+    function drawOtherActions(inner, outer) {
+      drawChoiceNest(sheet.other, inner, outer, parentSeg("other"));
+    }
+
+    function drawAbilityFeatures(inner, outer) {
+      const parent = state.readyOpen
+        ? (actionLayout.readyOtherSeg || parentSeg("ready"))
+        : parentSeg("abilities");
+      drawChoiceNest(sheet.abilities, inner, outer, parent);
+    }
+
+    function drawFeatureModes(inner, outer) {
+      const source = [...sheet.abilities, ...sheet.other, ...sheet.bonus, ...sheet.reaction];
+      const feature = source.find(entry => entry.id === state.featureNestId);
+      const modes = feature ? featureModesFor(feature) : [];
+      const parent = actionLayout.featureSeg || parentSeg("abilities");
+      const segs = arcSegmentsForParent(Math.max(modes.length, 1), parent.start, parent.end, { maxSpanDeg: 200 });
+      modes.forEach((entry, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest2Inner, outer: RINGS.nest2Outer,
+          inner, outer,
+          caption: entry.name,
+          img: entry.img
+        });
+        g.addEventListener("pointerenter", (ev) => showTooltip(entry.tooltip || { title: entry.name }, ev));
+        svg.appendChild(g);
+      });
+    }
+
+    function drawWeaponSpecials() {
+      const weapon = (actionLayout.attackEntries || sheet.attack).find(w => w.id === state.weaponNest);
+      const options = weapon ? weaponModesFor(weapon) : [];
+      const idx = (actionLayout.attackEntries || []).findIndex(w => w.id === state.weaponNest);
+      const parent = (idx >= 0 && actionLayout.attackSegs?.[idx]) || parentSeg("attack");
+      const inner = state.readyOpen ? RINGS.nest3Inner : RINGS.nest2Inner;
+      const outer = state.readyOpen ? RINGS.nest3Outer : RINGS.nest2Outer;
+      const segs = arcSegmentsForParent(Math.max(options.length, 1), parent.start, parent.end, { maxSpanDeg: 180 });
+      options.forEach((opt, i) => {
+        const seg = segs[i];
+        const g = leaf({
+          start: seg.start, end: seg.end,
+          inner, outer,
           caption: opt.name,
           img: opt.img
         });
-        g.addEventListener("pointerenter", () => showTooltip({ title: opt.name }, null));
+        g.addEventListener("pointerenter", (ev) => showTooltip(opt.tooltip || { title: opt.name }, ev));
         svg.appendChild(g);
       });
     }
 
     function drawInventory() {
-      const parent = parentSeg("useItem");
-      const segs = arcSegmentsForParent(MOCK.inventory.length, parent.start, parent.end, {
-        maxSpanDeg: 170,
-        titles: MOCK.inventory.map(it => it.name || "")
-      });
-      MOCK.inventory.forEach((item, i) => {
+      const onBonus = state.section === "bonus";
+      const items = onBonus ? (sheet.bonusInventory || []) : sheet.inventory;
+      const parent = onBonus
+        ? (actionLayout.useItemSeg || mainSectionById("bonus"))
+        : parentSeg("useItem");
+      const inner = onBonus ? RINGS.flatNestInner : RINGS.nest1Inner;
+      const outer = onBonus ? RINGS.flatNestOuter : RINGS.nest1Outer;
+      const segs = arcSegmentsForParent(Math.max(items.length, 1), parent.start, parent.end, { maxSpanDeg: 280 });
+      items.forEach((item, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          inner, outer,
           caption: item.name,
-          img: item.img
+          img: item.img,
+          itemArt: true
         });
-        g.addEventListener("pointerenter", () => showTooltip({ title: item.name }, null));
+        g.addEventListener("pointerenter", (ev) => showTooltip(item.tooltip || { title: item.name }, ev));
+        g.addEventListener("pointermove", (ev) => positionTooltip(ev));
+        g.addEventListener("pointerleave", hideTooltip);
         svg.appendChild(g);
       });
     }
 
+    function levelList() {
+      if (state.section === "bonus") return sheet.bonusLevels || [];
+      if (state.section === "reaction") return sheet.reactionLevels || [];
+      return sheet.levels;
+    }
+
     function drawLevels() {
-      const parent = parentSeg("cast");
-      const segs = arcSegmentsForParent(MOCK.levels.length, parent.start, parent.end, {
-        maxSpanDeg: 170,
-        titles: MOCK.levels.map(l => l.label || "")
-      });
+      const onFlat = state.section === "bonus" || state.section === "reaction";
+      const parent = actionLayout.castSeg || (onFlat ? mainSectionById(state.section) : parentSeg("cast"));
+      const levels = levelList();
+      const segs = arcSegmentsForParent(Math.max(levels.length, 1), parent.start, parent.end, { maxSpanDeg: 200 });
       actionLayout.levelSegs = segs;
-      actionLayout.levelInfos = MOCK.levels;
-      MOCK.levels.forEach((lvl, i) => {
+      actionLayout.levelInfos = levels;
+      const inner = onFlat ? RINGS.flatNestInner : (state.readyOpen ? RINGS.nest2Inner : RINGS.nest1Inner);
+      const outer = onFlat ? RINGS.flatNestOuter : (state.readyOpen ? RINGS.nest2Outer : RINGS.nest1Outer);
+      levels.forEach((lvl, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          inner, outer,
           label: lvl.label,
+          caption: lvl.slots || undefined,
           img: lvl.level === 0 ? CHROME.spell0 : previewWedge(`spell-${lvl.level}`),
           active: state.spellLevel === lvl.level
         });
@@ -589,23 +734,24 @@
     }
 
     function drawSpells(level) {
-      const spells = MOCK.levels.find(l => l.level === level)?.spells ?? [];
-      let parent = parentSeg("cast");
+      const onFlat = state.section === "bonus" || state.section === "reaction";
+      const spells = levelList().find(l => l.level === level)?.spells ?? [];
+      let parent = onFlat ? (actionLayout.castSeg || mainSectionById(state.section)) : parentSeg("cast");
       const li = actionLayout.levelInfos.findIndex(l => l.level === level);
       if (li >= 0) parent = actionLayout.levelSegs[li];
-      const segs = arcSegmentsForParent(spells.length, parent.start, parent.end, {
-        maxSpanDeg: 160,
-        titles: spells.map(s => s.name || "")
-      });
+      const segs = arcSegmentsForParent(Math.max(spells.length, 1), parent.start, parent.end, { maxSpanDeg: 280 });
+      const inner = onFlat ? RINGS.flatSpellInner : (state.readyOpen ? RINGS.nest3Inner : RINGS.nest2Inner);
+      const outer = onFlat ? RINGS.flatSpellOuter : (state.readyOpen ? RINGS.nest3Outer : RINGS.nest2Outer);
       spells.forEach((spell, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest2Inner, outer: RINGS.nest2Outer,
+          inner, outer,
           caption: spell.name,
-          img: spell.img
+          img: spell.img,
+          itemArt: true
         });
-        g.addEventListener("pointerenter", (ev) => showTooltip(spell.tooltip, ev));
+        g.addEventListener("pointerenter", (ev) => showTooltip(spell.tooltip || { title: spell.name }, ev));
         g.addEventListener("pointermove", (ev) => positionTooltip(ev));
         g.addEventListener("pointerleave", hideTooltip);
         svg.appendChild(g);
@@ -614,85 +760,139 @@
 
     function drawFlat(options) {
       const main = mainSectionById(state.section === "reaction" ? "reaction" : "bonus");
-      const segs = arcSegmentsForParent(options.length, main.start, main.end, {
-        maxSpanDeg: 160,
-        titles: options.map(o => o.name || "")
+      const segs = arcSegmentsForParent(Math.max(options.length, 1), main.start, main.end, {
+        maxSpanDeg: 300, minSegmentDeg: 32, idealSegmentDeg: 46
       });
       options.forEach((opt, i) => {
         const seg = segs[i];
+        const isCast = opt.kind === "cast";
+        const isUseItem = opt.kind === "useItem";
+        const isFeature = opt.kind === "feature" && opt.hasNest;
+        const isOpportunity = opt.kind === "opportunity";
+        if (opt.id === state.featureNestId) actionLayout.featureSeg = seg;
+        if (isCast) actionLayout.castSeg = seg;
+        if (isUseItem) actionLayout.useItemSeg = seg;
+        if (isOpportunity) actionLayout.opportunitySeg = seg;
+        const caption = opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name;
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.actionInner, outer: RINGS.actionOuter,
-          caption: opt.name,
-          img: opt.img
+          inner: RINGS.flatInner, outer: RINGS.flatOuter,
+          caption,
+          img: opt.img,
+          active: (isFeature && opt.id === state.featureNestId)
+            || (isCast && state.castSpell)
+            || (isUseItem && state.useItem)
+            || (isOpportunity && state.opportunityOpen)
         });
-        g.addEventListener("pointerenter", () => showTooltip({ title: opt.name }, null));
+        g.addEventListener("pointerenter", (ev) => {
+          clearCollapse();
+          if (isCast) {
+            state.featureNestId = null;
+            state.opportunityOpen = false;
+            state.useItem = false;
+            state.castSpell = true;
+            state.spellEconomy = opt.economy || state.section;
+            state.spellLevel = null;
+            draw();
+            hideTooltip();
+            return;
+          }
+          if (isUseItem) {
+            state.featureNestId = null;
+            state.opportunityOpen = false;
+            state.castSpell = false;
+            state.spellLevel = null;
+            state.useItem = true;
+            draw();
+            hideTooltip();
+            return;
+          }
+          if (isOpportunity) {
+            state.featureNestId = null;
+            state.castSpell = false;
+            state.spellLevel = null;
+            state.useItem = false;
+            state.opportunityOpen = true;
+            draw();
+            hideTooltip();
+            return;
+          }
+          if (state.castSpell || state.opportunityOpen || state.useItem) {
+            state.castSpell = false;
+            state.spellLevel = null;
+            state.opportunityOpen = false;
+            state.useItem = false;
+          }
+          const open = isFeature ? opt.id : null;
+          const changed = open !== state.featureNestId;
+          state.featureNestId = open;
+          if (changed) draw();
+          showTooltip(opt.tooltip || { title: opt.name }, ev);
+        });
         g.addEventListener("pointerleave", hideTooltip);
         svg.appendChild(g);
       });
     }
 
-    const MOCK_ABILITIES = [
-      { id: "str", name: "Strength", mod: 3 },
-      { id: "dex", name: "Dexterity", mod: 2 },
-      { id: "con", name: "Constitution", mod: 1 },
-      { id: "int", name: "Intelligence", mod: 0 },
-      { id: "wis", name: "Wisdom", mod: 2 },
-      { id: "cha", name: "Charisma", mod: -1 }
-    ];
-    let abilityLayout = { segs: [], entries: [] };
+    let checksLayout = { segs: [], entries: [] };
 
-    function drawAbilities() {
+    function drawChecksMenu() {
       const main = mainSectionById("checks");
-      const segs = arcSegmentsForParent(MOCK_ABILITIES.length, main.start, main.end, {
-        maxSpanDeg: 200,
-        titles: MOCK_ABILITIES.map(a => {
-          const mod = a.mod >= 0 ? `+${a.mod}` : String(a.mod);
-          return `${a.name} ${mod}`;
-        })
-      });
-      abilityLayout = { segs, entries: MOCK_ABILITIES };
-      MOCK_ABILITIES.forEach((abl, i) => {
+      const entries = sheet.checksMenu;
+      const segs = arcSegmentsForParent(Math.max(entries.length, 1), main.start, main.end, { maxSpanDeg: 200 });
+      checksLayout = { segs, entries };
+      entries.forEach((opt, i) => {
         const seg = segs[i];
-        const mod = abl.mod >= 0 ? `+${abl.mod}` : String(abl.mod);
+        const isBranch = opt.kind === "checks-branch";
         const g = leaf({
           start: seg.start, end: seg.end,
           inner: RINGS.actionInner, outer: RINGS.actionOuter,
-          caption: `${abl.name} ${mod}`,
-          img: CHROME.abilities[abl.id] || CHROME.checks,
-          active: state.abilityId === abl.id
+          caption: opt.name,
+          img: opt.img || CHROME.checks,
+          active: isBranch && state.checksBranch === opt.branch
         });
-        g.addEventListener("pointerenter", () => {
+        g.addEventListener("pointerenter", (ev) => {
+          if (pointerRadius(ev) < RINGS.actionInner) return;
           clearCollapse();
-          state.abilityId = abl.id;
-          draw();
+          if (isBranch) {
+            if (state.checksBranch === opt.branch) return;
+            state.checksBranch = opt.branch;
+            draw();
+            return;
+          }
+          if (state.checksBranch) {
+            state.checksBranch = null;
+            draw();
+          }
+          showTooltip(opt.tooltip || { title: opt.name }, ev);
         });
         svg.appendChild(g);
       });
     }
 
-    function drawAbilityRolls() {
-      const abl = MOCK_ABILITIES.find(a => a.id === state.abilityId) || MOCK_ABILITIES[0];
+    function drawSavingThrows() {
+      drawChecksLeaves(sheet.saves, "saves");
+    }
+
+    function drawSkills() {
+      drawChecksLeaves(sheet.skills, "skills");
+    }
+
+    function drawChecksLeaves(options, branch) {
       let parent = mainSectionById("checks");
-      const idx = abilityLayout.entries.findIndex(a => a.id === abl.id);
-      if (idx >= 0) parent = abilityLayout.segs[idx];
-      const rolls = [
-        { name: "Check", tip: `${abl.name} ability check` },
-        { name: "Save", tip: `${abl.name} saving throw` }
-      ];
-      const segs = arcSegmentsForParent(rolls.length, parent.start, parent.end, {
-        maxSpanDeg: 120,
-        titles: rolls.map(r => r.name || "")
-      });
-      rolls.forEach((opt, i) => {
+      const idx = checksLayout.entries.findIndex(entry => entry.kind === "checks-branch" && entry.branch === branch);
+      if (idx >= 0) parent = checksLayout.segs[idx];
+      const segs = arcSegmentsForParent(Math.max(options.length, 1), parent.start, parent.end, { maxSpanDeg: 200 });
+      options.forEach((opt, i) => {
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
           inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
-          label: opt.name,
-          img: opt.name === "Save" ? CHROME.save : CHROME.check
+          caption: opt.name,
+          img: opt.img,
+          proficiency: opt.proficiency
         });
-        g.addEventListener("pointerenter", () => showTooltip({ title: opt.tip }, null));
+        g.addEventListener("pointerenter", (ev) => showTooltip(opt.tooltip || { title: opt.name }, ev));
         svg.appendChild(g);
       });
     }
@@ -725,12 +925,97 @@
       tooltipEl.innerHTML = "";
     }
 
+    function pointerRadius(ev) {
+      if (!svg || ev?.clientX == null) return Infinity;
+      const pt = svg.createSVGPoint();
+      pt.x = ev.clientX;
+      pt.y = ev.clientY;
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return Infinity;
+      const p = pt.matrixTransform(ctm.inverse());
+      return Math.hypot(p.x - CX, p.y - CY);
+    }
+
     function clearCollapse() {
       if (collapseTimer) clearTimeout(collapseTimer);
       collapseTimer = null;
     }
 
-    mount();
+    function installI18n(lang) {
+      const dict = lang?.TINHEADS_COMBAT_HUD ?? {};
+      const lookup = (key) => {
+        const parts = String(key).replace(/^TINHEADS_COMBAT_HUD\./, "").split(".");
+        let node = dict;
+        for (const part of parts) node = node?.[part];
+        return typeof node === "string" ? node : key;
+      };
+      globalThis.game = {
+        i18n: {
+          format(key, data) {
+            let text = lookup(key);
+            if (data) {
+              for (const [name, value] of Object.entries(data)) {
+                text = text.replaceAll(`{${name}}`, String(value));
+              }
+            }
+            return text;
+          },
+          localize: lookup
+        },
+        user: { isGM: true, targets: new Set() }
+      };
+      globalThis.foundry = { utils: { duplicate: (value) => JSON.parse(JSON.stringify(value)) } };
+      globalThis.CONFIG = { DND5E: { defaultArtwork: { Item: {} }, abilities: {} } };
+      globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3, OBSERVER: 2 } };
+    }
+
+    async function boot() {
+      const note = document.getElementById("preview-note");
+      try {
+        const [lang, raw] = await Promise.all([
+          fetch("../lang/en.json").then(response => response.json()),
+          fetch("./demo/cornholio.json").then(response => response.json())
+        ]);
+        installI18n(lang);
+        const { hydrateActor } = await import("./demo/hydrate-actor.mjs");
+        const { buildActionRingEntries, buildEconomyRingEntries, getAttackNestEntries, getReadyNestEntries } = await import("../scripts/data/basic-actions.mjs");
+        const { getEquippedWeapons, getSpellLevels } = await import("../scripts/data/actor-options.mjs");
+        const { getClassFeatureOptions, getOtherActionOptions, getFeatureModeOptions } = await import("../scripts/data/action-features.mjs");
+        const { getUsableInventoryItems } = await import("../scripts/data/use-items.mjs");
+        const { getSpecialWeaponOptions } = await import("../scripts/data/weapon-abilities.mjs");
+        const { getChecksMenuOptions, getSavingThrowOptions, getSkillOptions } = await import("../scripts/data/ability-checks.mjs");
+
+        const actor = hydrateActor(raw);
+        const weapons = getEquippedWeapons(actor);
+        sheet.name = actor.name;
+        sheet.action = buildActionRingEntries(actor, weapons);
+        sheet.attack = getAttackNestEntries(actor, weapons);
+        sheet.ready = getReadyNestEntries(actor);
+        sheet.other = getOtherActionOptions(actor);
+        sheet.abilities = getClassFeatureOptions(actor, "action");
+        sheet.inventory = getUsableInventoryItems(actor);
+        sheet.bonusInventory = getUsableInventoryItems(actor, "bonus");
+        sheet.levels = getSpellLevels(actor, "action").levels;
+        sheet.bonusLevels = getSpellLevels(actor, "bonus").levels;
+        sheet.reactionLevels = getSpellLevels(actor, "reaction").levels;
+        sheet.bonus = buildEconomyRingEntries(actor, "bonus");
+        sheet.reaction = buildEconomyRingEntries(actor, "reaction");
+        sheet.checksMenu = getChecksMenuOptions(actor);
+        sheet.saves = getSavingThrowOptions(actor);
+        sheet.skills = getSkillOptions(actor);
+        featureModesFor = getFeatureModeOptions;
+        weaponModesFor = getSpecialWeaponOptions;
+        if (note) {
+          note.textContent = `${actor.name}. Hover a wedge. This is his sheet, run through the same HUD lists Foundry uses. Foundry item art is not in this folder, so missing pictures fall back to the module wedge.`;
+        }
+        mount();
+      } catch (error) {
+        if (note) note.textContent = `Could not load Cornholio: ${error.message}`;
+        console.error(error);
+      }
+    }
+
+    boot();
   </script>
 </body>
 </html>
