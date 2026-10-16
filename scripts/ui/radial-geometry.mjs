@@ -3,8 +3,8 @@
  *
  * Angle convention: 0° = north, clockwise positive (combat HUD).
  * An opened ring is centered on its parent wedge.
- * Ten or more options use the whole circle. Fewer than ten use a half circle.
- * A single option uses a quarter circle.
+ * Labelled wedges are as wide as their text, and the ring grows up to a full circle when that text needs it.
+ * Equal-count nests still use a quarter circle for one option, a half circle below ten, and a full circle from ten.
  */
 
 /** Option count below this opens a half circle. Ten or more use the whole circle. */
@@ -171,12 +171,58 @@ export function arcSegmentsForParent(count, parentStart, parentEnd, opts = {}) {
 }
 
 /**
- * Same arc as equal wedges, but longer titles take a wider slice.
- * Short names keep a minimum so they stay tappable.
+ * Characters on the longer line when a caption can sit on two lines.
+ * A single word stays on one line.
+ * @param {string} label
+ * @returns {number}
+ */
+export function captionLineChars(label) {
+  const text = String(label ?? "").trim().replace(/\s+/g, " ");
+  if (!text) return 1;
+  const words = text.split(" ");
+  if (words.length < 2) return text.length;
+  let best = text.length;
+  for (let i = 0; i < words.length - 1; i += 1) {
+    const left = words.slice(0, i + 1).join(" ").length;
+    const right = words.slice(i + 1).join(" ").length;
+    best = Math.min(best, Math.max(left, right));
+  }
+  return best;
+}
+
+/**
+ * Degrees a caption needs along the ring so the letters fit without shrinking.
+ * A title that can break across two lines is measured from its longer line.
+ * @param {string} label
+ * @param {object} [opts]
+ * @param {number} [opts.textRadius]
+ * @param {number} [opts.wedgeDepth]
+ * @param {number} [opts.fontPx]
+ * @param {number} [opts.minDeg]
+ * @returns {number}
+ */
+export function labelSweepDeg(label, opts = {}) {
+  const fontPx = opts.fontPx ?? 13;
+  const radius = Math.max(Number(opts.textRadius) || 150, 48);
+  const minDeg = opts.minDeg ?? 16;
+  const depth = Number(opts.wedgeDepth) || 62;
+  const text = String(label ?? "").trim().replace(/\s+/g, " ");
+  const twoLinesFit = depth * 0.78 >= (fontPx + 2) * 2;
+  const chars = twoLinesFit ? captionLineChars(text) : Math.max(text.length, 1);
+  const arcPx = Math.max(chars, 1) * fontPx * 0.6 + 18;
+  const deg = (arcPx / radius) * (180 / Math.PI);
+  return Math.max(minDeg, deg);
+}
+
+/**
+ * Wedges sized from their captions. The ring is only as wide as those captions,
+ * and it uses the whole circle when the captions need more than one turn.
+ * `fixedSpanDeg` still splits that exact span by title length.
  * @param {string[]} labels
  * @param {object} [opts]
  * @param {number} [opts.midAngle=0]
  * @param {number} [opts.fixedSpanDeg]
+ * @param {number} [opts.textRadius]
  * @param {number} [opts.gapDeg]
  * @returns {Array<{ index: number, start: number, end: number, mid: number }>}
  */
@@ -187,19 +233,33 @@ export function weightedArcSegments(labels, opts = {}) {
 
   const gapDeg = opts.gapDeg ?? ARC_DEFAULTS.gapDeg;
   const midAngle = opts.midAngle ?? 0;
-  const span = Number.isFinite(opts.fixedSpanDeg) ? opts.fixedSpanDeg : nestSpanDeg(count);
-  const closes = span >= 360 - 0.01;
-  const gapTotal = closes ? gapDeg * count : gapDeg * Math.max(count - 1, 0);
-  const usable = Math.max(span - gapTotal, count * 8);
-  const weights = names.map(label => {
-    const len = String(label ?? "").trim().length;
-    return Math.max(5, Math.min(len || 5, 32));
-  });
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  let cursor = midAngle - span / 2;
+  let sweeps;
+  let closes;
 
-  return weights.map((weight, index) => {
-    const segSweep = usable * (weight / total);
+  if (Number.isFinite(opts.fixedSpanDeg)) {
+    const span = opts.fixedSpanDeg;
+    closes = span >= 360 - 0.01;
+    const gapTotal = closes ? gapDeg * count : gapDeg * Math.max(count - 1, 0);
+    const usable = Math.max(span - gapTotal, count * 8);
+    const weights = names.map(label => Math.max(labelSweepDeg(label, opts), 1));
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    sweeps = weights.map(weight => usable * (weight / total));
+  } else {
+    sweeps = names.map(label => labelSweepDeg(label, opts));
+    const openSpan = sweeps.reduce((sum, sweep) => sum + sweep, 0) + gapDeg * Math.max(count - 1, 0);
+    closes = openSpan > 360 - 0.01;
+    if (closes) {
+      const usable = Math.max(360 - gapDeg * count, count * 4);
+      const content = sweeps.reduce((sum, sweep) => sum + sweep, 0);
+      const scale = usable / content;
+      sweeps = sweeps.map(sweep => sweep * scale);
+    }
+  }
+
+  const gapCount = closes ? count : Math.max(count - 1, 0);
+  const span = sweeps.reduce((sum, sweep) => sum + sweep, 0) + gapDeg * gapCount;
+  let cursor = midAngle - span / 2;
+  return sweeps.map((segSweep, index) => {
     const start = cursor;
     const end = cursor + segSweep;
     cursor = end + gapDeg;

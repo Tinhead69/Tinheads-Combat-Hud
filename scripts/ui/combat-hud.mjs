@@ -31,11 +31,9 @@ import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterLegendaryOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
 import {
-  arcSegmentsForParent,
   centerArcOnIndex,
   mainSectionAngles,
   mainSectionById,
-  nestSpanDeg,
   normalizeMid,
   sectionAnchor,
   sectionWedgePath,
@@ -119,6 +117,27 @@ export const RINGS = Object.freeze({
 
 /** @type {CombatHud|null} */
 let activeHud = null;
+
+function wedgeCaption(entry) {
+  if (!entry) return "";
+  if (entry.usesLabel) return `${entry.name} · ${entry.usesLabel}`;
+  return entry.label || entry.name || "";
+}
+
+/**
+ * Wedges as wide as their captions, on the ring those captions are drawn.
+ * @param {string[]} labels
+ * @param {{ start: number, end: number }} parent
+ * @param {number} inner
+ * @param {number} outer
+ */
+function textSegments(labels, parent, inner, outer) {
+  return weightedArcSegments(labels, {
+    midAngle: normalizeMid(parent.start, parent.end),
+    textRadius: (inner + outer) / 2,
+    wedgeDepth: Math.abs(outer - inner)
+  });
+}
 
 export class CombatHud {
   /**
@@ -829,7 +848,12 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(entries.length, main.start, main.end, { maxSpanDeg: 220 });
+    const segs = textSegments(
+      entries.map(wedgeCaption),
+      main,
+      inner,
+      outer
+    );
     this._layout = { ...(this._layout || {}) };
     entries.forEach((opt, i) => {
       const seg = segs[i];
@@ -984,7 +1008,7 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(entries.length, parent.start, parent.end, { maxSpanDeg: 220 });
+    const segs = textSegments(entries.map(entry => entry.name), parent, inner, outer);
     entries.forEach((entry, index) => {
       const seg = segs[index];
       const g = this._leafSegment({
@@ -1029,7 +1053,12 @@ export class CombatHud {
     }
 
     const group = this._ringGroup("monster-spell-groups");
-    const segs = arcSegmentsForParent(groups.length, parent.start, parent.end, { maxSpanDeg: 170 });
+    const segs = textSegments(
+      groups.map(entry => entry.label),
+      parent,
+      RINGS.nest1Inner,
+      RINGS.nest1Outer
+    );
     this._layout.levelSegs = segs;
     this._layout.levelInfos = groups;
     groups.forEach((entry, i) => {
@@ -1083,7 +1112,7 @@ export class CombatHud {
       this.svg.appendChild(group);
       return;
     }
-    const segs = arcSegmentsForParent(spells.length, parent.start, parent.end, { maxSpanDeg: 160 });
+    const segs = textSegments(spells.map(spell => spell.name), parent, inner, outer);
     spells.forEach((spell, i) => {
       const seg = segs[i];
       const g = this._leafSegment({
@@ -1154,8 +1183,7 @@ export class CombatHud {
       source: "action",
       groupName: "action",
       store: "action",
-      centerOnId: "attack",
-      spanDeg: 360
+      centerOnId: "attack"
     });
   }
 
@@ -1269,12 +1297,14 @@ export class CombatHud {
       return;
     }
 
-    const labels = entries.map(entry => (
-      entry.usesLabel ? `${entry.name} · ${entry.usesLabel}` : entry.name
-    ));
-    const spanDeg = Number.isFinite(cfg.spanDeg) ? cfg.spanDeg : nestSpanDeg(entries.length);
+    const labels = entries.map(wedgeCaption);
     const mid = normalizeMid(parent.start, parent.end);
-    let segs = weightedArcSegments(labels, { midAngle: mid, fixedSpanDeg: spanDeg });
+    let segs = weightedArcSegments(labels, {
+      midAngle: mid,
+      textRadius: (band.inner + band.outer) / 2,
+      wedgeDepth: Math.abs(band.outer - band.inner),
+      ...(Number.isFinite(cfg.spanDeg) ? { fixedSpanDeg: cfg.spanDeg } : {})
+    });
     if (cfg.centerOnId) {
       const centerIndex = entries.findIndex(entry => entry.kind === cfg.centerOnId || entry.id === cfg.centerOnId);
       if (centerIndex >= 0) segs = centerArcOnIndex(segs, centerIndex, parent.start, parent.end);
@@ -1394,7 +1424,7 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(modes.length, parent.start, parent.end, { maxSpanDeg: 170 });
+    const segs = textSegments(modes.map(wedgeCaption), parent, band.inner, band.outer);
     modes.forEach((opt, i) => {
       const seg = segs[i];
       const caption = opt.usesLabel ? `${opt.name} · ${opt.usesLabel}` : opt.name;
@@ -1433,7 +1463,12 @@ export class CombatHud {
     const entries = getChecksMenuOptions(this.actor);
     const group = this._ringGroup("checks-menu");
     const main = mainSectionById("checks");
-    const segs = arcSegmentsForParent(entries.length, main.start, main.end, { maxSpanDeg: 200 });
+    const segs = textSegments(
+      entries.map(entry => entry.name),
+      main,
+      RINGS.actionInner,
+      RINGS.actionOuter
+    );
     this._layout = {
       ...(this._layout || {}),
       checksMenu: entries,
@@ -1503,7 +1538,12 @@ export class CombatHud {
     const idx = entries.findIndex(entry => entry.kind === "checks-branch" && entry.branch === branch);
     const parent = idx >= 0 && segsLayout[idx] ? segsLayout[idx] : mainSectionById("checks");
     const group = this._ringGroup(branch);
-    const segs = arcSegmentsForParent(options.length, parent.start, parent.end, { maxSpanDeg: 200 });
+    const segs = textSegments(
+      options.map(opt => opt.name),
+      parent,
+      RINGS.nest1Inner,
+      RINGS.nest1Outer
+    );
 
     options.forEach((opt, i) => {
       const seg = segs[i];
@@ -1555,12 +1595,7 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(
-      items.length,
-      parent.start,
-      parent.end,
-      { maxSpanDeg: 170 }
-    );
+    const segs = textSegments(items.map(item => item.name), parent, inner, outer);
     if (this._layout) {
       this._layout.useItemEntries = items;
       this._layout.useItemSegs = segs;
@@ -1628,7 +1663,7 @@ export class CombatHud {
     const inner = onBonus ? RINGS.flatSpellInner : RINGS.nest2Inner;
     const outer = onBonus ? RINGS.flatSpellOuter : RINGS.nest2Outer;
     const group = this._ringGroup("use-item-group");
-    const childSegs = arcSegmentsForParent(children.length, parent.start, parent.end, { maxSpanDeg: 170 });
+    const childSegs = textSegments(children.map(opt => opt.name), parent, inner, outer);
 
     children.forEach((opt, i) => {
       const seg = childSegs[i];
@@ -1695,11 +1730,11 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(
-      levels.length,
-      parent.start,
-      parent.end,
-      { maxSpanDeg: 170 }
+    const segs = textSegments(
+      levels.map(levelInfo => [levelInfo.label, levelInfo.slots].filter(Boolean).sort((a, b) => b.length - a.length)[0] || ""),
+      parent,
+      band.inner,
+      band.outer
     );
     if (this._layout) {
       this._layout.levelSegs = segs;
@@ -1778,12 +1813,7 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(
-      spells.length,
-      parent.start,
-      parent.end,
-      { maxSpanDeg: 160 }
-    );
+    const segs = textSegments(spells.map(spell => spell.name), parent, spellBand.inner, spellBand.outer);
     spells.forEach((spell, i) => {
       const seg = segs[i];
       const g = this._leafSegment({
@@ -1835,11 +1865,11 @@ export class CombatHud {
       return;
     }
 
-    const segs = arcSegmentsForParent(
-      entries.length,
-      main.start,
-      main.end,
-      { maxSpanDeg: 300, minSegmentDeg: 32, idealSegmentDeg: 46 }
+    const segs = textSegments(
+      entries.map(wedgeCaption),
+      main,
+      RINGS.flatInner,
+      RINGS.flatOuter
     );
     this._layout = {
       ...(this._layout || {}),

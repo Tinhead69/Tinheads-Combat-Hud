@@ -11,6 +11,8 @@ import {
   mainSectionById,
   nestSpanDeg,
   normalizeMid,
+  captionLineChars,
+  labelSweepDeg,
   weightedArcSegments
 } from "../ui/radial-geometry.mjs";
 
@@ -97,6 +99,39 @@ function assert(cond, msg) {
   const widths = segs.map(seg => seg.end - seg.start);
   assert(widths[1] > widths[0] && widths[0] > widths[2], "a longer title gets a wider wedge");
   assert(segs[1].start >= segs[0].end - 0.01, "weighted wedges stay in order");
+}
+
+{
+  assert(captionLineChars("Divine Intervention") < "Divine Intervention".length, "a two-word title is measured from its longer line");
+  assert(captionLineChars("Disengage") === "Disengage".length, "a single word stays on one line");
+  const wrapped = labelSweepDeg("Divine Intervention", { textRadius: 150, wedgeDepth: 62 });
+  const solid = labelSweepDeg("DivineIntervention", { textRadius: 150, wedgeDepth: 62 });
+  assert(wrapped < solid, "a title that fits on two lines uses a smaller wedge");
+}
+
+{
+  const segs = weightedArcSegments(["Dash"], { midAngle: 0, textRadius: 150 });
+  const span = segs[0].end - segs[0].start;
+  assert(span < 40, "a short title stays about as wide as its letters");
+  assert(Math.abs(span - labelSweepDeg("Dash", { textRadius: 150 })) < 0.01, "one wedge uses the sweep its caption needs");
+}
+
+{
+  const labels = ["Dash", "Divine Intervention"];
+  const segs = weightedArcSegments(labels, { midAngle: 0, textRadius: 150 });
+  const widths = segs.map(seg => seg.end - seg.start);
+  const span = segs[1].end - segs[0].start;
+  assert(widths[1] > widths[0] * 1.5, "the long title takes more of the ring than the short one");
+  assert(span < 180, "two titles do not open a half circle when the letters fit in less");
+}
+
+{
+  const labels = Array.from({ length: 12 }, () => "Tasha's Hideous Laughter");
+  const segs = weightedArcSegments(labels, { midAngle: 0, textRadius: 150 });
+  const span = segs[11].end - segs[0].start;
+  const seam = segs[0].start + 360 - segs[11].end;
+  assert(Math.abs(span + seam - 360) < 1, "captions that overflow a turn use the whole circle");
+  assert(Math.abs(seam - ARC_DEFAULTS.gapDeg) < 0.05, "a text-sized full circle keeps a gap at the seam");
 }
 
 console.log(`\n${passed} assertions passed`);
