@@ -2,7 +2,7 @@
 
 Nested radial combat HUD for **Foundry VTT v13** and **dnd5e 3.0.0+**. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.2.4** (`module.json`).
+Current module version: **0.2.5** (`module.json`).
 
 ## What it does
 
@@ -37,7 +37,7 @@ A rogue with Cunning Action gets Hide, Dash, and Disengage on the bonus ring. Hi
 Hover **Checks** for **Saves**, **Skills**, and **Death Saves**.
 
 - **Saves** lists the six saving throws.
-- **Skills** lists every skill. A proficient skill has a silver outline. Expertise is filled gold.
+- **Skills** lists every skill across two rings: the second half is on the inner ring and the first half is on the outer ring. A proficient skill has a silver outline. Expertise is filled gold.
 - **Death Saves** rolls a death saving throw. The tooltip shows successes and failures out of 3.
 
 ## Requirements
