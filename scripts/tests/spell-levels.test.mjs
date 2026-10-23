@@ -25,6 +25,7 @@ const {
   isSpellAvailableForHud,
   hasSpellSlotForLevel
 } = await import("../data/actor-options.mjs");
+const { serializeResolveOption } = await import("../data/resolve.mjs");
 
 function spell(partial) {
   const mode = partial.mode ?? "spell";
@@ -93,6 +94,20 @@ const misty = spell({ name: "Misty Step", level: 2, mode: "always", prepared: tr
 const eldritch = spell({ name: "Hex", level: 1, mode: "pact" });
 const guidance = spell({ name: "Guidance", level: 0, mode: "atwill" });
 
+// dnd5e creates cached spell documents for Cast activities shown in Additional Spells.
+const grantingItem = { id: "feature-id", uuid: "Actor.actor.Item.feature-id", isOwner: true };
+const grantedCast = {
+  id: "limited-cast",
+  item: grantingItem,
+  activation: { type: "action" },
+  canUse: true,
+  displayInSpellbook: true
+};
+const additionalSpell = spell({ name: "Additional Shield", level: 1, prepared: false });
+additionalSpell.flags = { dnd5e: { cachedFor: "feature-id" } };
+additionalSpell.system.linkedActivity = grantedCast;
+additionalSpell.getFlag = (scope, key) => additionalSpell.flags?.[scope]?.[key];
+
 // Slots only for 1st — 2nd prepared spell must not create a 2nd-level section
 {
   const actor = actorWith(
@@ -136,6 +151,19 @@ const guidance = spell({ name: "Guidance", level: 0, mode: "atwill" });
   assert(!isSpellAvailableForHud(actor, misty), "always L2 without L2+ slots excluded");
   const actor2 = actorWith([misty], { spell2: { value: 1, max: 1 } });
   assert(isSpellAvailableForHud(actor2, misty), "always L2 with L2 slots included");
+}
+
+{
+  const actor = actorWith([additionalSpell]);
+  assert(isSpellAvailableForHud(actor, additionalSpell), "additional spell ignores preparation and slot gates");
+  const { levels } = getSpellLevels(actor);
+  assert(levels.map(entry => entry.id).join(",") === "atwill", "additional spell appears under At-Will");
+  const option = levels[0].spells[0];
+  assert(option.available === true, "additional spell uses the granting activity availability");
+  assert(option.activity === grantedCast, "additional spell keeps its limited Cast activity");
+  const payload = serializeResolveOption(option, actor);
+  assert(payload.itemUuid === grantingItem.uuid, "proxied additional spell resolves through its granting item");
+  assert(payload.activityId === grantedCast.id, "proxied additional spell keeps the limited Cast activity id");
 }
 
 // Pact

@@ -18,6 +18,7 @@ export function contentOuterRadius(state, rings) {
   if (!state?.section) return rings.mainOuter;
 
   if (state.section === "checks") {
+    if (state.checksBranch === "skills") return rings.nest2Outer;
     return state.checksBranch ? rings.nest1Outer : rings.actionOuter;
   }
   if (state.section === "bonus" || state.section === "reaction") {

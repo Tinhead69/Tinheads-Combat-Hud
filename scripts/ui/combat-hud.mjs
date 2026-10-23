@@ -385,7 +385,7 @@ export class CombatHud {
     }
 
     // Nests change the occupied radius — keep arcs on-screen.
-    this._clampToViewport();
+    this._clampToViewport(true);
     this._redrawing = false;
   }
 
@@ -1529,20 +1529,26 @@ export class CombatHud {
   }
 
   _drawSkillRing() {
-    this._drawChecksLeafRing(getSkillOptions(this.actor), "skills");
+    const options = getSkillOptions(this.actor);
+    const splitAt = Math.ceil(options.length / 2);
+    this._drawChecksLeafRing(options.slice(splitAt), "skills", "nest1");
+    this._drawChecksLeafRing(options.slice(0, splitAt), "skills-outer", "nest2");
   }
 
-  _drawChecksLeafRing(options, branch) {
+  _drawChecksLeafRing(options, branch, ring = "nest1") {
     const entries = this._layout?.checksMenu ?? getChecksMenuOptions(this.actor);
     const segsLayout = this._layout?.checksMenuSegs ?? [];
-    const idx = entries.findIndex(entry => entry.kind === "checks-branch" && entry.branch === branch);
-    const parent = idx >= 0 && segsLayout[idx] ? segsLayout[idx] : mainSectionById("checks");
+    const parentBranch = branch === "skills-outer" ? "skills" : branch;
+    const parentIdx = entries.findIndex(entry => entry.kind === "checks-branch" && entry.branch === parentBranch);
+    const parent = parentIdx >= 0 && segsLayout[parentIdx] ? segsLayout[parentIdx] : mainSectionById("checks");
+    const inner = ring === "nest2" ? RINGS.nest2Inner : RINGS.nest1Inner;
+    const outer = ring === "nest2" ? RINGS.nest2Outer : RINGS.nest1Outer;
     const group = this._ringGroup(branch);
     const segs = textSegments(
       options.map(opt => opt.name),
       parent,
-      RINGS.nest1Inner,
-      RINGS.nest1Outer
+      inner,
+      outer
     );
 
     options.forEach((opt, i) => {
@@ -1550,8 +1556,8 @@ export class CombatHud {
       const g = this._leafSegment({
         start: seg.start,
         end: seg.end,
-        inner: RINGS.nest1Inner,
-        outer: RINGS.nest1Outer,
+        inner,
+        outer,
         caption: opt.name,
         img: opt.img,
         proficiency: opt.proficiency

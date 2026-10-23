@@ -162,20 +162,24 @@ const midiStaff = enrichWeaponOption({
   id: "midi-staff",
   name: "Staff of Frost",
   img: "",
-  type: "weapon",
-  isOwner: true,
-  system: {
-    description: { value: "<p>A frost staff.</p>" },
-    activities: [
-      { id: "atk", name: "Attack", type: "attack", activation: { type: "action" } },
-      {
-        id: "cone",
-        name: "Midi - Cone of Cold",
-        type: "save",
-        activation: { type: "action" },
-        description: { value: "<p>Midi activity blurb.</p>" }
-      }
-    ]
+  item: {
+    id: "midi-staff-item",
+    name: "Staff of Frost",
+    type: "weapon",
+    isOwner: true,
+    system: {
+      description: { value: "<p>A frost staff.</p>" },
+      activities: [
+        { id: "atk", name: "Attack", type: "attack", activation: { type: "action" } },
+        {
+          id: "cone",
+          name: "Midi - Cone of Cold",
+          type: "save",
+          activation: { type: "action" },
+          description: { value: "<p>Midi activity blurb.</p>" }
+        }
+      ]
+    }
   },
   activity: null
 });
@@ -295,10 +299,10 @@ const checkRoll = await rollAbilityHudOption(actor, rolls[0]);
 assert(checkRoll.type === "check" && checkRoll.ability === "str", "rollAbilityCheck used");
 const saveRoll = await rollAbilityHudOption(actor, rolls[1]);
 assert(saveRoll.type === "save" && saveRoll.ability === "str", "rollSavingThrow used");
-const menu = getChecksMenuOptions({
+const checksMenu = getChecksMenuOptions({
   system: { attributes: { death: { success: 2, failure: 1 } } }
 });
-assert(menu.map(entry => entry.branch || entry.kind).join(",") === "saves,skills,death-save", "Checks opens Saves, Skills, and Death Saves");
+assert(checksMenu.map(entry => entry.branch || entry.kind).join(",") === "saves,skills,death-save", "Checks opens Saves, Skills, and Death Saves");
 const saves = getSavingThrowOptions(actor);
 assert(saves.length === 6 && saves.every(entry => entry.kind === "ability-save"), "saves ring is the six saving throws");
 const skilled = {

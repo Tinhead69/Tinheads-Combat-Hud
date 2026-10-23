@@ -875,10 +875,12 @@
     }
 
     function drawSkills() {
-      drawChecksLeaves(sheet.skills, "skills");
+      const splitAt = Math.ceil(sheet.skills.length / 2);
+      drawChecksLeaves(sheet.skills.slice(splitAt), "skills", RINGS.nest1Inner, RINGS.nest1Outer);
+      drawChecksLeaves(sheet.skills.slice(0, splitAt), "skills", RINGS.nest2Inner, RINGS.nest2Outer);
     }
 
-    function drawChecksLeaves(options, branch) {
+    function drawChecksLeaves(options, branch, inner = RINGS.nest1Inner, outer = RINGS.nest1Outer) {
       let parent = mainSectionById("checks");
       const idx = checksLayout.entries.findIndex(entry => entry.kind === "checks-branch" && entry.branch === branch);
       if (idx >= 0) parent = checksLayout.segs[idx];
@@ -887,7 +889,7 @@
         const seg = segs[i];
         const g = leaf({
           start: seg.start, end: seg.end,
-          inner: RINGS.nest1Inner, outer: RINGS.nest1Outer,
+          inner, outer,
           caption: opt.name,
           img: opt.img,
           proficiency: opt.proficiency

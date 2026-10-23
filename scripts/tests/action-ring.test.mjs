@@ -83,7 +83,7 @@ const dashMatch = findActorBasicAction(actor, dashDef);
 assert(!dashMatch, "bonus-only Dash not used for Action ring");
 
 const basics = getBasicActionOptions(actor);
-assert(basics.length === 4, "four basics");
+assert(basics.length === 5, "five core action options including Ready");
 assert(basics.find(b => b.basicId === "dodge").source !== "module", "dodge from sheet");
 assert(basics.find(b => b.basicId === "dodge").name === "Dodge", "dodge keeps its action name");
 assert(basics.find(b => b.basicId === "dash").source === "module", "dash module fallback");

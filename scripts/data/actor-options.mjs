@@ -279,7 +279,7 @@ const SPELL_ECONOMIES = new Set(["action", "bonus", "reaction"]);
 export function spellEconomy(item) {
   const itemType = String(item?.system?.activation?.type ?? "");
   if (SPELL_ECONOMIES.has(itemType)) return itemType;
-  const cast = getCastActivity(item);
+  const cast = spellActivity(item);
   const activityType = String(
     cast?.activation?.type
     ?? cast?.system?.activation?.type
@@ -297,9 +297,10 @@ export function spellEconomy(item) {
  *
  * @param {Actor} actor
  * @param {"action"|"bonus"|"reaction"} [economy]
- * @returns {{ levels: Array<{ level: number, label: string, slots: string|null, slotHint: string, spells: object[] }>, empty: boolean }}
+ * @returns {{ levels: Array<{ level: number|string, label: string, slots: string|null, slotHint: string, spells: object[] }>, empty: boolean }}
  */
 export function getSpellLevels(actor, economy = "action") {
+  const atwill = [];
   const innate = [];
   const pact = [];
   const byLevel = new Map();
@@ -311,6 +312,10 @@ export function getSpellLevels(actor, economy = "action") {
 
     const spell = spellRingOption(item);
     const method = spellCastingMethod(item);
+    if (isAdditionalSpell(item)) {
+      atwill.push(spell);
+      continue;
+    }
     if (method === "innate") {
       innate.push(spell);
       continue;
@@ -328,6 +333,17 @@ export function getSpellLevels(actor, economy = "action") {
 
   // Innate and Pact Magic are their own wedges. Slot levels follow.
   const levels = [];
+  if (atwill.length) {
+    atwill.sort((a, b) => a.name.localeCompare(b.name));
+    levels.push({
+      id: "atwill",
+      level: "atwill",
+      label: t("SpellLevels.AtWill"),
+      slots: null,
+      slotHint: "",
+      spells: atwill
+    });
+  }
   if (innate.length) {
     innate.sort((a, b) => a.name.localeCompare(b.name));
     levels.push({
@@ -373,7 +389,7 @@ export function getSpellLevels(actor, economy = "action") {
  * @param {Item} item
  */
 function spellRingOption(item) {
-  const cast = getCastActivity(item);
+  const cast = spellActivity(item);
   const available = canAttemptUse(cast, item);
   const level = Number(item.system?.level ?? 0);
   return {
@@ -528,6 +544,26 @@ export function spellCastingMethod(item) {
 }
 
 /**
+ * A spell copied into an actor's spellbook from an item's Cast activity.
+ * dnd5e marks these cached spell documents with `dnd5e.cachedFor` and links
+ * them back to the activity that owns their limited uses.
+ * @param {Item} item
+ * @returns {boolean}
+ */
+export function isAdditionalSpell(item) {
+  const cachedFor = item?.getFlag?.("dnd5e", "cachedFor")
+    ?? item?.flags?.dnd5e?.cachedFor;
+  return !!cachedFor && item?.system?.linkedActivity?.displayInSpellbook !== false;
+}
+
+/** @param {Item} item */
+export function spellActivity(item) {
+  return isAdditionalSpell(item)
+    ? item?.system?.linkedActivity ?? null
+    : getCastActivity(item);
+}
+
+/**
  * dnd5e 5.1 stores casting on `system.method` and preparation on `system.prepared`
  * (0 unprepared, 1 prepared, 2 always). Reading `system.preparation` logs a deprecation warning.
  * Plain objects that still carry the old shape are accepted without touching a live getter
@@ -586,6 +622,9 @@ function spellMethodPrepares(method) {
  */
 export function isSpellAvailableForHud(actor, item) {
   if (!item || item.type !== "spell") return false;
+
+  // Item-granted spellbook copies use their linked Cast activity's uses.
+  if (isAdditionalSpell(item)) return true;
 
   const level = Number(item.system?.level ?? 0);
   const { method, prepared } = spellCastingState(item);
@@ -777,7 +816,7 @@ export function canAttemptUse(activity, item) {
   }
   if (item.type === "spell") {
     const { method, prepared } = spellCastingState(item);
-    if (spellMethodPrepares(method) && prepared <= 0) {
+    if (!isAdditionalSpell(item) && spellMethodPrepares(method) && prepared <= 0) {
       return { ok: false, reason: "Spell is not prepared." };
     }
   }

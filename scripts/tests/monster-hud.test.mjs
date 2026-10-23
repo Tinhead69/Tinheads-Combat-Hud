@@ -304,7 +304,7 @@ assert(resistantReactions[1]?.kind === "legendary-resistance", "legendary resist
 assert(resistantReactions[1]?.usesLabel === "2/3", "legendary resistance shows the uses left");
 assert(resistantReactions[1]?.available === true, "a remaining legendary resistance can be spent");
 assert(
-  resistantReactions.filter(entry => entry.name === "Legendary Resistance").length === 1,
+  resistantReactions.filter(entry => entry.kind === "legendary-resistance").length === 1,
   "the trait is not listed twice"
 );
 assert(

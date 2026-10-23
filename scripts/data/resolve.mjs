@@ -84,9 +84,10 @@ export async function resolveHudOption(option, ctx = {}) {
  * @param {Actor|null} actor
  */
 export function serializeResolveOption(option, actor) {
+  const sourceItem = option.activity?.item ?? option.activity?.parent?.item ?? option.item;
   return {
-    actorUuid: actor?.uuid ?? option.item?.actor?.uuid ?? null,
-    itemUuid: option.item?.uuid ?? null,
+    actorUuid: actor?.uuid ?? sourceItem?.actor?.uuid ?? option.item?.actor?.uuid ?? null,
+    itemUuid: sourceItem?.uuid ?? null,
     activityId: option.activity?.id ?? option.activity?._id ?? null,
     kind: option.kind ?? null,
     basicId: option.basicId ?? null,

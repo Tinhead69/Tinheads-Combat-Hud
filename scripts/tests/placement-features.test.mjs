@@ -65,7 +65,7 @@ assert(VIEWPORT_MARGIN >= 8, "viewport margin defined");
   const checks = contentOuterRadius({
     section: "checks", checksBranch: "skills"
   }, RINGS);
-  assert(checks === RINGS.nest1Outer, "skill nest uses nest1");
+  assert(checks === RINGS.nest2Outer, "split skill rings use nest2 as their outer edge");
   const bonus = contentOuterRadius({ section: "bonus" }, RINGS);
   assert(bonus === RINGS.flatOuter, "bonus options use the same wedge height as Action");
   const bonusNest = contentOuterRadius({ section: "bonus", featureNestId: "font" }, RINGS);

@@ -10,14 +10,15 @@ import {
   canAttemptUse,
   getActivities,
   getActivationType,
-  getCastActivity,
   getDefaultIcon,
+  isAdditionalSpell,
   isSpellAvailableForHud,
   isGenericMidiActivityName,
   itemArtwork,
   optionRequiresTarget,
   sheetItemTooltip,
   spellCastingMethod,
+  spellActivity,
   spellEconomy,
   t
 } from "./actor-options.mjs";
@@ -213,7 +214,7 @@ export function getMonsterSpellGroups(actor, economy = "action") {
     if (!isSpellAvailableForHud(actor, item)) continue;
     const spell = monsterSpellOption(item);
     const method = spellCastingMethod(item);
-    if (method === "atwill") atwill.push(spell);
+    if (isAdditionalSpell(item) || method === "atwill") atwill.push(spell);
     else if (method === "innate") innate.push(spell);
     else if (method === "pact") pact.push(spell);
     else {
@@ -357,7 +358,7 @@ function collectActionFeatures(actor, seen) {
  * @param {Item} item
  */
 function monsterSpellOption(item) {
-  const cast = getCastActivity(item);
+  const cast = spellActivity(item);
   const available = canAttemptUse(cast, item);
   return {
     id: `spell:${item.id}`,
@@ -610,7 +611,8 @@ function isEconomyBlurb(item) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-  return ident === "legendary actions" || ident === "lair actions" || ident === "regional effects";
+  const isBlurb = ident === "legendary actions" || ident === "lair actions" || ident === "regional effects";
+  return isBlurb && getActivities(item).length === 0;
 }
 
 function monsterAttackHub() {
@@ -693,8 +695,9 @@ const LEGENDARY_RESISTANCE_NAMES = new Set([
  */
 function ensureLegendaryResistance(actor, options) {
   if (!monsterHasLegendaryResistance(actor)) return;
-  const existing = options.findIndex(entry => isLegendaryResistanceName(entry.name));
-  if (existing >= 0) options.splice(existing, 1);
+  for (let index = options.length - 1; index >= 0; index -= 1) {
+    if (isLegendaryResistanceName(options[index]?.name)) options.splice(index, 1);
+  }
   const option = monsterLegendaryResistanceOption(actor);
   const afterOpportunity = options.findIndex(entry =>
     entry.kind === "opportunity" || isOpportunityName(entry.name)
