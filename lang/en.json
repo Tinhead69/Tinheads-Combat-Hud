@@ -43,8 +43,10 @@
       "Hint": "Hover for Hide, Dash, and Disengage."
     },
     "Features": {
+      "Label": "Features",
+      "Hint": "Features from this creature.",
       "ClassFeatureHint": "Class feature from your character sheet.",
-      "UsesRemaining": "Uses remaining: {uses}",
+      "UsesRemaining": "Uses remaining: {uses}.",
       "OpenModesHint": "Hover for options (e.g. Channel Divinity modes)."
     },
     "Checks": {
@@ -88,10 +90,6 @@
     "Abilities": {
       "Label": "Abilities",
       "Hint": "Class features from your character sheet."
-    },
-    "Features": {
-      "Label": "Features",
-      "Hint": "Features from this creature."
     },
     "Legendary": {
       "Label": "Legendary",
