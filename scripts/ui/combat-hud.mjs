@@ -53,6 +53,8 @@ import {
 } from "./hud-placement.mjs";
 import { CHROME, spellLevelIcon } from "../data/module-icons.mjs";
 
+import { tooltipText } from "../data/tooltip-text.mjs";
+
 let _clipSeq = 0;
 function nextClipId(prefix = "tch-clip") {
   _clipSeq += 1;
@@ -2158,6 +2160,9 @@ export class CombatHud {
 
   showTooltip(data, _segment, event) {
     if (!this.tooltipEl || !data) return;
+    // Every tooltip source passes through the same plain-text conversion.
+    data = Object.fromEntries(["title", "description", "targets", "range", "duration", "damage"]
+      .map(key => [key, tooltipText(data[key])]));
     const rows = [];
     if (data.description) {
       rows.push(`<p class="tch-tooltip__desc">${escapeHtml(data.description)}</p>`);

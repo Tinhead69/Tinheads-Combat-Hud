@@ -3,6 +3,8 @@
  * Keeps dnd5e data shaping out of the radial UI.
  */
 
+import { tooltipText } from "./tooltip-text.mjs";
+
 const MODULE_ID = "tinheads-combat-hud";
 
 /**
@@ -875,16 +877,11 @@ const DESCRIPTION_LIMIT = 420;
  */
 export function itemDescriptionText(item, activity = null) {
   const useActivity = activity && !isGenericMidiActivityName(activity.name);
-  const fromActivity = useActivity ? plainText(
-    activity?.description?.value
-    ?? (typeof activity?.description === "string" ? activity.description : "")
-    ?? activity?.system?.description?.value
-    ?? ""
-  ) : "";
-  const fromItem = plainText(item?.system?.description?.value ?? item?.system?.description ?? "");
-  const text = fromActivity || fromItem;
-  if (!text) return "";
-  return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT - 1)}…` : text;
+  const fromActivity = useActivity
+    ? tooltipText(activity.description) || tooltipText(activity.system?.description)
+    : "";
+  const text = fromActivity || tooltipText(item?.system?.description);
+  return text.length > DESCRIPTION_LIMIT ? text.slice(0, DESCRIPTION_LIMIT - 1) + "…" : text;
 }
 
 /**
@@ -894,201 +891,19 @@ export function itemDescriptionText(item, activity = null) {
  */
 export function sheetItemTooltip(item, extras = {}) {
   const description = itemDescriptionText(item, extras.activity ?? null);
-  const parts = [extras.note, description, extras.reason].map(part => String(part ?? "").trim()).filter(Boolean);
-  if (!parts.length) parts.push(extras.fallback || t("Tooltip.NoDescription"));
+  const parts = [extras.note, description, extras.reason].map(tooltipText).filter(Boolean);
+  if (!parts.length) parts.push(tooltipText(extras.fallback || t("Tooltip.NoDescription")));
   let title = extras.title || item?.name || "";
   if (isGenericMidiActivityName(title)) title = String(item?.name ?? "").trim() || title;
   const tip = {
-    title,
+    title: tooltipText(title),
     description: parts.join(" ")
   };
-  if (extras.targets != null && extras.targets !== "") tip.targets = extras.targets;
-  if (extras.range != null && extras.range !== "") tip.range = extras.range;
-  if (extras.duration != null && extras.duration !== "") tip.duration = extras.duration;
-  if (extras.damage != null && extras.damage !== "") tip.damage = extras.damage;
+  if (extras.targets != null && extras.targets !== "") tip.targets = tooltipText(extras.targets);
+  if (extras.range != null && extras.range !== "") tip.range = tooltipText(extras.range);
+  if (extras.duration != null && extras.duration !== "") tip.duration = tooltipText(extras.duration);
+  if (extras.damage != null && extras.damage !== "") tip.damage = tooltipText(extras.damage);
   return tip;
-}
-
-function plainText(raw) {
-  if (raw == null || raw === "") return "";
-  const text = typeof raw === "string" ? raw : String(raw?.value ?? raw);
-  const stripped = text
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/p>/gi, " ")
-    .replace(/<[^>]+>/g, " ");
-  return replaceEnrichers(decodeEntities(stripped))
-    .replace(/\s+([,.;:])/g, "$1")
-    .replace(/^[,.;:\s]+/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Foundry text enrichers (&Reference, @UUID, [[/r]]) become the label a player reads.
- * @param {string} text
- * @returns {string}
- */
-function replaceEnrichers(text) {
-  let out = text.replace(
-    /&Reference\[([^\]]*)\](?:\{([^}]*)\})?/gi,
-    (match, config, label, offset, whole) => referenceLabel(config, label, whole.slice(0, offset))
-  );
-  out = out.replace(
-    /@([A-Za-z][\w-]*)\[([^\]]*)\](?:\{([^}]*)\})?/g,
-    (match, type, id, label, offset, whole) => {
-      if (label) return choosePlural(label, whole.slice(0, offset));
-      if (/^(embed|pdf)$/i.test(type)) return "";
-      return readableId(id);
-    }
-  );
-  out = out.replace(/\[\[([\s\S]*?)\]\]/g, (_, body) => inlineRollLabel(body));
-  out = out.replace(
-    /([\p{L}][\p{L}'’-]{0,40}(?: [\p{L}][\p{L}'’-]{0,40}){0,4});([\p{L}][\p{L}'’-]{0,40}(?: [\p{L}][\p{L}'’-]{0,40}){0,4})/gu,
-    (match, singular, plural, offset, whole) => {
-      if (!isPluralPair(singular, plural)) return match;
-      return choosePlural(`${singular};${plural}`, whole.slice(0, offset));
-    }
-  );
-  return out;
-}
-
-/**
- * @param {string} config
- * @param {string|undefined} label
- * @param {string} before
- */
-function referenceLabel(config, label, before) {
-  if (label && String(label).trim()) return choosePlural(label, before);
-  return readableId(config);
-}
-
-/**
- * `{singular;plural}` follows a leading count. One, or no count, uses the singular.
- * @param {string} label
- * @param {string} before
- */
-function choosePlural(label, before) {
-  const parts = String(label).split(";").map(part => part.trim()).filter(Boolean);
-  if (parts.length < 2) return parts[0] || "";
-  const count = precedingCount(before);
-  return count != null && count !== 1 ? parts[1] : parts[0];
-}
-
-function precedingCount(before) {
-  const match = String(before).match(/(\d+)\s*$/);
-  if (!match) return null;
-  const count = Number(match[1]);
-  return Number.isFinite(count) ? count : null;
-}
-
-function isPluralPair(singular, plural) {
-  const one = singular.toLowerCase();
-  const many = plural.toLowerCase();
-  if (one === many) return true;
-  if (many === `${one}s` || many === `${one}es`) return true;
-  if (one.endsWith("y") && many === `${one.slice(0, -1)}ies`) return true;
-  if (one.endsWith("f") && many === `${one.slice(0, -1)}ves`) return true;
-  if (one.endsWith("fe") && many === `${one.slice(0, -2)}ves`) return true;
-  return many.startsWith(one) && many.length - one.length <= 3;
-}
-
-function readableId(id) {
-  const tail = String(id ?? "").split(/[#?]/)[0].split(".").pop() ?? "";
-  if (!tail || /^[a-f0-9]{16,}$/i.test(tail)) return "";
-  return tail.replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
-}
-
-const ROLL_FLAGS = new Set(["average", "extended", "critical"]);
-
-const ABILITY_NAMES = {
-  str: "Strength",
-  dex: "Dexterity",
-  con: "Constitution",
-  int: "Intelligence",
-  wis: "Wisdom",
-  cha: "Charisma"
-};
-
-function inlineRollLabel(body) {
-  let rest = String(body).trim();
-  const kindMatch = rest.match(/^\/([a-z]+)\s*/i);
-  let kind = "";
-  if (kindMatch) {
-    kind = kindMatch[1].toLowerCase();
-    rest = rest.slice(kindMatch[0].length);
-    if (kind === "lookup") return "";
-  }
-  rest = rest.split("#")[0].split("|")[0].trim();
-  rest = rest.replace(/\[([^\]]+)\]/g, " $1");
-  const { formula, config } = splitRollConfig(rest);
-  const dice = humanizeFormula(formula);
-  const type = formatRollType(config.type);
-  if (kind === "damage" || kind === "heal" || type) return [dice, type].filter(Boolean).join(" ");
-  return dice;
-}
-
-/**
- * Dice stay. `type=slashing` becomes the type name. `average=true` and `extended` drop out.
- * @param {string} rest
- * @returns {{ formula: string, config: Record<string, string> }}
- */
-function splitRollConfig(rest) {
-  const formula = [];
-  const config = {};
-  for (const token of String(rest).split(/\s+/).filter(Boolean)) {
-    const eq = token.match(/^([A-Za-z][\w-]*)=(.*)$/);
-    if (eq) {
-      config[eq[1].toLowerCase()] = eq[2];
-      continue;
-    }
-    if (Object.keys(config).length) continue;
-    if (ROLL_FLAGS.has(token.toLowerCase())) continue;
-    formula.push(token);
-  }
-  return { formula: formula.join(" ").trim(), config };
-}
-
-/**
- * @param {string} formula
- * @returns {string}
- */
-function humanizeFormula(formula) {
-  return String(formula)
-    .replace(/@abilities\.([a-z]{3})\.(mod|value|save|dc)/gi, (_, abl, prop) => {
-      const name = ABILITY_NAMES[abl.toLowerCase()] || abl.toUpperCase();
-      const key = prop.toLowerCase();
-      if (key === "mod") return `${name} modifier`;
-      if (key === "save" || key === "dc") return `${name} save`;
-      return name;
-    })
-    .replace(/@mod\b/gi, "ability modifier")
-    .replace(/@prof\b/gi, "proficiency bonus")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * @param {string|undefined} type
- * @returns {string}
- */
-function formatRollType(type) {
-  return String(type ?? "")
-    .split(/[,|]/)
-    .map(part => part.replace(/[-_]+/g, " ").trim())
-    .filter(Boolean)
-    .join(" ");
-}
-
-function decodeEntities(text) {
-  return text
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, "\"")
-    .replace(/&#39;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
 }
 
 function formatTargets(activity, item) {

@@ -2,7 +2,7 @@
 
 Nested radial combat HUD for **Foundry VTT v13** and **dnd5e 3.0.0+**. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.2.5** (`module.json`).
+Current module version: **0.2.6** (`module.json`).
 
 ## What it does
 
@@ -10,6 +10,7 @@ Current module version: **0.2.5** (`module.json`).
 - Main radial: **Action**, **Checks**, **Bonus Action**, **Reaction**
 - Center hub is **End Turn** (`Combat#nextTurn` for the GM or the current combatant's owner). **Esc** or a click outside closes the HUD
 - Draggable HUD. Open nests stay on screen
+- Tooltips show readable sheet text, roll labels and spell details without HTML tags or Foundry enrichment configuration
 - A nest with fewer than ten options uses a half circle. Ten or more use the full circle
 - **socketlib** proxy for absent-player control: an observer can open the HUD, and a connected GM resolves the click
 - Module wedge art for chrome. Weapons, spells, items, and features keep their sheet artwork
