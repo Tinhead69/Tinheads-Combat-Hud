@@ -16,6 +16,7 @@ import {
 } from "./permissions.mjs";
 import { rollAbilityHudOption } from "./ability-checks.mjs";
 import { grantDashMovement } from "./dash-movement.mjs";
+import { grantHelp } from "./help-action.mjs";
 
 /**
  * @param {object} option
@@ -38,7 +39,9 @@ export async function resolveHudOption(option, ctx = {}) {
     ?? option.item?.actor
     ?? null;
 
-  const local = shouldResolveLocally(actor) || canResolveLocally(actor);
+  const helpNeedsGM = option.basicId === "help" && !game.user?.isGM
+    && Array.from(game.user?.targets ?? []).some(token => !token.actor?.isOwner);
+  const local = !helpNeedsGM && (shouldResolveLocally(actor) || canResolveLocally(actor));
 
   if (!local) {
     if (!socketlibModuleActive()) {
@@ -70,7 +73,7 @@ export async function resolveHudOption(option, ctx = {}) {
       return { closed: true, ok: true };
     }
     const used = await useOption(option, actor);
-    if (option.kind === "legendary-resistance" && used === false) return { closed: false, ok: false };
+    if (used === false) return { closed: false, ok: false };
     return { closed: true, ok: true };
   } catch (err) {
     console.error("Tinhead's Combat Hud | resolve failed", err);
@@ -145,11 +148,12 @@ export async function executeResolvePayload(payload, ctx = {}) {
     img: payload.img,
     item,
     activity,
-    actor
+    actor,
+    targetUuids: payload.targetUuids ?? []
   };
 
   const used = await useOption(option, actor);
-  if (option.kind === "legendary-resistance" && used === false) return { ok: false, closed: false };
+  if (used === false) return { ok: false, closed: false };
   return { ok: true, closed: true };
 }
 
@@ -301,6 +305,12 @@ async function useOption(option, actor = null) {
   const { activity, item } = option;
   const resolvedActor = option.actor ?? item?.actor ?? actor ?? null;
 
+  if (option.basicId === "help") {
+    const target = await grantHelp(resolvedActor, option.targetUuids ?? getSelectedTargetUuids());
+    if (!target) return false;
+    return postBasicActionChat({ ...option, actor: resolvedActor, helpTarget: target });
+  }
+
   if (option.basicId === "dash") {
     await grantDashMovement(resolvedActor);
   }
@@ -352,7 +362,9 @@ async function postBasicActionChat(option) {
     ?? { alias: actor?.name || game.user?.name };
 
   const who = actor?.name || speaker.alias || "Character";
-  const line = option.basicId === "ready-other"
+  const line = option.basicId === "help"
+    ? `<strong>${escapeHtml(who)}</strong> helps <strong>${escapeHtml(option.helpTarget?.name)}</strong>, granting advantage on their next skill check.`
+    : option.basicId === "ready-other"
     ? `<strong>${escapeHtml(who)}</strong> readies another action.`
     : option.basicId === "dash"
       ? `<strong>${escapeHtml(who)}</strong> takes the <em>${escapeHtml(name)}</em> action and gains extra movement equal to their speed until the end of this turn.`

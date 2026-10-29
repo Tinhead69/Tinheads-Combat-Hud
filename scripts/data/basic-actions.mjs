@@ -2,8 +2,8 @@
  * Core Action-economy options for the Action sub-radial:
  * Dash, Disengage, Dodge, Help, Ready.
  *
- * Prefer an actor-owned item/activity when present; otherwise module-backed
- * chat announcement (no invented rules automation).
+ * Prefer an actor-owned item/activity when present; otherwise a chat announcement.
+ * Dash and Help also have module-backed effect automation.
  */
 
 import {
@@ -215,6 +215,7 @@ function normalizeName(value) {
 }
 
 function dashTooltip(basicId) {
+  if (basicId === "help") return t("BasicActions.HelpHint");
   if (basicId !== "dash") return "";
   return t("BasicActions.DashHint");
 }

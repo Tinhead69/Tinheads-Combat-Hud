@@ -7,6 +7,7 @@ import { registerSocket } from "./net/socket.mjs";
 import { CombatHud } from "./ui/combat-hud.mjs";
 import { MODULE_ID } from "./data/actor-options.mjs";
 import { socketlibModuleActive } from "./data/permissions.mjs";
+import { registerHelpHooks } from "./data/help-action.mjs";
 
 Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Initializing Tinhead's Combat Hud`);
@@ -33,6 +34,7 @@ Hooks.once("ready", () => {
   }
 
   registerTokenEntry();
+  registerHelpHooks();
 
   game.modules.get(MODULE_ID).api = {
     openForToken: (token) => CombatHud.openForToken(token),

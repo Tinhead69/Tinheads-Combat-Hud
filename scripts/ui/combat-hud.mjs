@@ -148,6 +148,10 @@ export class CombatHud {
    */
   constructor(actor, tokenDoc = null) {
     this.actor = actor;
+    this.keepOpen = false;
+    try {
+      this.keepOpen = globalThis.localStorage?.getItem(this._keepOpenStorageKey()) === "true";
+    } catch (_) { /* Storage may be unavailable. */ }
     this.tokenDoc = tokenDoc;
     this.root = null;
     this.stage = null;
@@ -219,7 +223,7 @@ export class CombatHud {
     const backdrop = document.createElement("div");
     backdrop.className = "tch-backdrop";
     backdrop.addEventListener("pointerdown", () => {
-      if (this._drag?.active) return;
+      if (this._drag?.active || this.keepOpen) return;
       this.close();
     });
     this.root.appendChild(backdrop);
@@ -227,6 +231,26 @@ export class CombatHud {
     this.stage = document.createElement("div");
     this.stage.className = "tch-stage";
     this.root.appendChild(this.stage);
+
+    const controls = document.createElement("div");
+    controls.className = "tch-controls";
+    const label = document.createElement("label");
+    const keepOpen = document.createElement("input");
+    keepOpen.type = "checkbox";
+    keepOpen.checked = this.keepOpen;
+    keepOpen.addEventListener("change", () => this._setKeepOpen(keepOpen.checked));
+    label.append(keepOpen, document.createTextNode(t("Controls.KeepOpen")));
+    label.title = t("Controls.KeepOpenHint");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "tch-close";
+    close.textContent = "×";
+    close.title = t("Controls.Close");
+    close.setAttribute("aria-label", t("Controls.Close"));
+    close.addEventListener("click", () => this.close());
+    controls.append(label, close);
+    this.root.appendChild(controls);
+    this.root.classList.toggle("tch-root--keep-open", this.keepOpen);
 
     this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     this.svg.classList.add("tch-radial");
@@ -278,6 +302,18 @@ export class CombatHud {
     this.root = null;
     this.stage = null;
     if (activeHud === this) activeHud = null;
+  }
+
+  _keepOpenStorageKey() {
+    return `tinheads-combat-hud.keepOpen.${game.world?.id ?? "world"}.${game.user?.id ?? "user"}`;
+  }
+
+  _setKeepOpen(value) {
+    this.keepOpen = !!value;
+    this.root?.classList.toggle("tch-root--keep-open", this.keepOpen);
+    try {
+      globalThis.localStorage?.setItem(this._keepOpenStorageKey(), String(this.keepOpen));
+    } catch (_) { /* Keep working when storage is unavailable. */ }
   }
 
   _onPauseGame(paused) {
@@ -493,7 +529,8 @@ export class CombatHud {
     }
     try {
       await endCombatTurn(this._endTurnSubject());
-      this.close();
+      if (!this.keepOpen) this.close();
+      else if (this.root) this._draw();
     } catch (err) {
       console.error("Tinhead's Combat Hud | end turn failed", err);
       ui.notifications.warn(err?.message || t("EndTurn.Unavailable"));
@@ -2172,8 +2209,8 @@ export class CombatHud {
       return;
     }
     const result = await resolveHudOption(option, { actor: this.actor });
-    if (result.closed) this.close();
-    else this._draw();
+    if (result.closed && !this.keepOpen) this.close();
+    else if (this.root) this._draw();
   }
 
   showTooltip(data, _segment, event) {
