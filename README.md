@@ -2,7 +2,7 @@
 
 Nested radial combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 requires Foundry 14.367 or later. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.3.2** (`module.json`).
+Current module version: **0.3.3** (`module.json`).
 
 ## Supported version
 
@@ -17,6 +17,7 @@ This is a work in progress maintained on `main`. Foundry reads `module.json` fro
 - Main radial: **Action**, **Checks**, **Bonus Action**, **Reaction**
 - Center hub is **End Turn** (`Combat#nextTurn` for the GM or the current combatant's owner). **Esc** or a click outside closes the HUD
 - Draggable HUD. Open nests stay on screen
+- **Keep open** checkbox in the top-right controls keeps the HUD open after actions and End Turn, and allows canvas clicks for targeting. The choice is remembered for this user and world in the current browser. Close with **×** or **Esc**; pausing still closes the HUD.
 - Tooltips show readable sheet text, roll labels and spell details without HTML tags or Foundry enrichment configuration
 - A nest with fewer than ten options uses a half circle. Ten or more use the full circle
 - **socketlib** proxy for absent-player control: an observer can open the HUD, and a connected GM resolves the click
@@ -28,6 +29,7 @@ Hover **Action** for Dodge, Dash, Disengage, Help, Attack, Cast Spell, Ready, Ot
 
 - **Attack** lists equipped weapons and unarmed strike. A weapon with special activities opens **Use Ability**. Spent activities stay on that ring, greyed out, and do not click. A weapon click runs **Midi-QOL** when that module is active, and dnd5e's own attack otherwise.
 - **Dash** adds extra movement equal to each speed the character already has, until the end of the current turn. Cunning Action Dash does the same.
+- **Help** requires exactly one other token with Friendly disposition targeted. It adds a visible Help effect granting advantage on the target's next skill check, from the HUD or sheet. The effect is removed after a completed check; cancelling the roll keeps it. Repeated Help does not stack. Helping an ally you do not own uses the connected GM through socketlib.
 - **Cast Spell** opens spell levels, then the spells prepared at that level.
 - **Ready** can ready an attack, a spell, or another action.
 - **Other** holds mundane and exploration actions from the sheet, including Shove, Grapple, Mount, Fall, Suffocation, Underwater, and Check Cover.
@@ -54,6 +56,8 @@ Version 0.3.1 introduced typed saving-throw messages for Legendary Resistance, f
 
 The 6.0.0 integration has source-derived automated regression coverage. A live Foundry 14 world, including socketlib and Midi-QOL, has not been verified here; the manifest does not claim live Foundry 14 verification.
 
+Version 0.3.3 adds Help for a friendly target's next skill check, a Keep open checkbox, and a close button.
+
 ## Requirements
 
 | Piece | Version |
@@ -75,7 +79,7 @@ A new `module.json` is read when the world is launched. Script and style changes
 | OBSERVER (non-owner) | yes | **socketlib → GM** (`executeAsGM`); GM re-checks OBSERVER+ |
 | Limited / none | no | no |
 
-The GM client must be online for proxy requests. Owners never round-trip.
+The GM client must be online for proxy requests. Owners resolve locally except when Help needs GM permission to apply an effect to an ally they do not own.
 
 ## Install
 

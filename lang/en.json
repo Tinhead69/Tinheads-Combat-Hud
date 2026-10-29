@@ -1,6 +1,11 @@
 {
   "TINHEADS_COMBAT_HUD": {
     "Title": "Tinhead's Combat Hud",
+    "Controls": {
+      "KeepOpen": "Keep open",
+      "KeepOpenHint": "Keep the HUD open after actions and ending your turn. You can still select targets on the canvas.",
+      "Close": "Close Combat Hud"
+    },
     "TokenHUD": {
       "Open": "Combat Hud",
       "Hint": "Open Tinhead's Combat Hud for this token"
@@ -30,6 +35,9 @@
       "Disengage": "Disengage",
       "Dodge": "Dodge",
       "Help": "Help",
+      "HelpHint": "Target one friendly character to grant advantage on their next skill check. The Help effect is removed after that check.",
+      "HelpTarget": "Target exactly one other friendly character to Help.",
+      "HelpCleanupFailed": "The skill check completed, but the Help effect could not be removed. Remove it from the actor's Effects tab.",
       "Ready": "Ready",
       "DashHint": "Gain extra movement equal to your speed until the end of this turn.",
       "Hint": "Core combat action — announces in chat if no matching sheet item.",
