@@ -45,7 +45,7 @@
     }
   ],
   "url": "https://github.com/Tinhead69/Tinheads-Combat-Hud",
-  "manifest": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Combat-Hud/foundry-v14/module.json",
+  "manifest": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Combat-Hud/main/module.json",
   "download": "https://github.com/Tinhead69/Tinheads-Combat-Hud/releases/download/v0.3.1-fvtt14/Tinheads-Combat-Hud-0.3.1.zip",
   "license": "MIT",
   "readme": "https://github.com/Tinhead69/Tinheads-Combat-Hud/blob/foundry-v14/README.md",
