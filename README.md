@@ -2,15 +2,18 @@
 
 Nested radial combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 requires Foundry 14.367 or later. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.3.1** (`module.json`).
+Current module version: **0.3.2** (`module.json`).
 
 ## Supported version
 
-This project supports **Foundry VTT v14 only**, with a minimum version of **14.367** and **dnd5e 6.0.0**. Earlier Foundry versions are no longer supported or maintained.
+This project supports **Foundry VTT v14 only**, with a minimum version of **14.367** and **dnd5e 6.0.0**.
+
+This is a work in progress maintained on `main`. Foundry reads `module.json` from `main` and downloads GitHub's automatically generated archive of that branch. No release package or tag is required.
 
 ## What it does
 
 - Token HUD button labeled **Combat Hud**, plus Actor Directory and Combat Tracker context-menu entries
+- Pausing the game closes the Combat Hud and blocks opening it for players and GMs. Open it again after unpausing.
 - Main radial: **Action**, **Checks**, **Bonus Action**, **Reaction**
 - Center hub is **End Turn** (`Combat#nextTurn` for the GM or the current combatant's owner). **Esc** or a click outside closes the HUD
 - Draggable HUD. Open nests stay on screen
@@ -47,7 +50,7 @@ Hover **Checks** for **Saves**, **Skills**, and **Death Saves**.
 
 ## dnd5e 6.0.0 compatibility
 
-Version 0.3.1 handles typed saving-throw messages for Legendary Resistance, full damage formulas and iterable damage types in tooltips, and Foundry 14 ActiveEffect data for Dash.
+Version 0.3.1 introduced typed saving-throw messages for Legendary Resistance, full damage formulas and iterable damage types in tooltips, and Foundry 14 ActiveEffect data for Dash. Version 0.3.2 also closes the HUD when the game is paused and blocks opening it until the game resumes.
 
 The 6.0.0 integration has source-derived automated regression coverage. A live Foundry 14 world, including socketlib and Midi-QOL, has not been verified here; the manifest does not claim live Foundry 14 verification.
 

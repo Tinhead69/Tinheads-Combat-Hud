@@ -176,6 +176,7 @@ export class CombatHud {
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onActorUpdate = this._onActorUpdate.bind(this);
     this._onCombatUpdate = this._onCombatUpdate.bind(this);
+    this._onPauseGame = this._onPauseGame.bind(this);
   }
 
   /**
@@ -183,6 +184,7 @@ export class CombatHud {
    * @returns {CombatHud|null}
    */
   static openForToken(tokenLike) {
+    if (game.paused) return null;
     const actor = actorFromToken(tokenLike);
     if (!actor || !canUseActor(actor)) {
       ui.notifications.warn(t("Notify.NoActor"));
@@ -196,6 +198,7 @@ export class CombatHud {
    * @param {TokenDocument|null} tokenDoc
    */
   static openForActor(actor, tokenDoc = null) {
+    if (game.paused) return null;
     if (activeHud) activeHud.close();
     const hud = new CombatHud(actor, tokenDoc);
     hud.render();
@@ -208,6 +211,7 @@ export class CombatHud {
   }
 
   render() {
+    if (game.paused) return;
     this.root = document.createElement("div");
     this.root.className = "tch-root";
     this.root.dataset.tchHud = "1";
@@ -247,6 +251,7 @@ export class CombatHud {
     Hooks.on("updateItem", this._onActorUpdate);
     Hooks.on("updateCombat", this._onCombatUpdate);
     Hooks.on("deleteCombat", this._onCombatUpdate);
+    Hooks.on("pauseGame", this._onPauseGame);
 
     const saved = loadHudPosition();
     this.position = saved ? { ...saved } : defaultHudCenter();
@@ -267,11 +272,16 @@ export class CombatHud {
     Hooks.off("updateItem", this._onActorUpdate);
     Hooks.off("updateCombat", this._onCombatUpdate);
     Hooks.off("deleteCombat", this._onCombatUpdate);
+    Hooks.off("pauseGame", this._onPauseGame);
     this.hideTooltip();
     this.root?.remove();
     this.root = null;
     this.stage = null;
     if (activeHud === this) activeHud = null;
+  }
+
+  _onPauseGame(paused) {
+    if (paused) this.close();
   }
 
   _onResize() {
@@ -472,6 +482,10 @@ export class CombatHud {
   }
 
   async _onEndTurnClick() {
+    if (game.paused) {
+      this.close();
+      return;
+    }
     const endTurn = getEndTurnState(this._endTurnSubject());
     if (!endTurn.enabled) {
       ui.notifications.warn(endTurn.reason || t("EndTurn.Unavailable"));
@@ -2153,6 +2167,10 @@ export class CombatHud {
   }
 
   async _onLeafClick(option) {
+    if (game.paused) {
+      this.close();
+      return;
+    }
     const result = await resolveHudOption(option, { actor: this.actor });
     if (result.closed) this.close();
     else this._draw();
