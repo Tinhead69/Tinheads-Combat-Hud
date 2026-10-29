@@ -28,7 +28,7 @@ export function registerTokenEntry() {
 function onRenderTokenHUD(hud, html) {
   const token = hud.object ?? hud.actor?.token ?? null;
   const actor = token?.actor ?? hud.actor ?? null;
-  if (game.paused || !actor || !canUseActor(actor)) return;
+  if (!actor || !canUseActor(actor)) return;
 
   const root = html?.jquery ? html[0] : html;
   if (!root?.querySelector) return;
@@ -65,7 +65,6 @@ function onGetActorContextOptions(_app, menuItems) {
     name: t("TokenHUD.Open"),
     icon: '<i class="fa-solid fa-bullseye"></i>',
     condition: (li) => {
-      if (game.paused) return false;
       const actor = resolveActorFromContext(li, _app);
       return !!actor && canUseActor(actor);
     },
@@ -85,7 +84,6 @@ function onGetCombatantContextOptions(_app, menuItems) {
     name: t("TokenHUD.Open"),
     icon: '<i class="fa-solid fa-bullseye"></i>',
     condition: (li) => {
-      if (game.paused) return false;
       const combatant = resolveCombatantFromContext(li, _app);
       const actor = combatant?.actor;
       return !!actor && canUseActor(actor);
