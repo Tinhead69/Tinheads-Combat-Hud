@@ -3,6 +3,7 @@
     "Title": "Tinhead's Combat Hud",
     "Controls": {
       "KeepOpen": "Keep open",
+      "Drag": "Drag to move HUD controls",
       "KeepOpenHint": "Keep the HUD open after actions and ending your turn. You can still select targets on the canvas.",
       "Close": "Close Combat Hud"
     },

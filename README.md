@@ -2,7 +2,7 @@
 
 Nested radial combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 requires Foundry 14.367 or later. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.3.3** (`module.json`).
+Current module version: **0.3.4** (`module.json`).
 
 ## Supported version
 
@@ -18,6 +18,7 @@ This is a work in progress maintained on `main`. Foundry reads `module.json` fro
 - Center hub is **End Turn** (`Combat#nextTurn` for the GM or the current combatant's owner). **Esc** or a click outside closes the HUD
 - Draggable HUD. Open nests stay on screen
 - **Keep open** checkbox in the top-right controls keeps the HUD open after actions and End Turn, and allows canvas clicks for targeting. The choice is remembered for this user and world in the current browser. Close with **×** or **Esc**; pausing still closes the HUD.
+- Drag the grip beside **Keep open** to move the control bar independently of the radial. Its position is remembered and kept within the window when resized.
 - Tooltips show readable sheet text, roll labels and spell details without HTML tags or Foundry enrichment configuration
 - A nest with fewer than ten options uses a half circle. Ten or more use the full circle
 - **socketlib** proxy for absent-player control: an observer can open the HUD, and a connected GM resolves the click
@@ -57,6 +58,8 @@ Version 0.3.1 introduced typed saving-throw messages for Legendary Resistance, f
 The 6.0.0 integration has source-derived automated regression coverage. A live Foundry 14 world, including socketlib and Midi-QOL, has not been verified here; the manifest does not claim live Foundry 14 verification.
 
 Version 0.3.3 adds Help for a friendly target's next skill check, a Keep open checkbox, and a close button.
+
+Version 0.3.4 makes the Keep open control bar draggable with a remembered position and fixes image sizing in basic-action chat cards.
 
 ## Requirements
 
