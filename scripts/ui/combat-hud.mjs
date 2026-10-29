@@ -234,6 +234,19 @@ export class CombatHud {
 
     const controls = document.createElement("div");
     controls.className = "tch-controls";
+    this.controls = controls;
+    const grip = document.createElement("button");
+    grip.type = "button";
+    grip.className = "tch-controls-grip";
+    grip.textContent = "⠿";
+    grip.title = t("Controls.Drag");
+    grip.setAttribute("aria-label", t("Controls.Drag"));
+    grip.addEventListener("pointerdown", event => {
+      if (event.button === 0) this._beginDragGesture(event, "controls");
+    });
+    controls.addEventListener("pointerdown", event => {
+      if (event.target === controls && event.button === 0) this._beginDragGesture(event, "controls");
+    });
     const label = document.createElement("label");
     const keepOpen = document.createElement("input");
     keepOpen.type = "checkbox";
@@ -248,7 +261,7 @@ export class CombatHud {
     close.title = t("Controls.Close");
     close.setAttribute("aria-label", t("Controls.Close"));
     close.addEventListener("click", () => this.close());
-    controls.append(label, close);
+    controls.append(grip, label, close);
     this.root.appendChild(controls);
     this.root.classList.toggle("tch-root--keep-open", this.keepOpen);
 
@@ -269,6 +282,12 @@ export class CombatHud {
     this.root.appendChild(this.tooltipEl);
 
     document.body.appendChild(this.root);
+    try {
+      const savedControls = JSON.parse(globalThis.localStorage?.getItem(this._controlsStorageKey()) ?? "null");
+      if (Number.isFinite(savedControls?.x) && Number.isFinite(savedControls?.y)) {
+        this._placeControls(savedControls.x, savedControls.y);
+      }
+    } catch (_) { /* Use the default position if storage is unavailable. */ }
     window.addEventListener("keydown", this._onKeyDown);
     window.addEventListener("resize", this._onResize);
     Hooks.on("updateActor", this._onActorUpdate);
@@ -301,11 +320,34 @@ export class CombatHud {
     this.root?.remove();
     this.root = null;
     this.stage = null;
+    this.controls = null;
     if (activeHud === this) activeHud = null;
   }
 
   _keepOpenStorageKey() {
     return `tinheads-combat-hud.keepOpen.${game.world?.id ?? "world"}.${game.user?.id ?? "user"}`;
+  }
+
+  _controlsStorageKey() {
+    return `${this._keepOpenStorageKey()}.controlsPosition`;
+  }
+
+  _placeControls(x, y, persist = false) {
+    if (!this.controls) return;
+    const rect = this.controls.getBoundingClientRect();
+    const margin = 8;
+    const position = {
+      x: Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin)),
+      y: Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin))
+    };
+    Object.assign(this.controls.style, {
+      left: `${position.x}px`, top: `${position.y}px`, right: "auto"
+    });
+    if (persist) {
+      try {
+        globalThis.localStorage?.setItem(this._controlsStorageKey(), JSON.stringify(position));
+      } catch (_) { /* Moving the controls still works without storage. */ }
+    }
   }
 
   _setKeepOpen(value) {
@@ -323,6 +365,8 @@ export class CombatHud {
   _onResize() {
     if (!this.root) return;
     this._clampToViewport(true);
+    const rect = this.controls?.getBoundingClientRect();
+    if (rect) this._placeControls(rect.left, rect.top, true);
   }
 
   _onKeyDown(event) {
@@ -469,7 +513,7 @@ export class CombatHud {
    * Hub / grab-ring drag: movement past DRAG_THRESHOLD_PX relocates the HUD;
    * a click with no drag on the hub fires End Turn.
    * @param {PointerEvent} event
-   * @param {"hub"|"grab"} source
+   * @param {"hub"|"grab"|"controls"} source
    */
   _beginDragGesture(event, source) {
     event.stopPropagation();
@@ -478,7 +522,8 @@ export class CombatHud {
 
     const startX = event.clientX;
     const startY = event.clientY;
-    const origin = { ...this.position };
+    const controlsRect = source === "controls" ? this.controls?.getBoundingClientRect() : null;
+    const origin = controlsRect ? { x: controlsRect.left, y: controlsRect.top } : { ...this.position };
     let dragging = false;
 
     const onMove = (ev) => {
@@ -490,6 +535,10 @@ export class CombatHud {
         this.hideTooltip();
       }
       if (!dragging) return;
+      if (source === "controls") {
+        this._placeControls(origin.x + dx, origin.y + dy);
+        return;
+      }
       this.position = { x: origin.x + dx, y: origin.y + dy };
       this._clampToViewport();
     };
@@ -498,6 +547,11 @@ export class CombatHud {
       const wasDragging = dragging;
       this._endDragListeners();
       if (wasDragging) {
+        if (source === "controls") {
+          const rect = this.controls?.getBoundingClientRect();
+          if (rect) this._placeControls(rect.left, rect.top, true);
+          return;
+        }
         this._clampToViewport(true);
         await saveHudPosition(this.position.x, this.position.y);
         return;
