@@ -69,7 +69,8 @@ export async function resolveHudOption(option, ctx = {}) {
       await rollAbilityHudOption(actor, option);
       return { closed: true, ok: true };
     }
-    await useOption(option, actor);
+    const used = await useOption(option, actor);
+    if (option.kind === "legendary-resistance" && used === false) return { closed: false, ok: false };
     return { closed: true, ok: true };
   } catch (err) {
     console.error("Tinhead's Combat Hud | resolve failed", err);
@@ -147,7 +148,8 @@ export async function executeResolvePayload(payload, ctx = {}) {
     actor
   };
 
-  await useOption(option);
+  const used = await useOption(option, actor);
+  if (option.kind === "legendary-resistance" && used === false) return { ok: false, closed: false };
   return { ok: true, closed: true };
 }
 
@@ -193,14 +195,15 @@ function weaponAttackActivity(option) {
 async function useLegendaryResistance(actor) {
   if (typeof actor?.system?.resistSave !== "function") {
     ui.notifications.warn(t("LegendaryResistance.Unavailable"));
-    return;
+    return false;
   }
   const message = latestFailedSave(actor);
   if (!message) {
     ui.notifications.warn(t("LegendaryResistance.NoFailedSave"));
-    return;
+    return false;
   }
   await actor.system.resistSave(message);
+  return true;
 }
 
 /**
@@ -215,10 +218,18 @@ function latestFailedSave(actor) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (!saveBelongsToActor(message, actor)) continue;
-    const roll = message.getFlag?.("dnd5e", "roll") ?? message.flags?.dnd5e?.roll ?? null;
-    if (roll?.type !== "save" || roll.forceSuccess) continue;
-    const rolls = message.rolls ?? [];
-    if (rolls.some(entry => entry?.isSuccess)) continue;
+    // dnd5e 6 uses typed save cards; earlier versions keep roll metadata in flags.
+    const typed = message.type === "save";
+    // The 6.0 resistance API rejects legacy chat-card types, even after a world upgrade.
+    if (!typed && parseInt(globalThis.game?.system?.version ?? "0", 10) >= 6) continue;
+    const data = typed ? message.system
+      : message.getFlag?.("dnd5e", "roll") ?? message.flags?.dnd5e?.roll;
+    if (!typed && data?.type !== "save") continue;
+    if (data?.resisted || data?.forceSuccess) continue;
+    const rolls = Array.from(message.rolls ?? []);
+    if (rolls.some(entry => entry?.isSuccess === true)) continue;
+    // Unknown outcomes (including unrolled cards and saves without a DC) are not failures.
+    if (!rolls.some(entry => entry?.isFailure === true || entry?.isSuccess === false)) continue;
     return message;
   }
   return null;

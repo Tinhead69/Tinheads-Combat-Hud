@@ -37,17 +37,40 @@ export async function grantDashMovement(actor) {
   const changes = dashMovementChanges(actor?.system?.attributes?.movement);
   if (!changes.length || typeof actor?.createEmbeddedDocuments !== "function") return changes;
 
+  const modern = Number(globalThis.game?.release?.generation
+    ?? parseInt(globalThis.game?.version ?? "0", 10)) >= 14;
+  const effect = {
+    name: t("BasicActions.Dash"),
+    img: moduleIcon("dash"),
+    transfer: false,
+    flags: { "tinheads-combat-hud": { dash: true } }
+  };
+  if (modern) {
+    const combat = globalThis.game?.combat?.started ? game.combat : null;
+    const documentClass = globalThis.CONFIG?.ActiveEffect?.documentClass
+      ?? globalThis.ActiveEffect?.implementation ?? globalThis.ActiveEffect;
+    Object.assign(effect, {
+      type: "base",
+      system: { changes, origin: { actor: actor.uuid ?? null } },
+      start: typeof documentClass?.getEffectStart === "function"
+        ? documentClass.getEffectStart(combat)
+        : {
+          time: globalThis.game?.time?.worldTime ?? 0,
+          combat: combat?.id ?? null,
+          combatant: combat?.combatant?.id ?? null,
+          initiative: combat?.combatant?.initiative ?? null,
+          round: combat?.round ?? null,
+          turn: combat?.turn ?? null
+        },
+      // Eligible immediately, but expires only at the end-of-turn event.
+      duration: combat ? { value: 0, units: "turns", expiry: "turnEnd" }
+        : { value: 6, units: "seconds", expiry: null }
+    });
+  } else {
+    Object.assign(effect, { origin: actor.uuid ?? null, changes, duration: dashDuration() });
+  }
   try {
-    await actor.createEmbeddedDocuments("ActiveEffect", [{
-      name: t("BasicActions.Dash"),
-      img: moduleIcon("dash"),
-      origin: actor.uuid ?? null,
-      duration: dashDuration(),
-      changes,
-      flags: {
-        "tinheads-combat-hud": { dash: true }
-      }
-    }]);
+    await actor.createEmbeddedDocuments("ActiveEffect", [effect]);
   } catch (err) {
     console.error("Tinhead's Combat Hud | dash movement failed", err);
   }

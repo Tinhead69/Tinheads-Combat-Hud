@@ -962,12 +962,10 @@ function formatDamage(activity, item) {
         const [formula, type] = part;
         parts.push(type ? `${formula} ${type}` : String(formula));
       } else if (part && typeof part === "object") {
-        const formula = part.custom?.formula
-          || (part.number != null && part.denomination != null ? `${part.number}d${part.denomination}` : part.formula)
-          || "";
-        const types = Array.isArray(part.types)
+        const formula = damagePartFormula(part);
+        const types = part.types && typeof part.types !== "string" && typeof part.types[Symbol.iterator] === "function"
           ? Array.from(part.types).join(", ")
-          : (part.type ?? "");
+          : (part.type ?? (typeof part.types === "string" ? part.types : ""));
         if (formula) parts.push(types ? `${formula} ${types}` : formula);
       }
     }
@@ -981,6 +979,19 @@ function formatDamage(activity, item) {
   }
 
   return parts.length ? parts.join(" + ") : null;
+}
+
+/** Prefer the live dnd5e damage model so bonuses and dice modifiers are preserved. */
+function damagePartFormula(part) {
+  if (typeof part.formula === "string") return part.formula;
+  if (part.custom?.enabled !== false && part.custom?.formula) return part.custom.formula;
+  if (part.custom?.enabled === true) return "";
+  let dice = Number(part.number) > 0 && Number(part.denomination) > 0
+    ? String(part.number) + "d" + String(part.denomination) : "";
+  if (dice && part.modifiers && typeof part.modifiers !== "string" && typeof part.modifiers[Symbol.iterator] === "function") {
+    dice += Array.from(part.modifiers).join("");
+  }
+  return [dice, part.bonus].filter(value => value != null && value !== "").join(" + ");
 }
 
 export { MODULE_ID };
