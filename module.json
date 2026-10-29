@@ -2,10 +2,10 @@
   "id": "tinheads-combat-hud",
   "title": "Tinhead's Combat Hud",
   "description": "Nested radial combat HUD for dnd5e. Open from a token to pick Action, Bonus Action, Reaction, or Checks and resolve through the system. Supports socketlib proxy for absent-player control.",
-  "version": "0.2.7",
+  "version": "0.3.2",
   "compatibility": {
-    "minimum": "13",
-    "verified": "13.351"
+    "minimum": "14.367",
+    "maximum": "14"
   },
   "relationships": {
     "systems": [
@@ -13,7 +13,7 @@
         "id": "dnd5e",
         "type": "system",
         "compatibility": {
-          "minimum": "3.0.0"
+          "minimum": "6.0.0"
         }
       }
     ],
@@ -44,17 +44,25 @@
       "name": "Tinhead"
     }
   ],
- "url": "https://github.com/Tinhead69/Tinheads-Combat-Hud",
-  "manifest": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Combat-Hud/main/module.json",
-  "download": "https://github.com/Tinhead69/Tinheads-Combat-Hud/archive/refs/heads/main.zip",
+  "url": "https://github.com/Tinhead69/Tinheads-Combat-Hud",
+  "manifest": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Combat-Hud/foundry-v14/module.json",
+  "download": "https://github.com/Tinhead69/Tinheads-Combat-Hud/releases/download/v0.3.2-fvtt14/Tinheads-Combat-Hud-0.3.2.zip",
   "license": "MIT",
-  "readme": "https://github.com/Tinhead69/Tinheads-Combat-Hud/blob/main/README.md",
+  "readme": "https://github.com/Tinhead69/Tinheads-Combat-Hud/blob/foundry-v14/README.md",
   "bugs": "https://github.com/Tinhead69/Tinheads-Combat-Hud/issues",
   "flags": {
     "hotReload": {
-      "extensions": ["css", "html", "hbs", "json"],
-      "paths": ["styles", "lang", "templates"]
-
+      "extensions": [
+        "css",
+        "html",
+        "hbs",
+        "json"
+      ],
+      "paths": [
+        "styles",
+        "lang",
+        "templates"
+      ]
     }
   }
 }

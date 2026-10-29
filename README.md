@@ -1,12 +1,20 @@
 # Tinhead's Combat Hud
 
-Nested radial combat HUD for **Foundry VTT v13** and **dnd5e 3.0.0+**. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
+Nested radial combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 requires Foundry 14.367 or later. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.2.7** (`module.json`).
+Current module version: **0.3.2** (`module.json`).
+
+## Release lines
+
+- **Foundry v13:** versions **0.2.x**, maintained on `foundry-v13`.
+- **Foundry v14:** versions **0.3.1 onward**, maintained on `foundry-v14`.
+
+The v14 manifest follows the `foundry-v14` update URL and downloads a fixed, tagged GitHub release. These URLs become available when the branch and release assets are published.
 
 ## What it does
 
 - Token HUD button labeled **Combat Hud**, plus Actor Directory and Combat Tracker context-menu entries
+- Pausing the game closes the Combat Hud and blocks opening it for players and GMs. Open it again after unpausing.
 - Main radial: **Action**, **Checks**, **Bonus Action**, **Reaction**
 - Center hub is **End Turn** (`Combat#nextTurn` for the GM or the current combatant's owner). **Esc** or a click outside closes the HUD
 - Draggable HUD. Open nests stay on screen
@@ -41,12 +49,18 @@ Hover **Checks** for **Saves**, **Skills**, and **Death Saves**.
 - **Skills** lists every skill across two rings: the second half is on the inner ring and the first half is on the outer ring. A proficient skill has a silver outline. Expertise is filled gold.
 - **Death Saves** rolls a death saving throw. The tooltip shows successes and failures out of 3.
 
+## dnd5e 6.0.0 compatibility
+
+Version 0.3.1 handles typed saving-throw messages for Legendary Resistance, full damage formulas and iterable damage types in tooltips, and Foundry 14 ActiveEffect data for Dash. This release belongs to the Foundry 14 release line. Foundry 13 releases remain on the 0.2.x line.
+
+The 6.0.0 integration has source-derived automated regression coverage. A live Foundry 14 world, including socketlib and Midi-QOL, has not been verified here; the manifest does not claim live Foundry 14 verification.
+
 ## Requirements
 
 | Piece | Version |
 |---|---|
-| Foundry VTT | **13** (verified against **13.351**) |
-| Game system | **dnd5e** ≥ **3.0.0** |
+| Foundry VTT | **14.367 or later within v14** |
+| Game system | **dnd5e** ≥ **6.0.0** |
 | Module | **socketlib** (required) |
 
 Activities (`activity.use()`) are used when the item has them (dnd5e 4.x and later). On 3.x items without activities, the module falls back to `Item#use()`.
