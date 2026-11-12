@@ -4,7 +4,7 @@
  */
 
 export const VIEWPORT_MARGIN = 14;
-/** Movement past this (px) before hub pointerdown becomes a drag, not End Turn. */
+/** Movement past this distance starts dragging. */
 export const DRAG_THRESHOLD_PX = 6;
 
 const STORAGE_KEY = "tinheads-combat-hud:hud-center";
@@ -50,7 +50,7 @@ export function contentOuterRadius(state, rings) {
  * @param {number} x
  * @param {number} y
  * @param {number} radius
- * @param {{ width?: number, height?: number, margin?: number }} [opts]
+ * @param {{ width?: number, height?: number, margin?: number, topClearance?: number }} [opts]
  */
 export function clampHudCenter(x, y, radius, opts = {}) {
   const margin = opts.margin ?? VIEWPORT_MARGIN;
@@ -60,8 +60,8 @@ export function clampHudCenter(x, y, radius, opts = {}) {
   // If the radial is wider than the viewport, pin to center on that axis.
   const minX = pad;
   const maxX = width - pad;
-  const minY = pad;
   const maxY = height - pad;
+  const minY = pad + Math.min(opts.topClearance ?? 0, Math.max(0, maxY - pad));
   return {
     x: minX > maxX ? width / 2 : Math.min(maxX, Math.max(minX, x)),
     y: minY > maxY ? height / 2 : Math.min(maxY, Math.max(minY, y))

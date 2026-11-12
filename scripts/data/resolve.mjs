@@ -17,6 +17,7 @@ import {
 import { rollAbilityHudOption } from "./ability-checks.mjs";
 import { grantDashMovement } from "./dash-movement.mjs";
 import { grantHelp } from "./help-action.mjs";
+import { castWarCasterSpell } from "./war-caster.mjs";
 
 /**
  * @param {object} option
@@ -31,6 +32,11 @@ export async function resolveHudOption(option, ctx = {}) {
 
   if (option.available === false) {
     ui.notifications.warn(option.reason || t("Notify.Unavailable"));
+    return { closed: false, ok: false };
+  }
+
+  if (option.kind === "war-caster-spell" && getSelectedTargetUuids().length !== 1) {
+    ui.notifications.warn(t("Opportunity.WarCasterTarget"));
     return { closed: false, ok: false };
   }
 
@@ -323,6 +329,8 @@ async function useOption(option, actor = null) {
   if (option.kind === "legendary-resistance") {
     return useLegendaryResistance(resolvedActor);
   }
+
+  if (option.kind === "war-caster-spell") return castWarCasterSpell(option, resolvedActor);
 
   if (isWeaponAttackOption(option)) {
     return useWeaponAttack(option);

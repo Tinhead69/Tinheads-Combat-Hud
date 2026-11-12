@@ -1,0 +1,189 @@
+# Tinhead's Combat Hud
+
+This is a nested radial Combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 and requires Foundry 14.367 or later. It allows players or the DM to see all the actor or NPC actions, reactions, bonus actions and skill checks in an easy to view manner and without having to open the character sheet everytime.  Clicking of a function on the radial hud, hands off any rolls to either midi-qol or the inbuilt functions of foundry.
+
+It is not accessible when the game is paused.
+
+When installed, it places a target icon on the bottom left when you right click the targeting icon to the lower right of the character icon
+
+![Icon_location](Screenshots/Hud-start-icon.png)
+
+Clicking the icon opens the basic combat hud up on the screen which can be dragged around to a more appropriate space on your screen; it will remember this location the netx time it is opened.  There is also a small window that starts in the top right of the screen which allows you to toggle whether the hud stays open all the time or closes after any function has been activated.  This can also be dragged to a more appropriate position..
+
+![Hud_Open](Screenshots/Hud-open.png)
+
+
+## Using the Hud 
+
+Once the hud is open and on the screen, moving over any of the wedges will show different functions that can be carried out as either an action/bonus action/reaction of check.  These are reliant on the relevant functions being set up correctly on the character sheet as it filters them by their action types.
+
+### Actions 
+
+![Hud_Action](Screenshots/Hud-action.png)
+
+Under the Action wedge you will find all things that can be carried out as an action.  These include **Attack**, **Cast Spell, **Use items**, **Dodge**, **Disengage** etc.  Moving over the relevant wedge may open up a further radial depending on whether there are a choice of options available within that action.  For example, **Attack** should show any equipped weapons, allowing you to attack with them; **Cast Spells** will show the spell levels and number of spell slots (if any available to you), moving onto a spell level opens up available spells in that level.  Hovering over the spell will provide a tool tip for that spell.
+
+![Cast_Spell_Action](Screenshots/cast-spell-radial-info.png)
+
+Clicking the action will offload it to Foundry or Midi-Qol to complete the task and generate any rolls.
+
+**Abilities** shows items that you may be able to do as part of your class, such as channel divinity, Lay on Hands or Recover Sorcery Points.  Again these rely on them being set up correctly on the character sheet.
+
+If you have no abilities under this tab, a message pops up saying 'No Feature Options".
+
+**Ready** allows you to prepare an action for use later in the turn.  Selecting the action you wish to take will generate a chat card to notify all what your action is.  A window will then pop up for the player who can complete the action when the trigger for their action occurs.  Should the combat tracker move to a new round then the ready action will expire and any resources will be consumed.
+
+
+
+## Supported version
+
+This project supports **Foundry VTT v14 only**, with a minimum version of **14.367** and **dnd5e 6.0.0**.
+
+This is a work in progress maintained on `main`. Foundry reads `module.json` from `main` and downloads GitHub's automatically generated archive of that branch. No release package or tag is required.
+
+## What it does
+
+- Token HUD button labeled **Combat Hud**, plus Actor Directory and Combat Tracker context-menu entries
+- Pausing the game closes the Combat Hud and blocks opening it for players and GMs. Open it again after unpausing.
+- Main radial: **Action**, **Checks**, **Bonus Action**, **Reaction**
+- Center hub is **End Turn** (`Combat#nextTurn` for the GM or the current combatant's owner). **Esc** or a click outside closes the HUD
+- Draggable HUD. Open nests stay on screen
+- **Keep open** checkbox in the top-right controls keeps the HUD open after actions and End Turn, and allows canvas clicks for targeting. The choice is remembered for this user and world in the current browser. Close with **×** or **Esc**; pausing still closes the HUD.
+- Drag the grip beside **Keep open** to move the control bar independently of the radial. Its position is remembered and kept within the window when resized.
+- Tooltips show readable sheet text, roll labels and spell details without HTML tags or Foundry enrichment configuration
+- A nest with fewer than ten options uses a half circle. Ten or more use the full circle
+- **socketlib** proxy for absent-player control: an observer can open the HUD, and a connected GM resolves the click
+- Module wedge art for chrome. Weapons, spells, items, and features keep their sheet artwork
+
+### Action
+
+Hover **Action** for Dodge, Dash, Disengage, Help, Attack, Cast Spell, Ready, Other, Abilities, and Use Item.
+
+- **Attack** lists equipped weapons and unarmed strike. A weapon with special activities opens **Use Ability**. Spent activities stay on that ring, greyed out, and do not click. A weapon click runs **Midi-QOL** when that module is active, and dnd5e's own attack otherwise.
+- **Dash** adds extra movement equal to each speed the character already has, until the end of the current turn. Cunning Action Dash does the same.
+- **Help** requires exactly one other token with Friendly disposition targeted. It adds a visible Help effect granting advantage on the target's next skill check, from the HUD or sheet. The effect is removed after a completed check; cancelling the roll keeps it. Repeated Help does not stack. Helping an ally you do not own uses the connected GM through socketlib.
+- **Cast Spell** opens spell levels, then the spells prepared at that level.
+- **Ready** can ready an attack, a spell, or another action.
+- **Other** holds mundane and exploration actions from the sheet, including Shove, Grapple, Mount, Fall, Suffocation, Underwater, and Check Cover.
+- **Abilities** holds class features whose activation cost is an action. Channel Divinity and Metamagic are one button each; the nest lists that feature's action options. Rest-only recovery stays off the ring.
+- **Use Item** lists consumables you use as an action. With more than ten of them, potions share a **Potions** wedge and spell scrolls share a **Spell Scrolls** wedge.
+
+### Bonus Action and Reaction
+
+Each ring lists activities with that activation cost. Bonus Action always offers Cast Spell and Use Item. Reaction offers Attack of Opportunity, and Cast Spell when the character has reaction spells.
+
+A rogue with Cunning Action gets Hide, Dash, and Disengage on the bonus ring. Hide makes a Stealth check.
+
+### Checks
+
+Hover **Checks** for **Saves**, **Skills**, and **Death Saves**.
+
+- **Saves** lists the six saving throws.
+- **Skills** lists every skill across two rings: the second half is on the inner ring and the first half is on the outer ring. A proficient skill has a silver outline. Expertise is filled gold.
+- **Death Saves** rolls a death saving throw. The tooltip shows successes and failures out of 3.
+
+## dnd5e 6.0.0 compatibility
+
+Version 0.3.1 introduced typed saving-throw messages for Legendary Resistance, full damage formulas and iterable damage types in tooltips, and Foundry 14 ActiveEffect data for Dash. Version 0.3.2 also closes the HUD when the game is paused and blocks opening it until the game resumes.
+
+The module manifest marks Foundry VTT v14 as verified. The dnd5e 6.0.0 integration also has source-derived automated regression coverage.
+
+Version 0.3.3 adds Help for a friendly target's next skill check, a Keep open checkbox, and a close button.
+
+Version 0.3.4 makes the Keep open control bar draggable with a remembered position and fixes image sizing in basic-action chat cards.
+
+Version 0.3.5 aligns the Attack wedge with its weapon, supplies the governing ability for skill rolls, and fixes GM proxy authorization and Midi-QOL targeting. Legendary Resistance matches unlinked NPC saves to the exact token and scene, and Dash grants movement after successful use.
+
+## Requirements
+
+| Piece | Version |
+|---|---|
+| Foundry VTT | **14.367 or later within v14** |
+| Game system | **dnd5e** ≥ **6.0.0** |
+| Module | **socketlib** (required) |
+
+Activities (`activity.use()`) are used when the item has them (dnd5e 4.x and later). On 3.x items without activities, the module falls back to `Item#use()`.
+
+A new `module.json` is read when the world is launched. Script and style changes apply on refresh (F5).
+
+### Absent-player / proxy (socketlib)
+
+| Role | Open HUD | Resolve / End Turn |
+|---|---|---|
+| GM | yes | **local** |
+| OWNER | yes | **local** |
+| OBSERVER (non-owner) | yes | **socketlib → GM** (`executeAsGM`); GM re-checks OBSERVER+ |
+| Limited / none | no | no |
+
+The GM client must be online for proxy requests. Owners resolve locally except when Help needs GM permission to apply an effect to an ally they do not own.
+
+## Install
+
+1. Copy this repository into your Foundry user data modules directory. The folder name must match the package id:
+
+   ```text
+   {User Data}/Data/modules/tinheads-combat-hud/
+   ```
+
+   Typical locations:
+
+   - **Windows:** `%localappdata%\FoundryVTT\Data\modules\`
+   - **macOS:** `~/Library/Application Support/FoundryVTT/Data/modules/`
+   - **Linux:** `~/.local/share/FoundryVTT/Data/modules/`
+
+2. Restart Foundry, or refresh the setup screen, so it rescans modules.
+3. In the world, open **Game Settings → Manage Modules** and enable **Tinhead's Combat Hud**.
+4. Confirm the world is using the **dnd5e** system.
+
+### Dev symlink (optional)
+
+```bash
+ln -s /absolute/path/to/this/repo "${FOUNDRY_DATA}/Data/modules/tinheads-combat-hud"
+```
+
+## How to use
+
+1. Select a token you own, or any token as GM.
+2. **Right-click** the token to open the Token HUD.
+3. Click the bullseye control, **Combat Hud**.
+4. Hover a main wedge, then a nested wedge, then click the action you want.
+5. Click the center hub to end the turn when it is that token's turn.
+6. Click outside, or press **Esc**, to close without ending the turn.
+
+Equip a weapon on the dnd5e inventory tab to put it on **Attack**. Unequipped weapons stay off the ring.
+
+### Macro / API
+
+```js
+const token = canvas.tokens.controlled[0];
+game.modules.get("tinheads-combat-hud").api.openForToken(token);
+```
+
+`openForActor` and `close` are on the same `api` object.
+
+## UI preview
+
+Foundry is not required to look at the radial. From the repo root:
+
+```bash
+python3 -m http.server 8765
+```
+
+Then open `http://127.0.0.1:8765/preview/radial-preview.html`. The preview uses the demo actor and the same list builders. It does not roll dice.
+
+## Project layout
+
+```text
+module.json
+lang/en.json
+styles/combat-hud.css
+assets/icons/                 # chrome icons
+assets/wedges/                # wedge fills
+scripts/
+  module.js                   # entry
+  hooks/token-entry.mjs       # Token HUD and context menus
+  data/                       # ring contents, rolls, and resolve
+  ui/combat-hud.mjs           # radial HUD
+  ui/radial-geometry.mjs      # wedge paths
+preview/radial-preview.html
+```

@@ -21,6 +21,7 @@ const {
   isMonsterActor
 } = await import("../data/monster-hud.mjs");
 const { getChecksMenuOptions } = await import("../data/ability-checks.mjs");
+const { CombatHud } = await import("../ui/combat-hud.mjs");
 
 let passed = 0;
 function assert(cond, msg) {
@@ -492,5 +493,43 @@ assert(
   !getMonsterAttackOptions(bonusCaster, "action").some(entry => entry.kind === "cast"),
   "bonus spells do not add Cast Spell to the action ring"
 );
+
+const counterspell = {
+  id: "counterspell", name: "Counterspell", type: "spell", isOwner: true,
+  system: { level: 3, method: "spell", prepared: 1,
+    activities: [{ id: "counter", type: "save", activation: { type: "reaction" } }] }
+};
+const reactionCaster = {
+  type: "npc",
+  system: { details: { cr: 2 }, spells: { spell3: { value: 1, max: 1 } } },
+  items: [...bonusCaster.items, counterspell]
+};
+const reactionCast = getMonsterAttackOptions(reactionCaster, "reaction").find(entry => entry.kind === "cast");
+assert(reactionCast?.economy === "reaction", "monster Reaction has a Cast Spell wedge for reaction spells");
+assert(!getMonsterAttackOptions(bonusCaster, "reaction").some(entry => entry.kind === "cast"),
+  "bonus spells do not add Cast Spell to Reaction");
+
+{
+  const hud = new CombatHud(reactionCaster);
+  hud.state.section = "reaction";
+  const wedges = new Map();
+  hud.svg = { replaceChildren() { wedges.clear(); }, appendChild() {} };
+  hud._circle = hud._drawGrabRing = hud._drawMainRing = hud._drawHub = () => {};
+  hud._ringGroup = () => ({ appendChild() {} });
+  hud._leafSegment = data => {
+    const events = {};
+    wedges.set(data.caption, events);
+    return { addEventListener(name, handler) { events[name] = handler; } };
+  };
+  hud._drawMonsterOpportunityNest = () => {};
+  hud._draw();
+  wedges.get(reactionCast.name).pointerenter({});
+  assert(wedges.has("Counterspell") && !wedges.has("Misty Step"),
+    "hovering Cast Spell renders Counterspell and excludes bonus spells");
+  const opportunity = getMonsterAttackOptions(reactionCaster, "reaction").find(entry => entry.kind === "opportunity");
+  wedges.get(opportunity.name).pointerenter({});
+  assert(hud.state.opportunityOpen && !wedges.has("Counterspell"),
+    "opening Attack of Opportunity closes the reaction spell nest");
+}
 
 console.log(`\n${passed} assertions passed`);

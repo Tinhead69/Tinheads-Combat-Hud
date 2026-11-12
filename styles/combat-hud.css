@@ -114,6 +114,33 @@
   pointer-events: none;
 }
 
+.tch-end-turn {
+  position: absolute;
+  left: 0;
+  transform: translateX(-50%);
+  z-index: 1;
+  width: max-content;
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 1px solid var(--tch-stroke-soft);
+  border-radius: 6px;
+  background: rgba(18, 22, 28, 0.92);
+  color: var(--tch-label);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tch-end-turn:not([aria-disabled="true"]):hover {
+  background: rgba(45, 55, 68, 0.96);
+}
+
+.tch-end-turn[aria-disabled="true"] {
+  color: var(--tch-muted);
+  cursor: not-allowed;
+}
+
 .tch-root--keep-open .tch-backdrop {
   background: transparent;
   pointer-events: none;
@@ -424,6 +451,17 @@
   stroke: rgba(210, 226, 242, 0.7);
 }
 
+.tch-segment--has-art.tch-segment--main[data-custom-colour] .tch-segment__fill {
+  fill: color-mix(in srgb, var(--tch-main-wedge-colour) 76%, transparent);
+  stroke: color-mix(in srgb, var(--tch-main-wedge-colour) 55%, white);
+}
+
+.tch-segment--has-art.tch-segment--main[data-custom-colour]:hover .tch-segment__fill,
+.tch-segment--has-art.tch-segment--main[data-custom-colour].tch-segment--active .tch-segment__fill {
+  fill: color-mix(in srgb, var(--tch-main-wedge-colour) 92%, transparent);
+  stroke: color-mix(in srgb, var(--tch-main-wedge-colour) 35%, white);
+}
+
 .tch-economy--action .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--action.tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-action-nest-art);
@@ -632,11 +670,6 @@
   fill: rgba(28, 34, 44, 0.58);
 }
 
-.tch-hub--disabled .tch-hub__art {
-  opacity: 0.28;
-  filter: grayscale(0.55);
-}
-
 .tch-hub__disk {
   fill: rgba(12, 14, 18, 0.62);
   stroke: var(--tch-stroke);
@@ -646,51 +679,6 @@
 
 .tch-hub:hover .tch-hub__disk {
   fill: rgba(28, 34, 44, 0.82);
-}
-
-.tch-hub--disabled {
-  cursor: not-allowed;
-}
-
-.tch-hub--disabled .tch-hub__disk {
-  fill: rgba(10, 12, 16, 0.35);
-  stroke: rgba(235, 238, 242, 0.35);
-}
-
-.tch-hub--disabled:hover .tch-hub__disk {
-  fill: rgba(10, 12, 16, 0.4);
-}
-
-.tch-hub__icon {
-  pointer-events: none;
-  opacity: 0.95;
-}
-
-.tch-hub__label {
-  fill: var(--tch-label);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  pointer-events: none;
-  paint-order: stroke;
-  stroke: rgba(0, 0, 0, 0.55);
-  stroke-width: 2px;
-}
-
-.tch-hub__sub {
-  fill: var(--tch-muted);
-  font-size: 8px;
-  font-weight: 600;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  pointer-events: none;
-}
-
-.tch-hub--disabled .tch-hub__label,
-.tch-hub--disabled .tch-hub__sub {
-  fill: rgba(160, 168, 178, 0.55);
 }
 
 .tch-ring-empty {

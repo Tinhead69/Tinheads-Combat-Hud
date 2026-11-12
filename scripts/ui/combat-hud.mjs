@@ -30,6 +30,8 @@ import {
 import { getSpecialWeaponOptions } from "../data/weapon-abilities.mjs";
 import { getMonsterAttackNestOptions, getMonsterAttackOptions, getMonsterFeatureOptions, getMonsterLegendaryOptions, getMonsterOpportunityAttacks, getMonsterSpellGroups, isMonsterActor } from "../data/monster-hud.mjs";
 import { resolveHudOption } from "../data/resolve.mjs";
+import { readyHudOption } from "../data/ready-action.mjs";
+import { getWarCasterSpellOptions } from "../data/war-caster.mjs";
 import {
   centerArcOnIndex,
   mainSectionAngles,
@@ -42,9 +44,11 @@ import {
 } from "./radial-geometry.mjs";
 import { appendHubArt, appendWedgeArt } from "./wedge-art.mjs";
 import { applyIconPalette } from "./icon-color.mjs";
+import { applyMainWedgeColour } from "./wedge-colours.mjs";
 import { appendWedgeText, wedgeTextLayout } from "./wedge-text.mjs";
 import {
   DRAG_THRESHOLD_PX,
+  VIEWPORT_MARGIN,
   clampHudCenter,
   contentOuterRadius,
   defaultHudCenter,
@@ -69,6 +73,7 @@ function nextClipId(prefix = "tch-clip") {
 export const SIZE = 760;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
+const END_TURN_GAP = 10;
 /** How long the open ring stays up after the pointer slips off it. */
 const COLLAPSE_DELAY_MS = 500;
 /** Radial thickness of every wedge, main sections included. */
@@ -214,6 +219,10 @@ export class CombatHud {
     if (activeHud) activeHud.close();
   }
 
+  static refreshMainWedgeColours() {
+    activeHud?.svg?.querySelectorAll(".tch-segment--main[data-section]").forEach(applyMainWedgeColour);
+  }
+
   render() {
     if (game.paused) return;
     this.root = document.createElement("div");
@@ -275,6 +284,7 @@ export class CombatHud {
       if (!this.tooltipEl?.hidden) this._positionTooltip(ev);
     });
     this.stage.appendChild(this.svg);
+    this._renderEndTurnButton();
 
     this.tooltipEl = document.createElement("div");
     this.tooltipEl.className = "tch-tooltip";
@@ -320,6 +330,7 @@ export class CombatHud {
     this.root?.remove();
     this.root = null;
     this.stage = null;
+    this.endTurnButton = null;
     this.controls = null;
     if (activeHud === this) activeHud = null;
   }
@@ -402,6 +413,7 @@ export class CombatHud {
     this._drawGrabRing();
     this._drawMainRing();
     this._drawHub();
+    this.endTurnButton?.setAttribute("aria-disabled", String(!getEndTurnState(this._endTurnSubject()).enabled));
 
     if (isMonsterActor(this.actor) && (this.state.section === "action" || this.state.section === "bonus" || this.state.section === "reaction")) {
       if (this.state.section !== "action") {
@@ -409,16 +421,12 @@ export class CombatHud {
         this.state.abilitiesOpen = false;
         this.state.legendaryOpen = false;
       }
-      if (this.state.section !== "action" && this.state.section !== "bonus") {
-        this.state.castSpell = false;
-        this.state.spellLevel = null;
-      }
       if (this.state.section !== "reaction") this.state.opportunityOpen = false;
       this._drawMonsterAttackRing(this.state.section);
       if (this.state.section === "action" && this.state.attackOpen) {
         this._drawMonsterAttackNest();
       }
-      if ((this.state.section === "action" || this.state.section === "bonus") && this.state.castSpell) {
+      if (this.state.castSpell) {
         this._drawMonsterSpellNest();
       }
       if (this.state.section === "action" && this.state.abilitiesOpen) {
@@ -490,13 +498,19 @@ export class CombatHud {
 
   _clampToViewport(persist = false) {
     const radius = contentOuterRadius(this.state, RINGS);
-    const next = clampHudCenter(this.position.x, this.position.y, radius);
+    const buttonHeight = this.endTurnButton?.offsetHeight ?? 0;
+    const topClearance = buttonHeight ? buttonHeight + END_TURN_GAP : 0;
+    const next = clampHudCenter(this.position.x, this.position.y, radius, { topClearance });
     if (next.x !== this.position.x || next.y !== this.position.y) {
       this.position = next;
       this._applyStagePosition();
       if (persist) void saveHudPosition(next.x, next.y);
     } else {
       this._applyStagePosition();
+    }
+    if (this.endTurnButton) {
+      const available = next.y - buttonHeight - VIEWPORT_MARGIN;
+      this.endTurnButton.style.bottom = `${Math.max(0, Math.min(radius + END_TURN_GAP, available))}px`;
     }
   }
 
@@ -510,10 +524,9 @@ export class CombatHud {
   }
 
   /**
-   * Hub / grab-ring drag: movement past DRAG_THRESHOLD_PX relocates the HUD;
-   * a click with no drag on the hub fires End Turn.
+   * Drag the radial or the separate Keep open controls.
    * @param {PointerEvent} event
-   * @param {"hub"|"grab"|"controls"} source
+   * @param {"grab"|"controls"} source
    */
   _beginDragGesture(event, source) {
     event.stopPropagation();
@@ -556,7 +569,6 @@ export class CombatHud {
         await saveHudPosition(this.position.x, this.position.y);
         return;
       }
-      if (source === "hub") await this._onEndTurnClick();
     };
 
     this._drag = { active: false, onMove, onUp };
@@ -776,24 +788,33 @@ export class CombatHud {
     return this.tokenDoc ?? this.actor ?? null;
   }
 
-  _drawHub() {
-    const endTurn = getEndTurnState(this._endTurnSubject());
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    g.classList.add("tch-hub", "tch-hub--has-art");
-    if (!endTurn.enabled) g.classList.add("tch-hub--disabled");
-
-    // Click = End Turn; drag past threshold = move HUD (see _beginDragGesture).
-    g.addEventListener("pointerdown", (e) => this._beginDragGesture(e, "hub"));
-    g.addEventListener("pointerenter", () => {
-      this._scheduleCollapse(null);
+  _renderEndTurnButton() {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tch-end-turn";
+    button.textContent = t("EndTurn.Label");
+    button.addEventListener("click", () => this._onEndTurnClick());
+    button.addEventListener("pointerenter", event => {
+      this._clearCollapse();
+      const endTurn = getEndTurnState(this._endTurnSubject());
       this.showTooltip({
         title: t("EndTurn.Label"),
-        description: endTurn.enabled
-          ? `${t("EndTurn.Hint")} ${t("Drag.HubHint")}`
-          : (endTurn.reason || t("EndTurn.Unavailable"))
-      }, g);
+        description: endTurn.enabled ? t("EndTurn.Hint") : (endTurn.reason || t("EndTurn.Unavailable"))
+      }, button, event);
     });
-    g.addEventListener("pointerleave", () => this.hideTooltip());
+    button.addEventListener("pointerleave", () => {
+      this.hideTooltip();
+      this._scheduleCollapse(null);
+    });
+    this.endTurnButton = button;
+    this.stage.appendChild(button);
+  }
+
+  _drawHub() {
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.classList.add("tch-hub", "tch-hub--has-art");
+    g.setAttribute("aria-label", t("Drag.Handle"));
+    g.addEventListener("pointerdown", event => this._beginDragGesture(event, "grab"));
 
     // Art under disk tint (circular clip).
     appendHubArt(g, {
@@ -811,21 +832,6 @@ export class CombatHud {
     disk.setAttribute("r", String(RINGS.hub));
     g.appendChild(disk);
 
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.classList.add("tch-hub__label");
-    label.setAttribute("x", String(CX));
-    label.setAttribute("y", String(CY + 2));
-    label.textContent = t("EndTurn.Label");
-    g.appendChild(label);
-
-    const sub = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    sub.classList.add("tch-hub__sub");
-    sub.setAttribute("x", String(CX));
-    sub.setAttribute("y", String(CY + 14));
-    sub.textContent = endTurn.enabled ? t("EndTurn.Sub") : "—";
-    g.appendChild(sub);
-
-    g.setAttribute("aria-label", t("EndTurn.Label"));
     this.svg.appendChild(g);
   }
 
@@ -870,6 +876,7 @@ export class CombatHud {
       if (this.state.section === section.id) g.classList.add("tch-segment--active");
       g.dataset.section = section.id;
       g.dataset.economy = section.id;
+      applyMainWedgeColour(g);
 
       const d = sectionWedgePath(
         CX, CY, RINGS.mainInner, RINGS.mainOuter, ang.start, ang.end
@@ -999,6 +1006,8 @@ export class CombatHud {
         if (isOpportunity) {
           if (!this.state.opportunityOpen) {
             this.state.opportunityOpen = true;
+            this.state.castSpell = false;
+            this.state.spellLevel = null;
             this.state.weaponNestId = null;
             this._draw();
           }
@@ -1025,6 +1034,7 @@ export class CombatHud {
         } else if (isCast) {
           if (!this.state.castSpell || this.state.attackOpen || this.state.abilitiesOpen || this.state.legendaryOpen) {
             this.state.castSpell = true;
+            this.state.opportunityOpen = false;
             this.state.spellEconomy = opt.economy || "action";
             this.state.spellLevel = null;
             this.state.attackOpen = false;
@@ -1152,7 +1162,7 @@ export class CombatHud {
    */
   _drawMonsterSpellNest() {
     const groups = getMonsterSpellGroups(this.actor, this.state.spellEconomy || "action");
-    const parent = this._layout?.castSeg ?? mainSectionById(this.state.section === "bonus" ? "bonus" : "action");
+    const parent = this._layout?.castSeg ?? mainSectionById(this.state.spellEconomy || "action");
     if (!groups.length) return;
     if (groups.length === 1) {
       this._drawMonsterSpellList(groups[0].spells, parent, RINGS.nest1Inner, RINGS.nest1Outer, "level");
@@ -1269,7 +1279,7 @@ export class CombatHud {
    * Opportunity attacks use the monster's action attacks.
    */
   _drawMonsterOpportunityNest() {
-    const entries = getMonsterOpportunityAttacks(this.actor);
+    const entries = [...getMonsterOpportunityAttacks(this.actor), ...getWarCasterSpellOptions(this.actor)];
     this._drawChoiceRing(entries, {
       depth: 2,
       parent: this._layout?.opportunitySeg ?? mainSectionById("reaction"),
@@ -1351,6 +1361,7 @@ export class CombatHud {
 
   _drawOpportunityNest() {
     const entries = getAttackNestEntries(this.actor, getEquippedWeapons(this.actor));
+    entries.push(...getWarCasterSpellOptions(this.actor));
     this._drawChoiceRing(entries, {
       depth: 2,
       parent: this._layout?.opportunitySeg ?? mainSectionById("reaction"),
@@ -2265,6 +2276,16 @@ export class CombatHud {
       this.close();
       return;
     }
+    if (this.state.readyOpen) {
+      const root = this.root;
+      if (root) root.hidden = true;
+      try {
+        if (await readyHudOption(option, this.actor, this.tokenDoc) && !this.keepOpen && this.root) this.close();
+      } finally {
+        if (this.root === root && root) root.hidden = false;
+      }
+      return;
+    }
     const result = await resolveHudOption(option, { actor: this.actor });
     if (result.closed && !this.keepOpen) this.close();
     else if (this.root) this._draw();
@@ -2403,6 +2424,7 @@ function usesSheetIcon(kind) {
   return kind === "weapon"
     || kind === "weapon-attack"
     || kind === "weapon-ability"
+    || kind === "war-caster-spell"
     || kind === "inventory";
 }
 

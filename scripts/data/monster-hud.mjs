@@ -111,6 +111,7 @@ export function getMonsterAttackOptions(actor, activation) {
   if (wanted === "reaction") {
     ensureOpportunityAttack(options);
     ensureLegendaryResistance(actor, options);
+    if (monsterOffersCastSpell(actor, "reaction")) options.push(monsterCastHub("reaction"));
   }
   return options;
 }

@@ -8,8 +8,11 @@ import { CombatHud } from "./ui/combat-hud.mjs";
 import { MODULE_ID } from "./data/actor-options.mjs";
 import { socketlibModuleActive } from "./data/permissions.mjs";
 import { registerHelpHooks } from "./data/help-action.mjs";
+import { registerReadyHooks } from "./data/ready-action.mjs";
+import { registerMainWedgeColours } from "./ui/wedge-colours.mjs";
 
 Hooks.once("init", () => {
+  registerMainWedgeColours(() => CombatHud.refreshMainWedgeColours());
   console.log(`${MODULE_ID} | Initializing Tinhead's Combat Hud`);
 });
 
@@ -35,6 +38,7 @@ Hooks.once("ready", () => {
 
   registerTokenEntry();
   registerHelpHooks();
+  registerReadyHooks();
 
   game.modules.get(MODULE_ID).api = {
     openForToken: (token) => CombatHud.openForToken(token),
