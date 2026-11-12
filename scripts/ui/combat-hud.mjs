@@ -521,8 +521,9 @@ export class CombatHud {
    * Drag the radial or the separate Keep open controls.
    * @param {PointerEvent} event
    * @param {"grab"|"controls"} source
+   * @param {Function} [onDragStart]
    */
-  _beginDragGesture(event, source) {
+  _beginDragGesture(event, source, onDragStart) {
     event.stopPropagation();
     event.preventDefault();
     this._endDragListeners();
@@ -538,6 +539,7 @@ export class CombatHud {
       const dy = ev.clientY - startY;
       if (!dragging && Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
         dragging = true;
+        onDragStart?.();
         this.root?.classList.add("tch-root--dragging");
         this.hideTooltip();
       }
@@ -787,7 +789,16 @@ export class CombatHud {
     button.type = "button";
     button.className = "tch-end-turn";
     button.textContent = t("EndTurn.Label");
-    button.addEventListener("click", () => this._onEndTurnClick());
+    let dragged = false;
+    button.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      dragged = false;
+      button.setPointerCapture(event.pointerId);
+      this._beginDragGesture(event, "grab", () => { dragged = true; });
+    });
+    button.addEventListener("click", event => {
+      if (event.detail === 0 || !dragged) void this._onEndTurnClick();
+    });
     button.addEventListener("pointerenter", () => {
       this._clearCollapse();
       const endTurn = getEndTurnState(this._endTurnSubject());
