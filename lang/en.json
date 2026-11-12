@@ -1,6 +1,10 @@
 {
   "TINHEADS_COMBAT_HUD": {
     "Title": "Tinhead's Combat Hud",
+    "Settings": {
+      "WedgeColour": "{section} wedge colour",
+      "WedgeColourHint": "Choose the colour of this main HUD wedge for your user."
+    },
     "Controls": {
       "KeepOpen": "Keep open",
       "Drag": "Drag to move HUD controls",
@@ -70,6 +74,7 @@
       "Proficient": "Proficient",
       "Expertise": "Expertise",
       "SkillHint": "Roll this skill.",
+      "NoSkillAbility": "No governing ability is configured for {skill}.",
       "AbilityHint": "Roll using the dnd5e ability helpers.",
       "Mod": "Check mod {mod}",
       "SaveMod": "Save mod {mod}"
@@ -83,7 +88,29 @@
     },
     "Opportunity": {
       "Label": "Attack of Opportunity",
-      "Hint": "Make a melee attack as a reaction when a creature leaves your reach."
+      "Hint": "Make a melee attack as a reaction when a creature leaves your reach.",
+      "WarCasterSpell": "{spell} (War Caster)",
+      "WarCasterTarget": "Target only the creature that provoked the opportunity attack."
+    },
+    "ReadyAction": {
+      "YourTurn": "Declare a Ready action on this character's turn in active combat.",
+      "OwnerOnly": "The actor's owner or the GM can declare and release a Ready action.",
+      "AlreadyDeclared": "This character has already declared a Ready action this turn.",
+      "Unsupported": "The selected activity is unavailable or does not support Ready.",
+      "ActionName": "Action to hold",
+      "ActionNameRequired": "Enter the name of the action you want to hold.",
+      "Trigger": "Trigger",
+      "SpendHint": "Any required spell slot or limited use is spent when you hold the action.",
+      "Hold": "Hold action",
+      "Cancel": "Cancel",
+      "Open": "Holding a Ready action",
+      "Holding": "{actor} is holding {action}.",
+      "ExpiryHint": "Select targets and release the action when the trigger occurs. It expires when combat advances to the next round.",
+      "Release": "Release action",
+      "Held": "Held",
+      "Releasing": "Releasing",
+      "Completed": "Completed",
+      "Expired": "Expended (trigger not met)"
     },
     "ReadyNest": {
       "Hint": "Choose the action you are readying.",
@@ -169,7 +196,6 @@
     },
     "EndTurn": {
       "Label": "End Turn",
-      "Sub": "next",
       "Hint": "End this token's turn. Only the active combatant can advance the tracker.",
       "NoCombat": "No active combat.",
       "NoCombatant": "No current combatant.",
@@ -178,8 +204,7 @@
     },
     "Drag": {
       "Handle": "Move Hud",
-      "Hint": "Drag this ring to reposition the combat hud.",
-      "HubHint": "Drag to move; click to end turn."
+      "Hint": "Drag the centre or its surrounding ring to move the HUD."
     },
     "Proxy": {
       "SocketlibMissing": "Enable the socketlib module for proxy resolve (absent-player control). Owners and GMs can still resolve locally.",
