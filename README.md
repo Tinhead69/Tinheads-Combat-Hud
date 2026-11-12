@@ -87,7 +87,7 @@ In the centre of the Hud is the End Turn button.  This only works if you are the
 
 The individual colours of the hud can be amended within the game settings menu.  These are retained between game sessions.
 
-![Game_settings](hud-colours.png)
+![Game_settings](Screenshots/hud-colours.png)
 
 ## Supported version 
 
