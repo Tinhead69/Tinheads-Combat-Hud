@@ -1,21 +1,22 @@
-# Tinhead's Combat Hud
+# Tinhead's Combat HUD
 
-This is a nested radial Combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 and requires Foundry 14.367 or later. It allows players or the DM to see all the actor or NPC actions, reactions, bonus actions and skill checks in an easy to view manner and without having to open the character sheet every time.  Clicking of a function on the Combat Hud, hands off any rolls to either midi-qol or the inbuilt functions of foundry.
+This is a nested radial Combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 and requires Foundry 14.367 or later. It lets players or the DM view all actor or NPC actions, reactions, bonus actions, and skill checks in an easy-to-view way, without opening the character sheet every time.  Clicking a function on the Combat Hud, hands off any rolls to either Midi-QOL or the inbuilt functions of Foundry.
 
 It is not accessible when the game is paused.
 
-When installed, it places a target icon on the bottom left when you right click the targeting icon to the lower right of the character icon
+When installed, it places a target icon with a sword on the bottom left when you right-click the targeting icon to the lower right of the character icon
 
 ![Icon_location](Screenshots/Hud-start-icon.png)
 
-Clicking the icon opens the basic combat Hud up on the screen which can be dragged around by holding the left mouse button on the **End Turn** button and moving it to a more appropriate space on your screen; it will remember this location the next time it is opened.  There is also a small window that starts in the top right of the screen which allows you to toggle whether the Hud stays open all the time or closes after any function has been activated.  This can also be dragged to a more appropriate position..
+Clicking the icon opens the basic combat HUD, which you can drag around by holding the left mouse button on the **End Turn** button and moving it to a more appropriate spot on your screen; it will remember this location the next time you open it.  A small window also starts in the top right of the screen, letting you toggle whether the HUD stays open all the time or closes after any function is activated.  This can also be dragged to a more appropriate position..
 
 ![Hud_Open](Screenshots/hud-open.png)
 
+All images the HUD uses are taken from the source, whether that is the compendium or world items.
 
-## Using the Hud 
+## Using the HUD 
 
-Once the Hud is open and on the screen, moving over any of the wedges will show different functions that can be carried out as either an **Action**, **Bonus Action**, **Reaction** or **Checks**.  These are reliant on the relevant functions being set up correctly on the character sheet as it filters them by their action types.
+Once the HUD is open and on the screen, moving over any of the wedges will show different functions that can be carried out as either an **Action**, **Bonus Action**, **Reaction** or **Checks**.  These are reliant on the relevant functions being set up correctly on the character sheet as it filters them by their action types.
 
 ### Actions 
 
