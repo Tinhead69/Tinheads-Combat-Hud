@@ -18,7 +18,7 @@ export async function readyHudOption(option, actor, token) {
   if (declarations.has(key) || Array.from(game.messages).some(message => {
     const ready = message.getFlag(MODULE_ID, "readyAction");
     return ready?.combatId === combat.id && ready.combatantId === combatant.id
-      && ready.round === combat.round && ready.turn === combat.turn;
+      && (ready.state === "held" || ready.state === "releasing") && !readyExpired(ready, combat);
   })) return warn(t("ReadyAction.AlreadyDeclared"));
 
   declarations.add(key);
@@ -103,10 +103,12 @@ async function promptDeclaration(manual) {
   });
 }
 
-// Readied actions are available only during the round in which they were held.
+// Compare with the combatant's current initiative position so skipped turns expire too.
 export function readyExpired(ready, combat) {
   if (!combat?.started || combat.id !== ready.combatId) return true;
-  return combat.round > ready.round || !combat.turns.some(entry => entry.id === ready.combatantId);
+  const nextTurn = combat.turns.findIndex(entry => entry.id === ready.combatantId);
+  if (nextTurn === -1 || combat.round > ready.round + 1) return true;
+  return combat.round > ready.round && Number.isInteger(combat.turn) && combat.turn >= nextTurn;
 }
 
 function readyCard(ready) {
@@ -121,9 +123,12 @@ function readyCard(ready) {
 }
 
 function setReadyState(message, ready, state) {
+  const flagUpdate = state === "completed" || state === "expired"
+    ? { [`flags.${MODULE_ID}.-=readyAction`]: null }
+    : { [`flags.${MODULE_ID}.readyAction.state`]: state };
   return message.update({
     content: readyCard({ ...ready, state }),
-    [`flags.${MODULE_ID}.readyAction.state`]: state
+    ...flagUpdate
   });
 }
 
