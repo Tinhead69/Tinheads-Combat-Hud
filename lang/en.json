@@ -2,7 +2,10 @@
   "TINHEADS_COMBAT_HUD": {
     "Title": "Tinhead's Combat Hud",
     "Settings": {
-      "WedgeColour": "{section} wedge colour",
+      "actionColour": "Action wedge colour",
+      "bonusActionColour": "Bonus Action wedge colour",
+      "reactionColour": "Reaction wedge colour",
+      "checksColour": "Checks wedge colour",
       "WedgeColourHint": "Choose the colour of this main HUD wedge for your user."
     },
     "Controls": {
