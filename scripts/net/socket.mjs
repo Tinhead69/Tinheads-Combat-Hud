@@ -55,10 +55,7 @@ export function shouldResolveLocally(actor) {
  */
 export async function requestRemoteResolve(payload) {
   ensureSocketOrThrow();
-  return socket.executeAsGM(SOCKET_HANDLERS.resolve, {
-    ...payload,
-    requesterId: game.user.id
-  });
+  return socket.executeAsGM(SOCKET_HANDLERS.resolve, payload);
 }
 
 /**
@@ -69,7 +66,6 @@ export async function requestRemoteEndTurn(payload = {}) {
   ensureSocketOrThrow();
   return socket.executeAsGM(SOCKET_HANDLERS.endTurn, {
     ...payload,
-    requesterId: game.user.id,
     combatUuid: game.combat?.uuid ?? null
   });
 }
@@ -86,11 +82,10 @@ function ensureSocketOrThrow() {
  * @param {object} payload
  */
 async function onRemoteResolve(payload) {
-  const requester = game.users.get(payload?.requesterId);
-  const actor = await resolveActorUuid(payload?.actorUuid);
-  assertRequesterMayProxy(requester, actor);
-
   try {
+    const requester = game.users.get(this?.socketdata?.userId);
+    const actor = await resolveActorUuid(payload?.actorUuid);
+    assertRequesterMayProxy(requester, actor);
     const { executeResolvePayload } = await import("../data/resolve.mjs");
     const result = await executeResolvePayload(payload, { actor, requester });
     return { ok: !!result?.ok, closed: result?.closed !== false };
@@ -105,10 +100,13 @@ async function onRemoteResolve(payload) {
  * @param {object} payload
  */
 async function onRemoteEndTurn(payload) {
-  const requester = game.users.get(payload?.requesterId);
+  const requester = game.users.get(this?.socketdata?.userId);
   const combat = game.combat;
   if (!combat) {
     return { ok: false, error: t("EndTurn.NoCombat") };
+  }
+  if (payload?.combatUuid !== combat.uuid) {
+    return { ok: false, error: t("EndTurn.Unavailable") };
   }
   const combatant = combat.combatant;
   const actor = combatant?.actor ?? null;
@@ -132,13 +130,10 @@ async function onRemoteEndTurn(payload) {
  * @param {Actor|null} actor
  */
 export function assertRequesterMayProxy(requester, actor) {
-  if (!requester) {
+  if (!requester || !actor) {
     throw new Error(t("Proxy.Unauthorized"));
   }
   if (requester.isGM) return true;
-  if (!actor) {
-    throw new Error(t("Proxy.Unauthorized"));
-  }
   if (!userHasObserver(actor, requester)) {
     throw new Error(t("Proxy.Unauthorized"));
   }

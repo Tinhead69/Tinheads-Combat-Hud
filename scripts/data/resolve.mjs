@@ -129,6 +129,9 @@ export async function executeResolvePayload(payload, ctx = {}) {
   const item = payload.itemUuid && typeof fromUuid === "function"
     ? await fromUuid(payload.itemUuid)
     : null;
+  if (payload.itemUuid && (item?.documentName !== "Item" || !actor.uuid || item.actor?.uuid !== actor.uuid)) {
+    throw new Error(t("Proxy.Unauthorized"));
+  }
 
   let activity = null;
   if (item && payload.activityId) {
@@ -140,6 +143,8 @@ export async function executeResolvePayload(payload, ctx = {}) {
       ) ?? null;
     }
   }
+
+  if (payload.activityId && !activity) throw new Error(t("Notify.Unavailable"));
 
   const option = {
     kind: payload.kind,
@@ -245,11 +250,15 @@ function latestFailedSave(actor) {
  * @returns {boolean}
  */
 function saveBelongsToActor(message, actor) {
-  const actorId = actor?.id;
-  if (!actorId) return false;
-  if (message.speaker?.actor === actorId) return true;
   const associated = message.getAssociatedActor?.();
-  return associated?.id === actorId;
+  const token = actor?.token?.document ?? actor?.token;
+  if (token) {
+    const speaker = message.speaker;
+    if (speaker?.token) return speaker.token === token.id && speaker.scene === token.parent?.id;
+    return associated === actor || (!!actor.uuid && associated?.uuid === actor.uuid);
+  }
+  if (associated?.uuid && actor?.uuid) return associated.uuid === actor.uuid;
+  return !!actor?.id && (message.speaker?.actor === actor.id || associated?.id === actor.id);
 }
 
 function midiQolActive() {
@@ -266,9 +275,9 @@ async function useWeaponAttack(option) {
   const activity = weaponAttackActivity(option);
 
   if (midiQolActive() && activity && typeof globalThis.MidiQOL?.completeActivityUse === "function") {
-    const usage = {};
-    const targetUuids = getSelectedTargetUuids();
-    if (targetUuids.length) usage.midiOptions = { targetUuids };
+    const targetUuids = option.targetUuids ?? getSelectedTargetUuids();
+    const usage = { midiOptions: { targetUuids } };
+    if (option.targetUuids != null) usage.midiOptions.ignoreUserTargets = true;
     return globalThis.MidiQOL.completeActivityUse(
       activity,
       usage,
@@ -311,10 +320,6 @@ async function useOption(option, actor = null) {
     return postBasicActionChat({ ...option, actor: resolvedActor, helpTarget: target });
   }
 
-  if (option.basicId === "dash") {
-    await grantDashMovement(resolvedActor);
-  }
-
   if (option.kind === "legendary-resistance") {
     return useLegendaryResistance(resolvedActor);
   }
@@ -323,26 +328,30 @@ async function useOption(option, actor = null) {
     return useWeaponAttack(option);
   }
 
-  if (activity && typeof activity.use === "function") {
-    return activity.use(
+  const dash = option.basicId === "dash";
+  let used;
+  if (typeof activity?.use === "function") {
+    used = await activity.use(
       { configure: true },
       { configure: true },
       { create: true }
     );
-  }
-
-  if (item && typeof item.use === "function") {
-    return item.use({}, { configure: true }, { create: true });
-  }
-
-  if (option.kind === "basic") {
+  } else if (typeof item?.use === "function") {
+    used = await item.use({}, { configure: true }, { create: true });
+  } else if (option.kind === "basic") {
+    if (dash) await grantDashMovement(resolvedActor);
     return postBasicActionChat({
       ...option,
       actor: resolvedActor
     });
+  } else {
+    throw new Error("No usable activity or item.use() on option");
   }
-
-  throw new Error("No usable activity or item.use() on option");
+  if (dash) {
+    if (!used) return false;
+    await grantDashMovement(resolvedActor);
+  }
+  return used;
 }
 
 /**

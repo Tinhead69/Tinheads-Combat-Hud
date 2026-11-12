@@ -34,6 +34,7 @@ const { getActionFeatureOptions, getClassFeatureOptions, getOtherActionOptions, 
 const { buildActionRingEntries, getAttackNestEntries } = await import("../data/basic-actions.mjs");
 const { mainSectionAngles } = await import("../ui/radial-geometry.mjs");
 const { dashMovementChanges } = await import("../data/dash-movement.mjs");
+const { CombatHud } = await import("../ui/combat-hud.mjs");
 
 let passed = 0;
 function assert(cond, msg) {
@@ -90,6 +91,27 @@ assert(menu[0].kind === "weapon-attack", "first is attack");
 assert(menu[1].kind === "weapon-use-ability", "second is use ability");
 const modes = getWeaponAbilityOptions(wave);
 assert(modes.length === 2, "two cube modes");
+
+{
+  const hud = new CombatHud({});
+  hud.state.section = "action";
+  hud.state.weaponNestId = wave.id;
+  const weaponSegment = { start: -24, end: -4 };
+  hud._layout = { attackEntries: [wave], attackSegs: [weaponSegment], attackDepth: 2 };
+  const wedges = [];
+  hud._ringGroup = () => ({ appendChild() {} });
+  hud.svg = { appendChild() {} };
+  hud._leafSegment = data => {
+    wedges.push(data);
+    return { addEventListener() {} };
+  };
+  hud._drawSpecialWeaponRing();
+  const [left, attack, right] = wedges;
+  assert(attack?.caption === menu[0].name && Math.abs((attack.start + attack.end) / 2 + 14) < 0.01,
+    "special weapon Attack is centered directly outside the weapon wedge");
+  assert(left?.caption === modes[0].name && right?.caption === modes[1].name,
+    "special abilities retain their order around Attack");
+}
 
 const hazirawn = enrichWeaponOption({
   id: "hazirawn",

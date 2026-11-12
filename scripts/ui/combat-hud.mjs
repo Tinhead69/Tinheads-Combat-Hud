@@ -1369,12 +1369,15 @@ export class CombatHud {
     if (!weapon) return;
     const parent = segs[idx] ?? this._parentSeg("attack");
     const onReaction = this.state.section === "reaction";
-    const options = getSpecialWeaponOptions(weapon);
+    const [attack, ...options] = getSpecialWeaponOptions(weapon);
+    // Keep the abilities in order around the Attack wedge.
+    if (attack) options.splice(Math.floor(options.length / 2), 0, attack);
     this._drawChoiceRing(options, {
       depth: (this._layout?.attackDepth ?? 2) + 1,
       parent,
       source: "weapon",
       groupName: "weapon-special",
+      centerOnId: "weapon-attack",
       band: onReaction ? { inner: RINGS.flatSpellInner, outer: RINGS.flatSpellOuter } : undefined
     });
   }

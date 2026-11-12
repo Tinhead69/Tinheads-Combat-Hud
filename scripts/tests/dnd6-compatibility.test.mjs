@@ -27,7 +27,20 @@ await check('ability checks, saves, skills and death saves use the 6.0 argument 
   await rollAbilityHudOption(actor, { kind: 'ability-save', abilityId: 'dex' });
   await rollAbilityHudOption(actor, { kind: 'skill-check', skillId: 'ste' });
   await rollAbilityHudOption(actor, { kind: 'death-save' });
-  assert.deepEqual(calls, [['rollAbilityCheck',{ability:'str'}],['rollSavingThrow',{ability:'dex'}],['rollSkill',{skill:'ste'}],['rollDeathSave',{}]]);
+  assert.deepEqual(calls, [['rollAbilityCheck',{ability:'str'}],['rollSavingThrow',{ability:'dex'}],['rollSkill',{skill:'ste',ability:'dex'}],['rollDeathSave',{}]]);
+});
+await check('NPC skill rolls send a valid governing ability when skill data is incomplete', async () => {
+  CONFIG.DND5E.skills = { prc: { ability: 'wis' } };
+  const calls = [];
+  const actor = { type: 'npc', system: { skills: { prc: { ability: '' }, ath: { ability: 'dex' } } },
+    rollSkill: config => calls.push(config) };
+  try {
+    await executeResolvePayload({ kind: 'skill-check', skillId: 'prc' }, { actor });
+    await rollAbilityHudOption(actor, { kind: 'skill-check', skillId: 'ath' });
+    assert.deepEqual(calls, [{ skill: 'prc', ability: 'wis' }, { skill: 'ath', ability: 'dex' }]);
+  } finally {
+    delete CONFIG.DND5E.skills;
+  }
 });
 await check('activity use retains its three configuration arguments', async () => {
   let configs;
@@ -75,6 +88,17 @@ await check('typed saves skip resisted, successful, unknown, unrolled and other-
   await resolveHudOption({kind:'legendary-resistance',actor,available:true});
   assert.deepEqual(selected,['eligible']);
 });
+await check('Legendary Resistance uses the exact token and scene for an unlinked NPC', async () => {
+  const selected = [];
+  const actor = { ...resistanceActor(selected), token: { id: 'first', parent: { id: 'scene' } } };
+  game.messages.contents = [
+    saveMessage('own', { speaker: { actor: 'dragon', token: 'first', scene: 'scene' } }),
+    saveMessage('other-token', { speaker: { actor: 'dragon', token: 'second', scene: 'scene' } }),
+    saveMessage('other-scene', { speaker: { actor: 'dragon', token: 'first', scene: 'elsewhere' } })
+  ];
+  await resolveHudOption({ kind: 'legendary-resistance', actor });
+  assert.deepEqual(selected, ['own']);
+});
 await check('no eligible typed save does not report success or spend a use, locally or via proxy', async () => {
   const selected=[];
   const actor=resistanceActor(selected);
@@ -119,6 +143,26 @@ async function dashEffect(generation,combat) {
     createEmbeddedDocuments:async (type,data)=>{assert.equal(type,'ActiveEffect');effect=data[0];}});
   return effect;
 }
+await check('sheet Dash adds movement only after a successful use', async () => {
+  const events = [];
+  const actor = {
+    uuid: 'Actor.runner', isOwner: true,
+    system: { attributes: { movement: { walk: 30 } } },
+    createEmbeddedDocuments: async () => { events.push('effect'); }
+  };
+  const dash = { kind: 'basic', basicId: 'dash', actor };
+  for (const cancelled of [undefined, false]) {
+    const result = await resolveHudOption({ ...dash, activity: { use: async () => cancelled } });
+    assert.deepEqual(result, { closed: false, ok: false });
+  }
+  assert.deepEqual(events, []);
+  const result = await resolveHudOption({ ...dash, activity: { use: async () => {
+    events.push('used');
+    return { effects: [], templates: [] };
+  } } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(events, ['used', 'effect']);
+});
 await check('Foundry 14 Dash uses native system changes and a six-second duration outside combat', async () => {
   const effect=await dashEffect(14,null);
   assert.equal(effect.type,'base');

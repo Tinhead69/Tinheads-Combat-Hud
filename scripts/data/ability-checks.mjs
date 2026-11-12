@@ -178,7 +178,7 @@ export function getSkillOptions(actor) {
   const known = actor?.system?.skills ?? {};
   return skillCatalog(actor).map(row => {
     const data = known[row.id] ?? {};
-    const abilityId = data.ability || row.ability || "dex";
+    const abilityId = skillAbilityId(actor, row.id);
     const mod = skillCheckMod(data);
     const name = skillLabel(row.id, row.label);
     const proficiency = skillProficiency(data);
@@ -190,10 +190,13 @@ export function getSkillOptions(actor) {
       name,
       img: CHROME.abilities[abilityId] || CHROME.check,
       proficiency,
-      available: true,
+      available: !!abilityId,
+      reason: abilityId ? null : t("Checks.NoSkillAbility", { skill: name }),
       tooltip: {
         title: name,
-        description: skillHint(mod, proficiency, abilityLabel(abilityId))
+        description: abilityId
+          ? skillHint(mod, proficiency, abilityLabel(abilityId))
+          : t("Checks.NoSkillAbility", { skill: name })
       }
     };
   });
@@ -256,7 +259,7 @@ async function rollDeathSave(actor) {
 }
 
 /**
- * Stealth and other skill checks. dnd5e 4+ takes { skill }; 3.x takes the skill id.
+ * Stealth and other skill checks. dnd5e 4+ takes a config; 3.x takes the skill id.
  * @param {Actor} actor
  * @param {string} skillId
  */
@@ -268,8 +271,12 @@ async function rollSkillCheck(actor, skillId) {
   const modern = typeof foundry?.utils?.isNewerVersion === "function"
     ? foundry.utils.isNewerVersion(version || "0.0.0", "3.9.99")
     : true;
-  if (modern) return actor.rollSkill({ skill: skillId });
-  return actor.rollSkill(skillId);
+  if (!modern) return actor.rollSkill(skillId);
+
+  const ability = skillAbilityId(actor, skillId);
+  if (!ability) throw new Error(t("Checks.NoSkillAbility", { skill: skillLabel(skillId) }));
+  // Pass the governing ability explicitly for the roll workflow and its chat card.
+  return actor.rollSkill({ skill: skillId, ability });
 }
 
 async function callLegacyRoll(fn, ability) {
@@ -327,19 +334,30 @@ function skillCatalog(actor) {
   if (configured && typeof configured === "object" && Object.keys(configured).length) {
     for (const [id, cfg] of Object.entries(configured)) {
       seen.add(id);
-      rows.push({ id, label: cfg?.label, ability: cfg?.ability });
+      rows.push({ id, label: cfg?.label });
     }
   } else {
-    for (const [id, label, ability] of SKILL_ORDER) {
+    for (const [id, label] of SKILL_ORDER) {
       seen.add(id);
-      rows.push({ id, label, ability });
+      rows.push({ id, label });
     }
   }
   for (const id of Object.keys(actor?.system?.skills ?? {}).filter(key => !seen.has(key)).sort()) {
     const data = actor.system.skills[id] ?? {};
-    rows.push({ id, label: data.label, ability: data.ability });
+    rows.push({ id, label: data.label });
   }
   return rows;
+}
+
+function skillAbilityId(actor, skillId) {
+  const config = globalThis.CONFIG?.DND5E;
+  const candidates = [
+    actor?.system?.skills?.[skillId]?.ability,
+    config?.skills?.[skillId]?.ability,
+    SKILL_ORDER.find(row => row[0] === skillId)?.[2]
+  ];
+  return candidates.find(id => typeof id === "string" &&
+    (ABILITY_IDS.includes(id) || Object.hasOwn(config?.abilities ?? {}, id))) ?? null;
 }
 
 function skillLabel(skillId, label) {

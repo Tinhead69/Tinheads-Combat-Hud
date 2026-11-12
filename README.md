@@ -2,7 +2,7 @@
 
 Nested radial combat HUD for **Foundry VTT v14** and **dnd5e 6.0.0+**. dnd5e 6.0.0 requires Foundry 14.367 or later. Right-click a character token, open **Combat Hud**, and pick from a screen-centered radial. Wedges are color-coded and semi-transparent: Action copper, Bonus Action teal, Reaction steel, Checks slate.
 
-Current module version: **0.3.4** (`module.json`).
+Current module version: **0.3.5** (`module.json`).
 
 ## Supported version
 
@@ -55,11 +55,13 @@ Hover **Checks** for **Saves**, **Skills**, and **Death Saves**.
 
 Version 0.3.1 introduced typed saving-throw messages for Legendary Resistance, full damage formulas and iterable damage types in tooltips, and Foundry 14 ActiveEffect data for Dash. Version 0.3.2 also closes the HUD when the game is paused and blocks opening it until the game resumes.
 
-The 6.0.0 integration has source-derived automated regression coverage. A live Foundry 14 world, including socketlib and Midi-QOL, has not been verified here; the manifest does not claim live Foundry 14 verification.
+The module manifest marks Foundry VTT v14 as verified. The dnd5e 6.0.0 integration also has source-derived automated regression coverage.
 
 Version 0.3.3 adds Help for a friendly target's next skill check, a Keep open checkbox, and a close button.
 
 Version 0.3.4 makes the Keep open control bar draggable with a remembered position and fixes image sizing in basic-action chat cards.
+
+Version 0.3.5 aligns the Attack wedge with its weapon, supplies the governing ability for skill rolls, and fixes GM proxy authorization and Midi-QOL targeting. Legendary Resistance matches unlinked NPC saves to the exact token and scene, and Dash grants movement after successful use.
 
 ## Requirements
 
