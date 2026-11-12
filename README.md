@@ -54,7 +54,9 @@ This opens a new radial where items stored in your inventory can be used.  Where
 
 ![Use_Potions](Screenshots/nested-items.png)
 
-## Bonus Action lists those abilities that can be carried out as a bonus action and can include **Use Item** such as taking a potion during combat (if allowed) or *Cast Spell** such as **Misty Step**
+## Bonus Action 
+
+This lists those abilities that can be carried out as a bonus action and can include **Use Item** such as taking a potion during combat (if allowed) or *Cast Spell** such as **Misty Step**
 
 ## Checks
 
