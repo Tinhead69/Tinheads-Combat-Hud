@@ -7,6 +7,7 @@
 
 import { CombatHud } from "../ui/combat-hud.mjs";
 import { actorFromToken, canUseActor, t } from "../data/actor-options.mjs";
+import { moduleIcon } from "../data/module-icons.mjs";
 
 /**
  * Register hooks that open the HUD from a token / actor.
@@ -41,7 +42,11 @@ function onRenderTokenHUD(hud, html) {
   button.dataset.tchAction = "open-combat-hud";
   button.title = t("TokenHUD.Hint");
   button.setAttribute("aria-label", t("TokenHUD.Open"));
-  button.innerHTML = `<i class="fa-solid fa-bullseye"></i>`;
+  const icon = document.createElement("img");
+  icon.className = "tch-token-hud-icon";
+  icon.src = moduleIcon("foundry-radial-combat");
+  icon.alt = "";
+  button.appendChild(icon);
 
   button.addEventListener("click", (event) => {
     event.preventDefault();
