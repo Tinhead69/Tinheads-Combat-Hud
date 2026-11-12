@@ -131,6 +131,7 @@
   font-size: 11px;
   cursor: pointer;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .tch-end-turn:not([aria-disabled="true"]):hover {
@@ -139,7 +140,11 @@
 
 .tch-end-turn[aria-disabled="true"] {
   color: var(--tch-muted);
-  cursor: not-allowed;
+  cursor: grab;
+}
+
+.tch-root--dragging .tch-end-turn {
+  cursor: grabbing;
 }
 
 .tch-root--keep-open .tch-backdrop {
