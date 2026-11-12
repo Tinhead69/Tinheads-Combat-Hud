@@ -286,7 +286,7 @@
 .tch-segment--main.tch-economy--action:hover .tch-segment__fill,
 .tch-segment--main.tch-economy--action.tch-segment--active .tch-segment__fill {
   fill: var(--tch-action-hot);
-  stroke: rgba(255, 210, 160, 0.75);
+  stroke: var(--tch-action-stroke-hot, rgba(255, 210, 160, 0.75));
 }
 
 .tch-segment--main.tch-economy--bonus .tch-segment__fill {
@@ -297,7 +297,7 @@
 .tch-segment--main.tch-economy--bonus:hover .tch-segment__fill,
 .tch-segment--main.tch-economy--bonus.tch-segment--active .tch-segment__fill {
   fill: var(--tch-bonus-hot);
-  stroke: rgba(160, 240, 220, 0.7);
+  stroke: var(--tch-bonus-stroke-hot, rgba(160, 240, 220, 0.7));
 }
 
 .tch-segment--main.tch-economy--reaction .tch-segment__fill {
@@ -308,7 +308,7 @@
 .tch-segment--main.tch-economy--reaction:hover .tch-segment__fill,
 .tch-segment--main.tch-economy--reaction.tch-segment--active .tch-segment__fill {
   fill: var(--tch-reaction-hot);
-  stroke: rgba(180, 210, 255, 0.75);
+  stroke: var(--tch-reaction-stroke-hot, rgba(180, 210, 255, 0.75));
 }
 
 .tch-segment--main.tch-economy--checks .tch-segment__fill {
@@ -319,7 +319,7 @@
 .tch-segment--main.tch-economy--checks:hover .tch-segment__fill,
 .tch-segment--main.tch-economy--checks.tch-segment--active .tch-segment__fill {
   fill: var(--tch-checks-hot);
-  stroke: rgba(210, 226, 242, 0.7);
+  stroke: var(--tch-checks-stroke-hot, rgba(210, 226, 242, 0.7));
 }
 
 /* Nested arcs inherit / tint from parent economy (ring) or self */
@@ -335,7 +335,7 @@
 .tch-segment.tch-economy--action:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--action.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-action-nest-hot);
-  stroke: rgba(255, 210, 160, 0.7);
+  stroke: var(--tch-action-stroke-hot, rgba(255, 210, 160, 0.7));
 }
 
 .tch-economy--bonus .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -349,7 +349,7 @@
 .tch-segment.tch-economy--bonus:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--bonus.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-bonus-nest-hot);
-  stroke: rgba(160, 240, 220, 0.65);
+  stroke: var(--tch-bonus-stroke-hot, rgba(160, 240, 220, 0.65));
 }
 
 .tch-economy--reaction .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -363,7 +363,7 @@
 .tch-segment.tch-economy--reaction:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--reaction.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-reaction-nest-hot);
-  stroke: rgba(180, 210, 255, 0.7);
+  stroke: var(--tch-reaction-stroke-hot, rgba(180, 210, 255, 0.7));
 }
 
 .tch-economy--checks .tch-segment:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -377,7 +377,7 @@
 .tch-segment.tch-economy--checks:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-checks-nest-hot);
-  stroke: rgba(210, 226, 242, 0.65);
+  stroke: var(--tch-checks-stroke-hot, rgba(210, 226, 242, 0.65));
 }
 
 .tch-segment--unavailable {
@@ -421,7 +421,7 @@
 .tch-segment--has-art.tch-segment--main.tch-economy--action:hover .tch-segment__fill,
 .tch-segment--has-art.tch-segment--main.tch-economy--action.tch-segment--active .tch-segment__fill {
   fill: var(--tch-action-art-hot);
-  stroke: rgba(255, 210, 160, 0.75);
+  stroke: var(--tch-action-stroke-hot, rgba(255, 210, 160, 0.75));
 }
 
 .tch-segment--has-art.tch-segment--main.tch-economy--bonus .tch-segment__fill {
@@ -432,7 +432,7 @@
 .tch-segment--has-art.tch-segment--main.tch-economy--bonus:hover .tch-segment__fill,
 .tch-segment--has-art.tch-segment--main.tch-economy--bonus.tch-segment--active .tch-segment__fill {
   fill: var(--tch-bonus-art-hot);
-  stroke: rgba(160, 240, 220, 0.7);
+  stroke: var(--tch-bonus-stroke-hot, rgba(160, 240, 220, 0.7));
 }
 
 .tch-segment--has-art.tch-segment--main.tch-economy--reaction .tch-segment__fill {
@@ -443,7 +443,7 @@
 .tch-segment--has-art.tch-segment--main.tch-economy--reaction:hover .tch-segment__fill,
 .tch-segment--has-art.tch-segment--main.tch-economy--reaction.tch-segment--active .tch-segment__fill {
   fill: var(--tch-reaction-art-hot);
-  stroke: rgba(180, 210, 255, 0.75);
+  stroke: var(--tch-reaction-stroke-hot, rgba(180, 210, 255, 0.75));
 }
 
 .tch-segment--has-art.tch-segment--main.tch-economy--checks .tch-segment__fill {
@@ -454,18 +454,7 @@
 .tch-segment--has-art.tch-segment--main.tch-economy--checks:hover .tch-segment__fill,
 .tch-segment--has-art.tch-segment--main.tch-economy--checks.tch-segment--active .tch-segment__fill {
   fill: var(--tch-checks-art-hot);
-  stroke: rgba(210, 226, 242, 0.7);
-}
-
-.tch-segment--has-art.tch-segment--main[data-custom-colour] .tch-segment__fill {
-  fill: color-mix(in srgb, var(--tch-main-wedge-colour) 76%, transparent);
-  stroke: color-mix(in srgb, var(--tch-main-wedge-colour) 55%, white);
-}
-
-.tch-segment--has-art.tch-segment--main[data-custom-colour]:hover .tch-segment__fill,
-.tch-segment--has-art.tch-segment--main[data-custom-colour].tch-segment--active .tch-segment__fill {
-  fill: color-mix(in srgb, var(--tch-main-wedge-colour) 92%, transparent);
-  stroke: color-mix(in srgb, var(--tch-main-wedge-colour) 35%, white);
+  stroke: var(--tch-checks-stroke-hot, rgba(210, 226, 242, 0.7));
 }
 
 .tch-economy--action .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -479,7 +468,7 @@
 .tch-segment.tch-economy--action.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--action.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-action-nest-art-hot);
-  stroke: rgba(255, 210, 160, 0.7);
+  stroke: var(--tch-action-stroke-hot, rgba(255, 210, 160, 0.7));
 }
 
 .tch-economy--bonus .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -493,7 +482,7 @@
 .tch-segment.tch-economy--bonus.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--bonus.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-bonus-nest-art-hot);
-  stroke: rgba(160, 240, 220, 0.65);
+  stroke: var(--tch-bonus-stroke-hot, rgba(160, 240, 220, 0.65));
 }
 
 .tch-economy--reaction .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -507,7 +496,7 @@
 .tch-segment.tch-economy--reaction.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--reaction.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-reaction-nest-art-hot);
-  stroke: rgba(180, 210, 255, 0.7);
+  stroke: var(--tch-reaction-stroke-hot, rgba(180, 210, 255, 0.7));
 }
 
 .tch-economy--checks .tch-segment--has-art:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill,
@@ -521,7 +510,7 @@
 .tch-segment.tch-economy--checks.tch-segment--has-art:not(.tch-segment--main):hover .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--has-art.tch-segment--active:not(.tch-segment--main):not(.tch-segment--unavailable) .tch-segment__fill {
   fill: var(--tch-checks-nest-art-hot);
-  stroke: rgba(210, 226, 242, 0.65);
+  stroke: var(--tch-checks-stroke-hot, rgba(210, 226, 242, 0.65));
 }
 
 .tch-economy--checks .tch-segment--proficient:not(.tch-segment--main) .tch-segment__fill,
@@ -548,7 +537,19 @@
   stroke-width: 3px;
 }
 
-/* Weapon (and other sheet-item) portraits: the picture is the wedge, not the economy tint. */
+.tch-ring[data-economy="action"] { --tch-item-base: var(--tch-action-custom-colour); }
+.tch-ring[data-economy="bonus"] { --tch-item-base: var(--tch-bonus-custom-colour); }
+.tch-ring[data-economy="reaction"] { --tch-item-base: var(--tch-reaction-custom-colour); }
+.tch-ring[data-economy="checks"] { --tch-item-base: var(--tch-checks-custom-colour); }
+
+/* A lighter tint keeps sheet-item portraits visible. */
+.tch-ring[data-economy] {
+  --tch-item-tint: color-mix(in srgb, var(--tch-item-base) 32%, transparent);
+  --tch-item-tint-hot: color-mix(in srgb, var(--tch-item-base) 46%, transparent);
+  --tch-item-outline: color-mix(in srgb, var(--tch-item-base) 55%, white);
+  --tch-item-outline-hot: color-mix(in srgb, var(--tch-item-base) 35%, white);
+}
+
 .tch-economy--action .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-economy--bonus .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-economy--reaction .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
@@ -557,8 +558,8 @@
 .tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill {
-  fill: rgba(8, 10, 14, 0.08);
-  stroke: rgba(255, 248, 236, 0.55);
+  fill: var(--tch-item-tint, rgba(8, 10, 14, 0.08));
+  stroke: var(--tch-item-outline, rgba(255, 248, 236, 0.55));
 }
 
 .tch-economy--action .tch-segment--item-art.tch-segment--has-art:not(.tch-segment--unavailable):hover .tch-segment__fill,
@@ -577,8 +578,8 @@
 .tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill {
-  fill: rgba(8, 10, 14, 0.02);
-  stroke: rgba(255, 248, 236, 0.85);
+  fill: var(--tch-item-tint-hot, rgba(8, 10, 14, 0.02));
+  stroke: var(--tch-item-outline-hot, rgba(255, 248, 236, 0.85));
 }
 
 /* Weapons and sheet items: fill and outline come from the item icon. */
@@ -590,8 +591,8 @@
 .tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art:not(.tch-segment--unavailable) .tch-segment__fill {
-  fill: var(--tch-icon-fill);
-  stroke: var(--tch-icon-stroke);
+  fill: var(--tch-item-tint, var(--tch-icon-fill));
+  stroke: var(--tch-item-outline, var(--tch-icon-stroke));
   stroke-width: 2.5px;
 }
 
@@ -611,8 +612,8 @@
 .tch-segment.tch-economy--bonus.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--reaction.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill,
 .tch-segment.tch-economy--checks.tch-segment--item-art.tch-segment--icon-color.tch-segment--has-art.tch-segment--active:not(.tch-segment--unavailable) .tch-segment__fill {
-  fill: var(--tch-icon-fill-hot);
-  stroke: var(--tch-icon-stroke-hot);
+  fill: var(--tch-item-tint-hot, var(--tch-icon-fill-hot));
+  stroke: var(--tch-item-outline-hot, var(--tch-icon-stroke-hot));
   stroke-width: 3px;
 }
 
@@ -762,6 +763,14 @@
 
 .tch-token-hud-btn.active {
   color: #fff;
+}
+
+.tch-token-hud-btn .tch-token-hud-icon {
+  width: 22px;
+  max-width: 70%;
+  height: auto;
+  border: 0;
+  pointer-events: none;
 }
 
 /* Nested ring reveal */
