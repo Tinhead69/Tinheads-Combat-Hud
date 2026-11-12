@@ -73,7 +73,7 @@ function nextClipId(prefix = "tch-clip") {
 export const SIZE = 760;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
-const END_TURN_GAP = 10;
+const END_TURN_TOOLTIP_GAP = 10;
 /** How long the open ring stays up after the pointer slips off it. */
 const COLLAPSE_DELAY_MS = 500;
 /** Radial thickness of every wedge, main sections included. */
@@ -498,19 +498,13 @@ export class CombatHud {
 
   _clampToViewport(persist = false) {
     const radius = contentOuterRadius(this.state, RINGS);
-    const buttonHeight = this.endTurnButton?.offsetHeight ?? 0;
-    const topClearance = buttonHeight ? buttonHeight + END_TURN_GAP : 0;
-    const next = clampHudCenter(this.position.x, this.position.y, radius, { topClearance });
+    const next = clampHudCenter(this.position.x, this.position.y, radius);
     if (next.x !== this.position.x || next.y !== this.position.y) {
       this.position = next;
       this._applyStagePosition();
       if (persist) void saveHudPosition(next.x, next.y);
     } else {
       this._applyStagePosition();
-    }
-    if (this.endTurnButton) {
-      const available = next.y - buttonHeight - VIEWPORT_MARGIN;
-      this.endTurnButton.style.bottom = `${Math.max(0, Math.min(radius + END_TURN_GAP, available))}px`;
     }
   }
 
@@ -794,13 +788,13 @@ export class CombatHud {
     button.className = "tch-end-turn";
     button.textContent = t("EndTurn.Label");
     button.addEventListener("click", () => this._onEndTurnClick());
-    button.addEventListener("pointerenter", event => {
+    button.addEventListener("pointerenter", () => {
       this._clearCollapse();
       const endTurn = getEndTurnState(this._endTurnSubject());
       this.showTooltip({
         title: t("EndTurn.Label"),
         description: endTurn.enabled ? t("EndTurn.Hint") : (endTurn.reason || t("EndTurn.Unavailable"))
-      }, button, event);
+      }, button);
     });
     button.addEventListener("pointerleave", () => {
       this.hideTooltip();
@@ -2291,7 +2285,7 @@ export class CombatHud {
     else if (this.root) this._draw();
   }
 
-  showTooltip(data, _segment, event) {
+  showTooltip(data, segment, event) {
     if (!this.tooltipEl || !data) return;
     // Every tooltip source passes through the same plain-text conversion.
     data = Object.fromEntries(["title", "description", "targets", "range", "duration", "damage"]
@@ -2320,12 +2314,25 @@ export class CombatHud {
       ${rows.join("")}
     `;
     this.tooltipEl.hidden = false;
-    if (event) this._positionTooltip(event);
+    if (segment && segment === this.endTurnButton) this._positionEndTurnTooltip();
+    else if (event) this._positionTooltip(event);
     else {
       this.tooltipEl.style.left = "50%";
       this.tooltipEl.style.top = "12%";
       this.tooltipEl.style.transform = "translateX(-50%)";
     }
+  }
+
+  _positionEndTurnTooltip() {
+    const tooltip = this.tooltipEl;
+    const radius = contentOuterRadius(this.state, RINGS);
+    const maxX = window.innerWidth - tooltip.offsetWidth - VIEWPORT_MARGIN;
+    const maxY = window.innerHeight - tooltip.offsetHeight - VIEWPORT_MARGIN;
+    const x = this.position.x - tooltip.offsetWidth / 2;
+    const y = this.position.y - radius - END_TURN_TOOLTIP_GAP - tooltip.offsetHeight;
+    tooltip.style.transform = "none";
+    tooltip.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(x, maxX))}px`;
+    tooltip.style.top = `${Math.max(VIEWPORT_MARGIN, Math.min(y, maxY))}px`;
   }
 
   _positionTooltip(event) {
