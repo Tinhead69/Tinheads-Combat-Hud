@@ -10,7 +10,7 @@ When installed, it places a target icon on the bottom left when you right click 
 
 Clicking the icon opens the basic combat Hud up on the screen which can be dragged around by holding the left mouse button on the **End Turn** button and moving it to a more appropriate space on your screen; it will remember this location the next time it is opened.  There is also a small window that starts in the top right of the screen which allows you to toggle whether the Hud stays open all the time or closes after any function has been activated.  This can also be dragged to a more appropriate position..
 
-![Hud_Open](Screenshots/Hud-open.png)
+![Hud_Open](Screenshots/hud-open.png)
 
 
 ## Using the Hud 
@@ -19,7 +19,7 @@ Once the Hud is open and on the screen, moving over any of the wedges will show 
 
 ### Actions 
 
-![Hud_Action](Screenshots/Hud-action.png)
+![Hud_Action](Screenshots/hud-action.png)
 
 Under the Action wedge you will find all things that can be carried out as an action.  
 
