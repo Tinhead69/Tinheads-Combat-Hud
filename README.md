@@ -83,6 +83,12 @@ Under this wedge are any abilities that are allowed as a reaction, whether they 
 
 In the centre of the Hud is the End Turn button.  This only works if you are the active character in the combat tracker.
 
+## Settings
+
+The individual colours of the hud can be amended within the game settings menu.  These are retained between game sessions.
+
+![Game_settings](hud_colours.png)
+
 ## Supported version 
 
 This project supports **Foundry VTT v14 only**, with a minimum version of **14.367** and **dnd5e 6.0.0**.
