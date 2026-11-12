@@ -117,17 +117,18 @@
 .tch-end-turn {
   position: absolute;
   left: 0;
-  transform: translateX(-50%);
+  top: 0;
+  transform: translate(-50%, -50%);
   z-index: 1;
-  width: max-content;
-  min-height: 34px;
-  padding: 6px 14px;
-  border: 1px solid var(--tch-stroke-soft);
+  width: 58px;
+  min-height: 26px;
+  padding: 2px 4px;
+  border: 0;
   border-radius: 6px;
-  background: rgba(18, 22, 28, 0.92);
+  background: transparent;
   color: var(--tch-label);
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   cursor: pointer;
   pointer-events: auto;
 }
