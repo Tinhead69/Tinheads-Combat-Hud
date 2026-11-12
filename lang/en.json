@@ -95,7 +95,7 @@
     "ReadyAction": {
       "YourTurn": "Declare a Ready action on this character's turn in active combat.",
       "OwnerOnly": "The actor's owner or the GM can declare and release a Ready action.",
-      "AlreadyDeclared": "This character has already declared a Ready action this turn.",
+      "AlreadyDeclared": "This character already has a Ready action in progress.",
       "Unsupported": "The selected activity is unavailable or does not support Ready.",
       "ActionName": "Action to hold",
       "ActionNameRequired": "Enter the name of the action you want to hold.",
@@ -105,7 +105,7 @@
       "Cancel": "Cancel",
       "Open": "Holding a Ready action",
       "Holding": "{actor} is holding {action}.",
-      "ExpiryHint": "Select targets and release the action when the trigger occurs. It expires when combat advances to the next round.",
+      "ExpiryHint": "Select targets and release the action when the trigger occurs. It expires at the start of this actor’s next turn.",
       "Release": "Release action",
       "Held": "Held",
       "Releasing": "Releasing",
