@@ -7,7 +7,7 @@ It is not accessible when the game is paused.
 When installed, it places a target icon with a sword on the bottom left when you right-click the targeting icon to the lower right of the character icon
 
 ![Icon_location](Screenshots/Hud-start-icon.png)
-
+  
 Clicking the icon opens the basic combat HUD, which you can drag around by holding the left mouse button on the **End Turn** button and moving it to a more appropriate spot on your screen; it will remember this location the next time you open it.  A small window also starts in the top right of the screen, letting you toggle whether the HUD stays open all the time or closes after any function is activated.  This can also be dragged to a more appropriate position..
 
 ![Hud_Open](Screenshots/hud-open.png)
