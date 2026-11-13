@@ -791,6 +791,16 @@
   transform: scale(1);
   pointer-events: auto;
 }
+
+#token-hud .control-icon.tch-token-hud-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#token-hud .tch-token-hud-btn > .tch-token-hud-icon {
+  flex: none;
+}
 /* Enlarge and brighten foundry-radial-combat.svg in the Token HUD */
 #token-hud .control-icon img[src*="assets/icons/foundry-radial-combat.svg"] {
   width: 34px;
