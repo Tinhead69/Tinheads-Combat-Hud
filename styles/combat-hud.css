@@ -791,3 +791,18 @@
   transform: scale(1);
   pointer-events: auto;
 }
+/* Enlarge and brighten foundry-radial-combat.svg in the Token HUD */
+#token-hud .control-icon img[src*="assets/icons/foundry-radial-combat.svg"] {
+  width: 34px;
+  height: 34px;
+  max-width: none;
+  max-height: none;
+  opacity: 0.95;
+  filter: brightness(1.15);
+}
+
+/* Match Foundry's bright white hover state */
+#token-hud .control-icon:hover img[src*="foundry-radial-combat.svg"] {
+  opacity: 1;
+  filter: brightness(1.3);
+}
