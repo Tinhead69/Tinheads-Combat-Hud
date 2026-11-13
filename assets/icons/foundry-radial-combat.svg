@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<svg xmlns="http://w3.org" width="16" height="16" viewBox="0 0 16 16">
   <title>Radial combat menu</title>
   <defs>
-    <path id="sword" d="M0 -6.9 1.16 -5.55 0.85 -3.55H1.9V-2.4H0.64V-1.55H-0.64V-2.4H-1.9V-3.55H-0.85L-1.16 -5.55Z"/>
+    <path id="sword" d="M0 -8.1 1.16 -6.4 0.85 -3.55H1.9V-2.4H0.64V-1.55H-0.64V-2.4H-1.9V-3.55H-0.85L-1.16 -6.4Z"/>
     <mask id="sword-clearance" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16" style="mask-type:luminance">
       <rect width="16" height="16" fill="#fff"/>
-      <use href="#sword" transform="translate(8.7 9.1) rotate(-35)" fill="#000" stroke="#000" stroke-width="1" stroke-linejoin="round"/>
+      <use href="#sword" transform="translate(8.7 9.1) rotate(-35)" fill="#000" stroke="#000" stroke-width="1.8" stroke-linejoin="round"/>
     </mask>
   </defs>
-  <path d="M1.278 8.451 A7.45 7.45 0 0 1 2.452 5.042 M3.251 4.019 A7.45 7.45 0 0 1 5.789 2.242 M7.024 1.841 A7.45 7.45 0 0 1 10.628 1.904" fill="none" stroke="#fff" stroke-width="2"/>
-  <path d="M4.206 8.388 A4.55 4.55 0 0 1 7.988 4.606 M9.412 4.606 A4.55 4.55 0 0 1 13.194 8.388 M13.194 9.812 A4.55 4.55 0 0 1 9.412 13.594 M7.988 13.594 A4.55 4.55 0 0 1 4.206 9.812" fill="none" stroke="#fff" stroke-width="2" mask="url(#sword-clearance)"/>
+  <path d="M1.577 8.477 A7.15 7.15 0 0 1 2.704 5.206 M3.471 4.224 A7.15 7.15 0 0 1 5.906 2.518 M7.092 2.133 A7.15 7.15 0 0 1 10.551 2.194" fill="none" stroke="#fff" stroke-width="3"/>
+  <path d="M5.105 8.466 A3.65 3.65 0 0 1 8.066 5.505 M9.334 5.505 A3.65 3.65 0 0 1 12.295 8.466 M12.295 9.734 A3.65 3.65 0 0 1 9.334 12.695 M8.066 12.695 A3.65 3.65 0 0 1 5.105 9.734" fill="none" stroke="#fff" stroke-width="3" mask="url(#sword-clearance)"/>
   <circle cx="8.7" cy="9.1" r="1.25" fill="#ddd"/>
   <use href="#sword" transform="translate(8.7 9.1) rotate(-35)" fill="#fff"/>
 </svg>
